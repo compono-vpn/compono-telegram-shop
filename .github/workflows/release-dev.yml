@@ -1,0 +1,63 @@
+name: remnashop - Release Artifact (dev)
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  release:
+    name: Build and Publish Dev Artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧾 Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: 🧱 Generate Build Metadata
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          BRANCH="${{ github.ref_name }}"
+          FULL_SHA="${{ github.sha }}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/$SHORT_SHA"
+
+          cat <<EOF > build.info.json
+          {
+            "buildTime": "$BUILD_TIME",
+            "commitFull": "$FULL_SHA",
+            "commit": "$SHORT_SHA",
+            "tag": "dev-build",
+            "branch": "$BRANCH",
+            "commitUrl": "$COMMIT_URL"
+          }
+          EOF
+
+      - name: 📁 Archive Project Files
+        run: |
+          zip -r remnashop-dev.zip . -x ".git/*" ".github/*" "logs/*" "*.zip"
+
+      - name: 🧹 Remove Previous Artifact (if exists)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete-asset dev-build remnashop-dev.zip || true
+
+      - name: ⬆️ Upload Artifact to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload dev-build remnashop-dev.zip --clobber
+
+      - name: 📝 Update Release Notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          DATE=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+
+          gh release edit dev-build --notes-file - <<EOF
+          🔁 Updated development build
+          🔗 [Commit]($COMMIT_URL)  
+          📅 Built: $DATE
+          EOF

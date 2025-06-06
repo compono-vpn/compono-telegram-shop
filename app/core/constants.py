@@ -5,10 +5,12 @@ API_V1: str = "/api/v1"
 WEBHOOK_PATH: str = "/webhook"
 HEADER_SECRET_TOKEN: str = "x-telegram-bot-api-secret-token"
 TIMEZONE = timezone.utc
+UNLIMITED = "∞"
 
 # Resource file names for i18n
 RESOURCE_I18N = ["messages.ftl", "buttons.ftl", "notifications.ftl", "popups.ftl"]
 
+# NOTE: think about a class for typed storage
 # Keys for data
 MIDDLEWARE_DATA_KEY = "middleware_data"
 AUDIT_KEY = "audit"

@@ -1,5 +1,4 @@
 import logging
-from typing import Any, Callable, Optional
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart, ExceptionTypeFilter
@@ -7,12 +6,12 @@ from aiogram.types import ErrorEvent, Message
 from aiogram_dialog import DialogManager, ShowMode, StartMode
 from aiogram_dialog.api.exceptions import UnknownState
 
+from app.bot.middlewares.i18n import I18nFormatter
 from app.bot.states import MenuState
 from app.db.models import User
 
 logger = logging.getLogger(__name__)
 router = Router()
-I18nFormatter = Callable[[str, Optional[dict[str, Any]]], str]
 
 
 @router.message(CommandStart())
@@ -21,8 +20,8 @@ async def command_start_handler(
     user: User,
     dialog_manager: DialogManager,
 ) -> None:
-    logger.info(f"[User:{user.telegram_id} ({user.name})] Opened menu")
-    print("asdasdasd")
+    logger.info(f"[User:{user.telegram_id} ({user.name})] Started dialog")
+
     await dialog_manager.start(
         MenuState.main,
         mode=StartMode.RESET_STACK,

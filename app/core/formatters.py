@@ -1,12 +1,14 @@
 from math import ceil
 from typing import Union
 
+from app.bot.middlewares.i18n import I18nFormatter
+
 from .enums import ByteUnit, TimeUnit
 
 
 def format_bytes(
     value: int,
-    i18n_format,
+    i18n_format: I18nFormatter,
     round_up: bool = False,
     min_unit: ByteUnit = ByteUnit.GIGABYTE,
 ) -> str:
@@ -45,7 +47,7 @@ def format_percent(part: int, whole: int) -> str:
 
 def format_duration(
     seconds: Union[int, float],
-    i18n_format,
+    i18n_format: I18nFormatter,
     round_up: bool = False,
 ) -> str:
     units = [

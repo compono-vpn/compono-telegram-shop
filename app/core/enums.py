@@ -23,7 +23,7 @@ class BannerFormat(StrEnum):
     JPEG = auto()
     PNG = auto()
     GIF = auto()
-    WEBP = auto()  # TODO: check
+    WEBP = auto()
 
     @property
     def content_type(self) -> ContentType:

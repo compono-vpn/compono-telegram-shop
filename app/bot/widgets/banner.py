@@ -8,7 +8,7 @@ from app.core.config import DEFAULT_BANNERS_DIR, AppConfig
 from app.core.constants import CONFIG_KEY
 from app.core.enums import BannerFormat, BannerName
 
-logger = logging.getLogger(__name__)  # FIXME: not working in this file, but works in others
+logger = logging.getLogger(__name__)
 
 
 class Banner(StaticMedia):
@@ -35,7 +35,7 @@ class Banner(StaticMedia):
             config: AppConfig = manager.middleware_data.get(CONFIG_KEY)
 
             if config is None:
-                logger.warning("Missing AppConfig in middleware data.")
+                logger.warning("Missing AppConfig in middleware data")
                 return False
 
             return config.bot.use_banners

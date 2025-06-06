@@ -1,10 +1,6 @@
-import logging
-
 from remnawave_api import RemnawaveSDK
 
 from app.core.config import AppConfig
-
-logger = logging.getLogger(__name__)
 
 
 def create_remnawave(config: AppConfig) -> RemnawaveSDK:

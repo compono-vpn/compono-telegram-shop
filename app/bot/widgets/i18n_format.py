@@ -6,6 +6,7 @@ from aiogram_dialog.api.protocols import DialogManager
 from aiogram_dialog.widgets.common import WhenCondition
 from aiogram_dialog.widgets.text import Text
 
+from app.bot.middlewares.i18n import I18nFormatter
 from app.core.constants import I18N_FORMAT_KEY
 
 
@@ -49,8 +50,8 @@ class I18nFormat(Text):
         self.key = key
 
     async def _render_text(self, data: dict, manager: DialogManager) -> str:
-        format_text = manager.middleware_data.get(
+        i18n_format: I18nFormatter = manager.middleware_data.get(
             I18N_FORMAT_KEY,
             default_format_text,
         )
-        return collapse_closing_tags(format_text(self.key, flatten_dict(data)))
+        return collapse_closing_tags(i18n_format(self.key, flatten_dict(data)))

@@ -10,7 +10,7 @@ from app.core.config import LoggingConfig
 from app.core.constants import TIMEZONE
 from app.core.enums import ArchiveFormat
 
-LOG_DIR = "logs"
+LOG_DIR = "/opt/remnashop/logs"
 LOG_FILENAME = "app.log"
 LOG_WHEN = "midnight"
 LOG_INTERVAL = 1

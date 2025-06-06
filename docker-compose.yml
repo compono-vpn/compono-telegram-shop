@@ -1,4 +1,23 @@
 services:
+  remnashop:
+      # build: .
+      image: ghcr.io/snoups/remnashop:dev
+      container_name: "remnashop"
+      hostname: remnashop
+      restart: always
+      env_file:
+        - .env
+      networks:
+        - remnashop-network
+      depends_on:
+        remnashop-db:
+          condition: service_healthy
+        remnashop-redis:
+          condition: service_healthy
+      volumes:
+        - ./app/assets:/opt/remnashop/assets
+        - ./logs:/opt/remnashop/logs
+
   remnashop-db:
     image: postgres:17
     container_name: "remnashop-db"
@@ -37,24 +56,6 @@ services:
       interval: 3s
       timeout: 10s
       retries: 3
-  
-  remnashop:
-    build: .
-    container_name: "remnashop"
-    hostname: remnashop
-    restart: always
-    env_file:
-      - .env
-    networks:
-      - remnashop-network
-    depends_on:
-      remnashop-db:
-        condition: service_healthy
-      remnashop-redis:
-        condition: service_healthy
-    volumes:
-      - ./app/assets:/app/assets
-      - ./logs:/logs
 
 networks:
   remnashop-network:

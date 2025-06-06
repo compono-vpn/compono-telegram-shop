@@ -11,6 +11,7 @@ from app.db.models import User
 from .base import EventTypedMiddleware
 
 logger = logging.getLogger(__name__)
+I18nFormatter = Callable[[str, Optional[dict[str, Any]]], str]
 
 
 class I18nMiddleware(EventTypedMiddleware):

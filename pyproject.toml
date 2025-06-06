@@ -1,11 +1,13 @@
 [tool.poetry]
-name = "remna-shop"
+name = "remnashop"
 version = "2.0.0"
 description = "This is a Telegram bot for selling VPN subscriptions. It works with Remnawave"
 authors = ["snoups"]
 readme = "README.md"
-package-mode = false
 
+packages = [
+    { include = "app" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.12"
