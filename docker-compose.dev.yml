@@ -1,6 +1,5 @@
 services:
   remnashop:
-      # build: .
       image: ghcr.io/snoups/remnashop:dev
       container_name: "remnashop"
       hostname: remnashop

@@ -121,10 +121,10 @@ def setup_logging(config: LoggingConfig) -> None:
 
     # Suppresses logs to avoid unnecessary output
     aiogram_logger = logging.getLogger("aiogram.event")
-    aiogram_logger.setLevel(logging.CRITICAL)
+    aiogram_logger.setLevel(config.level.value.upper())
 
     aiogram_dialog_logger = logging.getLogger("aiogram_dialog")
-    aiogram_dialog_logger.setLevel(logging.DEBUG)
+    aiogram_dialog_logger.setLevel(config.level.value.upper())
 
     asyncio_logger = logging.getLogger("asyncio")
     asyncio_logger.setLevel(logging.WARNING)

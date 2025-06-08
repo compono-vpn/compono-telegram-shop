@@ -19,7 +19,7 @@ FROM python-poetry-build-base AS builder-base
 
 WORKDIR /opt/remnashop
 
-COPY pyproject.toml ./
+COPY pyproject.toml poetry.lock ./
 
 RUN poetry config virtualenvs.create false \
     && poetry config cache-dir false \
@@ -28,7 +28,7 @@ RUN poetry config virtualenvs.create false \
 COPY ./app ./app
 
 
-FROM python-poetry-build-base AS production-builder
+FROM python-poetry-build-base AS app-builder
 
 WORKDIR /opt/remnashop
 
@@ -45,7 +45,7 @@ FROM python:3.12-alpine AS production
 ENV VIRTUAL_ENV="/opt/pysetup/venv"
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-COPY --from=production-builder $VIRTUAL_ENV $VIRTUAL_ENV
+COPY --from=app-builder $VIRTUAL_ENV $VIRTUAL_ENV
 
 WORKDIR /opt/remnashop
 COPY ./app ./app

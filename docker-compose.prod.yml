@@ -1,0 +1,71 @@
+services:
+  remnashop:
+      image: ghcr.io/snoups/remnashop:dev # TODO: prod
+      container_name: "remnashop"
+      hostname: remnashop
+      restart: always
+      env_file:
+        - .env
+      networks:
+        - remnashop-network
+      depends_on:
+        remnashop-db:
+          condition: service_healthy
+        remnashop-redis:
+          condition: service_healthy
+      volumes:
+        - ./app/assets:/opt/remnashop/assets
+        - ./logs:/opt/remnashop/logs
+
+  remnashop-db:
+    image: postgres:17
+    container_name: "remnashop-db"
+    hostname: remnashop-db
+    restart: always
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      - TZ=UTC
+    volumes:
+      - remnashop-db-data:/var/lib/postgresql/data
+    networks:
+      - remnashop-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 10s
+      retries: 3
+
+  remnashop-redis:
+    image: redis:8
+    container_name: remnashop-redis
+    hostname: remnashop-redis
+    restart: always
+    networks:
+      - remnashop-network
+    volumes:
+      - remnashop-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 3
+
+networks:
+  remnashop-network:
+    external: true
+
+volumes:
+  remnashop-db-data:
+    driver: local
+    external: false
+    name: remnashop-db-data
+  remnashop-redis-data:
+    driver: local
+    external: false
+    name: remnashop-redis-data

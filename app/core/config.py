@@ -92,6 +92,10 @@ class BotConfig(BaseSettings, env_prefix="BOT_"):
         url = f"https://{self.domain.get_secret_value()}:{self.webhook_port}{self.webhook_path}"
         return SecretStr(url)
 
+    @property
+    def safe_webhook_url(self) -> str:
+        return f"https://{self.domain}:{self.webhook_port}{self.webhook_path}"
+
 
 class RemnaConfig(BaseSettings, env_prefix="REMNA_"):
     host: SecretStr = SecretStr(DEFAULT_REMNA_HOST)  # TODO: docker

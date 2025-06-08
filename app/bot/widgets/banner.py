@@ -24,7 +24,7 @@ class Banner(StaticMedia):
                 break
 
         if path is None:
-            logger.warning(f"Banner file for '{name.value}' not found. Using default")
+            logger.warning(f"Banner file for '{name.value}' not found (using default)")
             path = DEFAULT_BANNERS_DIR / f"{BannerName.DEFAULT.value}.{BannerFormat.JPG.value}"
             content_type = BannerFormat.JPG.content_type
 

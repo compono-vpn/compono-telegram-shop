@@ -1,3 +1,9 @@
+from app.core.config import AppConfig
+from app.core.logger import setup_logging
+
+config = AppConfig.get()
+setup_logging(config.logging)
+
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -10,13 +16,9 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.bot.commands import commands_delete, commands_setup
 from app.bot.webhook import webhook_shutdown, webhook_startup
-from app.core.config import AppConfig
 from app.core.constants import BOT_KEY, HEADER_SECRET_TOKEN
-from app.core.logger import setup_logging
 from app.factories import create_bot, create_dispatcher
 
-config = AppConfig.get()
-setup_logging(config.logging)
 logger = logging.getLogger(__name__)
 
 
