@@ -24,7 +24,7 @@ async def on_start_command(
     logger.info(f"{format_log_user(user)} Started dialog")
 
     await dialog_manager.start(
-        state=MainMenu.main,
+        state=MainMenu.MAIN,
         mode=StartMode.RESET_STACK,
         show_mode=ShowMode.DELETE_AND_SEND,
     )

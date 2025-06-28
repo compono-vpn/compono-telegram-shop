@@ -24,7 +24,6 @@ class UTCFormatter(logging.Formatter):
 
 
 class ArchiveRotatingFileHandler(TimedRotatingFileHandler):
-
     def __init__(
         self,
         filename,
@@ -43,7 +42,7 @@ class ArchiveRotatingFileHandler(TimedRotatingFileHandler):
         )
 
         self.archive_format = archive_format
-        logger.debug(f"Initialized with format: {self.archive_format}")
+        logger.debug(f"Initialized with format: '{self.archive_format}'")
 
     def doRollover(self) -> None:
         super().doRollover()
@@ -56,14 +55,14 @@ class ArchiveRotatingFileHandler(TimedRotatingFileHandler):
         self._remove_old_logs()
 
     def _archive_log_file(self, archive_name: str) -> None:
-        logger.info(f"Archiving {self.baseFilename} to {archive_name}")
+        logger.info(f"Archiving '{self.baseFilename}' to '{archive_name}'")
         if os.path.exists(self.baseFilename):
             if self.archive_format == ArchiveFormat.ZIP.value:
                 self._archive_to_zip(archive_name)
             elif self.archive_format == ArchiveFormat.GZ.value:
                 self._archive_to_gz(archive_name)
         else:
-            logger.warning(f"Log file {self.baseFilename} does not exist, skipping archive")
+            logger.warning(f"Log file '{self.baseFilename}' does not exist, skipping archive")
 
     def _archive_to_zip(self, archive_name: str) -> None:
         log = self.getFilesToDelete()[0]
@@ -82,14 +81,14 @@ class ArchiveRotatingFileHandler(TimedRotatingFileHandler):
 
     def _remove_old_logs(self) -> None:
         files_to_delete = self.getFilesToDelete()
-        logger.debug(f"Removing old log files: {files_to_delete}")
+        logger.debug(f"Removing old log files: '{files_to_delete}'")
         for file in files_to_delete:
             if os.path.exists(file):
                 try:
                     os.remove(file)
-                    logger.debug(f"Successfully deleted old log file: {file}")
+                    logger.debug(f"Successfully deleted old log file: '{file}'")
                 except Exception as exception:
-                    logger.error(f"Error deleting {file}: {exception}")
+                    logger.error(f"Error deleting '{file}': {exception}")
 
 
 def setup_logging(config: LoggingConfig) -> None:

@@ -1,3 +1,7 @@
+import json
+
+from pydantic import ValidationError
+
 from app.core.config import AppConfig
 from app.core.logger import setup_logging
 
@@ -34,7 +38,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
     await webhook_startup(bot, dispatcher, config)
     await commands_setup(bot, config)
-    yield  # TODO: notify devs for start and maintenance
+    yield  # TODO: Notify devs for start and maintenance
     await commands_delete(bot, config)
     await webhook_shutdown(bot, config)
 
@@ -72,9 +76,24 @@ async def webhook(request: Request, update: Update) -> Optional[dict]:
         logger.error("Wrong secret token")
         return {"status": "error", "message": "Wrong secret token"}
 
-    update = Update.model_validate(await request.json(), context={BOT_KEY: bot})
-    await dispatcher.feed_webhook_update(bot, update)
-    return {"ok": True}
+    try:
+        request_data = await request.json()
+        update = Update.model_validate(request_data, context={BOT_KEY: bot})
+
+        await dispatcher.feed_webhook_update(bot, update)
+        return {"ok": True}
+    except json.JSONDecodeError as exception:
+        logger.error(
+            f"Invalid JSON in webhook request: {exception}. "
+            f"Request body: {await request.body()}"
+        )
+        return {"status": "error", "message": "Invalid JSON format"}
+    except ValidationError as exception:
+        logger.error(f"Webhook update validation error: {exception}. Data: {request_data}")
+        return {"status": "error", "message": "Invalid update format"}
+    except Exception as exception:
+        logger.exception(f"Unhandled exception during webhook update processing: {exception}")
+        return {"status": "error", "message": "Internal server error"}
 
 
 if __name__ == "__main__":

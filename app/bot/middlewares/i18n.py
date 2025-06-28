@@ -32,7 +32,10 @@ class I18nMiddleware(EventTypedMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Union[Message, CallbackQuery], dict[str, Any]], Awaitable[Any]],
+        handler: Callable[
+            [Union[Message, CallbackQuery, ErrorEvent], dict[str, Any]],
+            Awaitable[Any],
+        ],
         event: Union[Message, CallbackQuery, ErrorEvent],
         data: dict[str, Any],
     ) -> Any:
@@ -52,7 +55,7 @@ class I18nMiddleware(EventTypedMiddleware):
             )
             return self.locales[self.default_locale]
 
-        self.logger.debug(f"{format_log_user(user)} Using locale: '{user.language}'")
+        # self.logger.debug(f"{format_log_user(user)} Using locale: '{user.language}'")
         return self.locales[user.language]
 
     def get_formatter(self, user: Optional[UserDto] = None) -> I18nFormatter:

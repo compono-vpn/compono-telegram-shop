@@ -22,7 +22,7 @@ class GarbageMiddleware(EventTypedMiddleware):
         user: Optional[UserDto] = data.get(USER_KEY)
 
         if user is None:
-            return await handler(event, data)
+            return
 
         if user.telegram_id != event.bot.id and event.text != f"/{Command.START.value.command}":
             await event.delete()

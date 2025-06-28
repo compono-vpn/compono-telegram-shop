@@ -1,10 +1,11 @@
 # Test
 btn = Кнопка
 msg = Сообщение
-
+unlimited = ∞
 
 # Used to create a blank line between elements
-space = {"\u00A0"}
+space = {" "}
+separator = {"\u00A0"}
 
 
 # Roles

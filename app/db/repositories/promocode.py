@@ -9,7 +9,7 @@ from app.db.models.sql import Promocode
 from .base import BaseRepository
 
 
-class PromocodesRepository(BaseRepository):
+class PromocodeRepository(BaseRepository):
     async def get(self, promocode_id: int) -> Optional[Promocode]:
         return await self._get(Promocode, Promocode.id == promocode_id)
 

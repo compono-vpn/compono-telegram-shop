@@ -15,17 +15,6 @@ from app.core.constants import I18N_FORMATTER_KEY
 logger = logging.getLogger(__name__)
 
 
-def flatten_dict(data: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
-    items = {}
-    for key, value in data.items():
-        new_key = f"{parent_key}{sep}{key}" if parent_key else key
-        if isinstance(value, dict):
-            items.update(flatten_dict(data=value, parent_key=new_key, sep=sep))
-        else:
-            items[new_key] = value
-    return items
-
-
 def collapse_closing_tags(text: str) -> str:
     def replacer(match: Match) -> str:
         tag = match.group(1)
@@ -45,7 +34,6 @@ def default_format_text(text: str, data: dict[str, Any]) -> str:
 
 
 class I18nFormat(Text):
-
     def __init__(
         self,
         key: str,

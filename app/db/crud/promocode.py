@@ -2,38 +2,16 @@ from typing import Any, Optional
 
 from app.core.enums import PromocodeType
 from app.db import SQLSessionContext
-from app.db.models.dto import PromocodeDto
+from app.db.models.dto import PromocodeDto, PromocodeSchema
 from app.db.models.sql import Promocode
 
 from .base import CrudService
 
 
 class PromocodeService(CrudService):
-    async def create(
-        self,
-        code: str,
-        type: PromocodeType,
-        *,
-        is_active: bool = True,
-        is_multi_use: bool = False,
-        lifetime: Optional[int] = None,
-        duration: Optional[int] = None,
-        traffic: Optional[int] = None,
-        discount_percent: Optional[int] = None,
-        activated_by: Optional[int] = None,
-    ) -> PromocodeDto:
+    async def create(self, promocode_data: PromocodeSchema) -> PromocodeDto:
         async with SQLSessionContext(self.session_pool) as (repository, uow):
-            db_promocode = Promocode(
-                code=code,
-                type=type,
-                is_active=is_active,
-                is_multi_use=is_multi_use,
-                lifetime=lifetime,
-                duration=duration,
-                traffic=traffic,
-                discount_percent=discount_percent,
-                activated_by=activated_by,
-            )
+            db_promocode = Promocode(**promocode_data.model_dump())
             await uow.commit(db_promocode)
             return db_promocode.dto()
 

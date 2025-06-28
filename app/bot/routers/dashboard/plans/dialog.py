@@ -1,0 +1,354 @@
+from aiogram_dialog import Dialog, StartMode, Window
+from aiogram_dialog.widgets.input import MessageInput
+from aiogram_dialog.widgets.kbd import (
+    Button,
+    Column,
+    Group,
+    ListGroup,
+    Row,
+    Select,
+    Start,
+    SwitchTo,
+)
+from aiogram_dialog.widgets.text import Format
+from magic_filter import F
+
+from app.bot.states import DashboardRemnashop, RemnashopPlans
+from app.bot.widgets import Banner, I18nFormat, IgnoreUpdate
+from app.core.enums import BannerName, Currency, PlanAvailability, PlanType
+
+from .getters import (
+    availability_getter,
+    create_getter,
+    durations_getter,
+    price_getter,
+    prices_getter,
+    type_getter,
+)
+from .handlers import (
+    on_active_toggle,
+    on_availability_selected,
+    on_confirm_plan,
+    on_currency_selected,
+    on_devices_input,
+    on_duration_input,
+    on_duration_removed,
+    on_duration_selected,
+    on_name_input,
+    on_price_input,
+    on_traffic_input,
+    on_type_selected,
+)
+
+plans = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plans-main"),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-plans-statistics"),
+            id="statistics",
+            state=RemnashopPlans.STATISTICS,
+        ),
+        SwitchTo(
+            I18nFormat("btn-plans-create"),
+            id="create",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    Row(
+        Start(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardRemnashop.MAIN,
+            mode=StartMode.RESET_STACK,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=RemnashopPlans.MAIN,
+)
+
+plan_config = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-config"),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-plan-name"),
+            id="name",
+            state=RemnashopPlans.NAME,
+        ),
+        SwitchTo(
+            text=I18nFormat("btn-plan-type"),
+            id="type",
+            state=RemnashopPlans.TYPE,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-plan-availability"),
+            id="availability",
+            state=RemnashopPlans.AVAILABILITY,
+        ),
+        Button(
+            text=I18nFormat("btn-plan-active", is_active=F["active"]),
+            id="active_toggle",
+            on_click=on_active_toggle,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-plan-traffic"),
+            id="traffic",
+            state=RemnashopPlans.TRAFFIC,
+            when=F["has_traffic_limit"],
+        ),
+        SwitchTo(
+            text=I18nFormat("btn-plan-devices"),
+            id="devices",
+            state=RemnashopPlans.DEVICES,
+            when=F["has_device_limit"],
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-plan-durations-prices"),
+            id="durations_prices",
+            state=RemnashopPlans.DURATIONS,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-plan-allowed"),
+            id="allowed",
+            state=RemnashopPlans.ALLOWED,
+            when=F["availability"] == PlanAvailability.ALLOWED,
+        ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-plan-confirm"),
+            id="confirm",
+            on_click=on_confirm_plan,
+        ),
+    ),
+    Row(
+        Start(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.MAIN,
+            mode=StartMode.RESET_STACK,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=RemnashopPlans.PLAN,
+    getter=create_getter,
+)
+
+plan_name = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-name"),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    MessageInput(func=on_name_input),
+    IgnoreUpdate(),
+    state=RemnashopPlans.NAME,
+)
+
+plan_type = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-type"),
+    Column(
+        Select(
+            text=I18nFormat("btn-plan-type-choice", type=F["item"]),
+            id="select_type",
+            item_id_getter=lambda item: item.value,
+            items="types",
+            type_factory=PlanType,
+            on_click=on_type_selected,
+        )
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=RemnashopPlans.TYPE,
+    getter=type_getter,
+)
+
+plan_availability = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-availability"),
+    Column(
+        Select(
+            text=I18nFormat("btn-plan-availability-choice", type=F["item"]),
+            id="select_availability",
+            item_id_getter=lambda item: item.value,
+            items="availability",
+            type_factory=PlanAvailability,
+            on_click=on_availability_selected,
+        )
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=RemnashopPlans.AVAILABILITY,
+    getter=availability_getter,
+)
+
+plan_traffic = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-traffic"),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    MessageInput(func=on_traffic_input),
+    IgnoreUpdate(),
+    state=RemnashopPlans.TRAFFIC,
+)
+
+plan_devices = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-devices"),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    MessageInput(func=on_devices_input),
+    IgnoreUpdate(),
+    state=RemnashopPlans.DEVICES,
+)
+
+
+plan_durations = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-durations"),
+    ListGroup(
+        Row(
+            Button(
+                text=I18nFormat("btn-plan-duration", duration=F["item"]["days"]),
+                id="select_duration",
+                on_click=on_duration_selected,
+            ),
+            Button(
+                text=Format("❌"),
+                id="remove_duration",
+                on_click=on_duration_removed,
+            ),
+        ),
+        id="duration_list",
+        item_id_getter=lambda item: item["days"],
+        items="durations",
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-plan-duration-add"),
+            id="duration_add",
+            state=RemnashopPlans.DURATION_ADD,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=RemnashopPlans.DURATIONS,
+    getter=durations_getter,
+)
+
+plan_durations_add = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-duration"),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.DURATIONS,
+        ),
+    ),
+    MessageInput(func=on_duration_input),
+    IgnoreUpdate(),
+    state=RemnashopPlans.DURATION_ADD,
+)
+
+plan_prices = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-prices", duration=F["duration"]),
+    Column(
+        Select(
+            text=I18nFormat(
+                "btn-plan-price-choice",
+                price=F["item"]["price"],
+                currency=F["item"]["currency"],
+            ),
+            id="select_price",
+            item_id_getter=lambda item: item["currency"].value,
+            items="prices",
+            type_factory=Currency,
+            on_click=on_currency_selected,
+        )
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.DURATIONS,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=RemnashopPlans.PRICES,
+    getter=prices_getter,
+)
+
+plan_price = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-price", duration=F["duration"], currency=F["currency"]),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PRICES,
+        ),
+    ),
+    MessageInput(func=on_price_input),
+    IgnoreUpdate(),
+    state=RemnashopPlans.PRICE,
+    getter=price_getter,
+)
+
+
+router = Dialog(
+    plans,
+    plan_config,
+    plan_name,
+    plan_type,
+    plan_availability,
+    plan_traffic,
+    plan_devices,
+    plan_durations,
+    plan_durations_add,
+    plan_prices,
+    plan_price,
+)

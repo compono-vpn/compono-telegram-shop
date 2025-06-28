@@ -1,6 +1,4 @@
-import logging
-
-from aiogram_dialog import Dialog, Window
+from aiogram_dialog import Dialog, StartMode, Window
 from aiogram_dialog.widgets.kbd import Row, Start, SwitchTo
 
 from app.bot.states import Dashboard, DashboardRemnawave
@@ -15,45 +13,43 @@ from .getters import (
     users_getter,
 )
 
-logger = logging.getLogger(__name__)
-
-
 remnawave = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-remnawave"),
+    I18nFormat("msg-remnawave-main"),
     Row(
         SwitchTo(
-            I18nFormat("btn-remnawave-users"),
-            id="remnawave.users",
-            state=DashboardRemnawave.users,
+            text=I18nFormat("btn-remnawave-users"),
+            id="users",
+            state=DashboardRemnawave.USERS,
         )
     ),
     Row(
         SwitchTo(
-            I18nFormat("btn-remnawave-hosts"),
-            id="remnawave.hosts",
-            state=DashboardRemnawave.hosts,
+            text=I18nFormat("btn-remnawave-hosts"),
+            id="hosts",
+            state=DashboardRemnawave.HOSTS,
         ),
         SwitchTo(
-            I18nFormat("btn-remnawave-nodes"),
-            id="remnawave.nodes",
-            state=DashboardRemnawave.nodes,
+            text=I18nFormat("btn-remnawave-nodes"),
+            id="nodes",
+            state=DashboardRemnawave.NODES,
         ),
         SwitchTo(
-            I18nFormat("btn-remnawave-inbounds"),
-            id="remnawave.inbounds",
-            state=DashboardRemnawave.inbounds,
+            text=I18nFormat("btn-remnawave-inbounds"),
+            id="inbounds",
+            state=DashboardRemnawave.INBOUNDS,
         ),
     ),
     Row(
         Start(
-            I18nFormat("btn-back"),
-            id="back.dashboard",
-            state=Dashboard.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=Dashboard.MAIN,
+            mode=StartMode.RESET_STACK,
         )
     ),
     IgnoreUpdate(),
-    state=DashboardRemnawave.main,
+    state=DashboardRemnawave.MAIN,
     getter=system_getter,
 )
 
@@ -62,13 +58,13 @@ users = Window(
     I18nFormat("msg-remnawave-users"),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.remnawave",
-            state=DashboardRemnawave.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardRemnawave.MAIN,
         )
     ),
     IgnoreUpdate(),
-    state=DashboardRemnawave.users,
+    state=DashboardRemnawave.USERS,
     getter=users_getter,
 )
 
@@ -77,13 +73,13 @@ hosts = Window(
     I18nFormat("msg-remnawave-hosts"),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.remnawave",
-            state=DashboardRemnawave.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardRemnawave.MAIN,
         )
     ),
     IgnoreUpdate(),
-    state=DashboardRemnawave.hosts,
+    state=DashboardRemnawave.HOSTS,
     getter=hosts_getter,
 )
 
@@ -92,13 +88,13 @@ nodes = Window(
     I18nFormat("msg-remnawave-nodes"),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.remnawave",
-            state=DashboardRemnawave.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardRemnawave.MAIN,
         )
     ),
     IgnoreUpdate(),
-    state=DashboardRemnawave.nodes,
+    state=DashboardRemnawave.NODES,
     getter=nodes_getter,
 )
 
@@ -107,13 +103,13 @@ inbounds = Window(
     I18nFormat("msg-remnawave-inbounds"),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.remnawave",
-            state=DashboardRemnawave.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardRemnawave.MAIN,
         )
     ),
     IgnoreUpdate(),
-    state=DashboardRemnawave.inbounds,
+    state=DashboardRemnawave.INBOUNDS,
     getter=inbounds_getter,
 )
 

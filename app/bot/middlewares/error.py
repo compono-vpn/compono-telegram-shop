@@ -24,12 +24,7 @@ class ErrorMiddleware(EventTypedMiddleware):
         event: ErrorEvent,
         data: dict[str, Any],
     ) -> Any:
-        aiogram_user: Optional[AiogramUser] = None
-
-        if event.update.message:
-            aiogram_user = event.update.message.from_user
-        elif event.update.callback_query:
-            aiogram_user = event.update.callback_query.from_user
+        aiogram_user: Optional[AiogramUser] = self._get_aiogram_user(event)
 
         if isinstance(event.exception, TelegramForbiddenError):
             self.logger.info(f"[User:{aiogram_user.id} ({aiogram_user.full_name})] Blocked the bot")
@@ -49,7 +44,7 @@ class ErrorMiddleware(EventTypedMiddleware):
             text = Text(
                 Bold((type(event.exception).__name__)), f": {str(event.exception)[:1021]}..."
             )
-            # TODO: send error details to developer
+            # TODO: Send error details to developer
 
         except TelegramBadRequest as exception:
             self.logger.warning(f"Failed to send error details: {exception}")

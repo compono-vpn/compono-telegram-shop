@@ -2,61 +2,79 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class MainMenu(StatesGroup):
-    main = State()
+    MAIN = State()
 
 
 class Dashboard(StatesGroup):
-    main = State()
-    statistics = State()
-    maintenance = State()
+    MAIN = State()
+    STATISTICS = State()
+    MAINTENANCE = State()
 
 
 class DashboardBroadcast(StatesGroup):
-    main = State()
-    to_all = State()
-    to_user = State()
-    subscribed = State()
-    unsubscribed = State()
-    expired = State()
-    last_sent = State()
+    MAIN = State()
+    TO_ALL = State()
+    TO_USER = State()
+    SUBSCRIBED = State()
+    UNSUBSCRIBED = State()
+    EXPIRED = State()
+    LAST_SENT = State()
 
 
 class DashboardPromocodes(StatesGroup):
-    main = State()
-    list = State()
-    create = State()
-    delete = State()
-    edit = State()
+    MAIN = State()
+    LIST = State()
+    CREATE = State()
+    DELETE = State()
+    EDIT = State()
 
 
 class DashboardUsers(StatesGroup):
-    main = State()
-    search = State()
-    recent_registered = State()
-    recent_activity = State()
-    blacklist = State()
-    unblock_all = State()
+    MAIN = State()
+    SEARCH = State()
+    RECENT_REGISTERED = State()
+    RECENT_ACTIVITY = State()
+    BLACKLIST = State()
+    UNBLOCK_ALL = State()
 
-    user = State()
-    statistics = State()
-    role = State()
-    subscription = State()
-    transactions = State()
+
+class DashboardUser(StatesGroup):
+    MAIN = State()
+    STATISTICS = State()
+    ROLE = State()
+    SUBSCRIPTION = State()
+    TRANSACTIONS = State()
 
 
 class DashboardRemnashop(StatesGroup):
-    main = State()
-    admins = State()
-    referral = State()
-    advertising = State()
-    plans = State()
-    notifications = State()
-    logs = State()
+    MAIN = State()
+    ADMINS = State()
+    REFERRAL = State()
+    ADVERTISING = State()
+    NOTIFICATIONS = State()
+    LOGS = State()
+
+
+class RemnashopPlans(StatesGroup):
+    MAIN = State()
+    STATISTICS = State()
+
+    PLAN = State()
+    NAME = State()
+    TYPE = State()
+    AVAILABILITY = State()
+    TRAFFIC = State()
+    DEVICES = State()
+    DURATIONS = State()
+    DURATION_ADD = State()
+    PRICES = State()
+    PRICE = State()
+    ALLOWED = State()
 
 
 class DashboardRemnawave(StatesGroup):
-    main = State()
-    users = State()
-    hosts = State()
-    nodes = State()
-    inbounds = State()
+    MAIN = State()
+    USERS = State()
+    HOSTS = State()
+    NODES = State()
+    INBOUNDS = State()

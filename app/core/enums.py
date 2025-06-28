@@ -71,6 +71,26 @@ class PlanAvailability(StrEnum):
     ALLOWED = auto()
 
 
+class Currency(str, Enum):
+    USD = "USD"
+    XTR = "XTR"
+    RUB = "RUB"
+
+    @property
+    def symbol(self) -> str:
+        symbols = {
+            "USD": "$",
+            "XTR": "★",
+            "RUB": "₽",
+        }
+        return symbols[self.value]
+
+    @classmethod
+    def from_code(cls, code: str) -> "Currency":
+        code = code.upper()
+        return cls(code)
+
+
 class MaintenanceMode(StrEnum):
     GLOBAL = auto()
     PURCHASE = auto()

@@ -1,4 +1,6 @@
 import logging
+from pathlib import Path
+from typing import Optional
 
 from aiogram_dialog import DialogManager
 from aiogram_dialog.widgets.common import Whenable
@@ -14,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 class Banner(StaticMedia):
     def __init__(self, name: BannerName) -> None:
-        path = None
-        content_type = None
+        path: Optional[Path] = None
+        content_type: Optional[str] = None
 
         for format in BannerFormat:
             candidate_path = DEFAULT_BANNERS_DIR / f"{name.value}.{format.value}"
@@ -34,7 +36,7 @@ class Banner(StaticMedia):
             raise FileNotFoundError(f"Default banner file not found: {path}")
 
         def is_use_banners(data: dict, widget: Whenable, dialog_manager: DialogManager) -> bool:
-            container: AppContainer = dialog_manager.middleware_data.get(APP_CONTAINER_KEY)
+            container: AppContainer = dialog_manager.middleware_data[APP_CONTAINER_KEY]
             return container.config.bot.use_banners
 
         super().__init__(path=path, type=content_type, when=is_use_banners)

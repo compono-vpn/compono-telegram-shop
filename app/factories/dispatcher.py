@@ -57,6 +57,7 @@ def create_dispatcher(config: AppConfig) -> Dispatcher:
     )
 
     # request -> outer -> filter -> inner -> handler #
+    setup_dialogs(router=dispatcher)
 
     for mw in middlewares.outer:
         mw.setup_outer(router=dispatcher)
@@ -66,5 +67,4 @@ def create_dispatcher(config: AppConfig) -> Dispatcher:
 
     dispatcher.message.filter(IsPrivate())
     dispatcher.include_routers(*routers)
-    setup_dialogs(router=dispatcher)
     return dispatcher

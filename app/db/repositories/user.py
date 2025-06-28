@@ -9,7 +9,7 @@ from app.db.models.sql import User
 from .base import BaseRepository
 
 
-class UsersRepository(BaseRepository):
+class UserRepository(BaseRepository):
     async def get(self, telegram_id: int) -> Optional[User]:
         return await self._get(User, User.telegram_id == telegram_id)
 

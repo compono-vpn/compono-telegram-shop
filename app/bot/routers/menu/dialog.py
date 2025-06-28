@@ -1,4 +1,4 @@
-from aiogram_dialog import Dialog, Window
+from aiogram_dialog import Dialog, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Row, Start
 
@@ -13,46 +13,49 @@ from .getters import menu_getter
 menu = Window(
     Banner(BannerName.MENU),
     I18nFormat("msg-menu-profile"),
-    I18nFormat("space"),
+    I18nFormat("separator"),
     I18nFormat("msg-menu-subscription"),
     # Row(
-    #     Button(I18nFormat("btn-menu-connect"), id="menu.connect"),
+    #     Button(text=I18nFormat("btn-menu-connect"), id="connect"),
     # ),
     # Row(
-    #     Button(I18nFormat("btn-menu-trial"), id="menu.trial"),
+    #     Button(text=I18nFormat("btn-menu-trial"), id="trial"),
     # ),
     Row(
         # Button(
-        #     I18nFormat("btn-menu-promocode"),
-        #     id="menu.promocode",
+        #     text=I18nFormat("btn-menu-promocode"),
+        #     id="promocode",
         # ),
         Button(
-            I18nFormat("btn-menu-subscription"),
-            id="menu.subscription",
+            text=I18nFormat("btn-menu-subscription"),
+            id="subscription",
         ),
     ),
     Row(
         Button(
-            I18nFormat("btn-menu-invite"),
-            id="menu.invite",
+            text=I18nFormat("btn-menu-invite"),
+            id="invite",
         ),
         Button(
-            I18nFormat("btn-menu-support"),
-            id="menu.support",
+            text=I18nFormat("btn-menu-support"),
+            id="support",
         ),
     ),
     Row(
         Start(
-            I18nFormat("btn-menu-dashboard"),
-            id="menu.dashboard",
-            state=Dashboard.main,
+            text=I18nFormat("btn-menu-dashboard"),
+            id="dashboard",
+            state=Dashboard.MAIN,
+            mode=StartMode.RESET_STACK,
             when=is_admin_or_dev,
         ),
     ),
     MessageInput(func=on_user_search),
     IgnoreUpdate(),
-    state=MainMenu.main,
+    state=MainMenu.MAIN,
     getter=menu_getter,
 )
 
-router = Dialog(menu)
+router = Dialog(
+    menu,
+)

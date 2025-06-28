@@ -1,5 +1,5 @@
-from aiogram_dialog import Dialog, Window
-from aiogram_dialog.widgets.kbd import Button, Row, SwitchTo
+from aiogram_dialog import Dialog, StartMode, Window
+from aiogram_dialog.widgets.kbd import Button, Row, Start
 
 from app.bot.states import Dashboard, DashboardPromocodes
 from app.bot.widgets import Banner, I18nFormat, IgnoreUpdate
@@ -7,40 +7,43 @@ from app.core.enums import BannerName
 
 promocodes = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-dashboard-promocodes"),
+    I18nFormat("msg-promocodes-main"),
     Row(
         Button(
-            I18nFormat("btn-promocodes-list"),
-            id="promocodes.list",
+            text=I18nFormat("btn-promocodes-list"),
+            id="list",
         ),
         Button(
-            I18nFormat("btn-promocodes-search"),
-            id="promocodes.search",
+            text=I18nFormat("btn-promocodes-search"),
+            id="search",
         ),
     ),
     Row(
         Button(
-            I18nFormat("btn-promocodes-create"),
-            id="promocodes.create",
+            text=I18nFormat("btn-promocodes-create"),
+            id="create",
         ),
         # Button(
-        #     I18nFormat("btn-promocodes-delete"),
-        #     id="promocodes.delete",
+        #     text=I18nFormat("btn-promocodes-delete"),
+        #     id="delete",
         # ),
         # Button(
-        #     I18nFormat("btn-promocodes-edit"),
-        #     id="promocodes.edit",
+        #     text=I18nFormat("btn-promocodes-edit"),
+        #     id="edit",
         # ),
     ),
     Row(
-        SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.dashboard",
-            state=Dashboard.main,
+        Start(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=Dashboard.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
     ),
     IgnoreUpdate(),
-    state=DashboardPromocodes.main,
+    state=DashboardPromocodes.MAIN,
 )
 
-router = Dialog(promocodes)
+router = Dialog(
+    promocodes,
+)

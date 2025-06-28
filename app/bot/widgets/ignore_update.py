@@ -4,7 +4,6 @@ from aiogram_dialog.widgets.input import BaseInput
 
 
 class IgnoreUpdate(BaseInput):
-
     async def process_message(
         self,
         message: Message,

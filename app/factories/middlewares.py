@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from app.core.config import AppConfig
@@ -20,8 +20,8 @@ from app.core.constants import RESOURCE_I18N
 
 
 class Middlewares(NamedTuple):
-    outer: List[EventTypedMiddleware]
-    inner: List[EventTypedMiddleware]
+    outer: list[EventTypedMiddleware]
+    inner: list[EventTypedMiddleware]
 
 
 def create_i18n_middleware(config: AppConfig) -> I18nMiddleware:
@@ -44,6 +44,8 @@ def create_middlewares(config: AppConfig) -> Middlewares:
     throttling_middleware = ThrottlingMiddleware()
     maintenance_middleware = MaintenanceMiddleware()
     garbage_middleware = GarbageMiddleware()
+    # TODO: Implement middleware for global user lookup
+    # TODO: Implement middleware for action auditing
 
     # NOTE: Order matters!
     outer_middlewares = [

@@ -1,17 +1,13 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Union
-
-if TYPE_CHECKING:
-    from app.db.models import UserDto
+from typing import Any, Awaitable, Callable, Optional, Union
 
 from aiogram.types import CallbackQuery, ErrorEvent, Message
 from aiogram.types import User as AiogramUser
 
 from app.bot.models import AppContainer
 from app.core.constants import APP_CONTAINER_KEY, USER_KEY
-from app.core.enums import MiddlewareEventType
+from app.core.enums import MiddlewareEventType, UserRole
 from app.core.formatters import format_log_user
+from app.db.models.dto import UserDto, UserSchema
 
 from .base import EventTypedMiddleware
 
@@ -26,33 +22,34 @@ class UserMiddleware(EventTypedMiddleware):
     async def __call__(
         self,
         handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
-        event: Union[Message, CallbackQuery, ErrorEvent],
+        event: Union[Union[Message, CallbackQuery, ErrorEvent], CallbackQuery, ErrorEvent],
         data: dict[str, Any],
-    ) -> Optional[Any]:
-        aiogram_user: Optional[AiogramUser] = None
-
-        if isinstance(event, (CallbackQuery)):
-            aiogram_user = event.from_user
-        elif isinstance(event, (Message)):
-            aiogram_user = event.from_user
-        elif isinstance(event, (ErrorEvent)):
-            if event.update.callback_query:
-                aiogram_user = event.update.callback_query.from_user
-            elif event.update.message:
-                aiogram_user = event.update.message.from_user
+    ) -> Any:
+        aiogram_user: Optional[AiogramUser] = self._get_aiogram_user(event)
 
         if aiogram_user is None or aiogram_user.is_bot:
-            return await handler(event, data)
+            return
 
         container: AppContainer = data[APP_CONTAINER_KEY]
         user_service = container.services.user
         user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
 
         if user is None:
-            is_dev = True if container.config.bot.dev_id == aiogram_user.id else False
-            user = await user_service.create(
-                aiogram_user=aiogram_user, i18n=container.i18n, is_dev=is_dev
+            user_data = UserSchema(
+                telegram_id=aiogram_user.id,
+                name=aiogram_user.full_name,
+                role=(
+                    UserRole.DEV
+                    if container.config.bot.dev_id == aiogram_user.id
+                    else UserRole.USER
+                ),
+                language=(
+                    aiogram_user.language_code
+                    if aiogram_user.language_code in container.i18n.locales
+                    else container.i18n.default_locale
+                ),
             )
+            user = await user_service.create(user_data)
             self.logger.info(f"{format_log_user(user)} Created new user")
             # TODO: Notify devs
 

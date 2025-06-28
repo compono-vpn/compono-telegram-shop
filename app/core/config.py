@@ -98,7 +98,8 @@ class BotConfig(BaseSettings, env_prefix="BOT_"):
 
 
 class RemnaConfig(BaseSettings, env_prefix="REMNA_"):
-    host: SecretStr = SecretStr(DEFAULT_REMNA_HOST)  # TODO: docker
+    # TODO: Ensure connection to the panel within a single Docker network
+    host: SecretStr = SecretStr(DEFAULT_REMNA_HOST)
     token: SecretStr
 
     @field_validator("host")
@@ -187,7 +188,7 @@ class I18nConfig(BaseSettings, env_prefix="I18N_"):
     default_locale: Locale = DEFAULT_I18N_LOCALE
 
 
-class SQLAlchemyConfig(BaseSettings, env_prefix="ALCHEMY_"):  # TODO:
+class SQLAlchemyConfig(BaseSettings, env_prefix="ALCHEMY_"):
     echo: bool = False
     echo_pool: bool = False
     pool_size: int = 25
@@ -205,7 +206,7 @@ class AppConfig(BaseSettings):
     i18n: I18nConfig = Field(default_factory=I18nConfig)
     alchemy: SQLAlchemyConfig = Field(default_factory=SQLAlchemyConfig)
 
-    origins: list[str] = []  # NOTE: for miniapp
+    origins: list[str] = []  # NOTE: For miniapp
 
     model_config = SettingsConfigDict(
         extra="ignore",

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 async def commands_setup(bot: Bot, config: AppConfig) -> None:
-    if config.bot.setup_commands is False:
+    if not config.bot.setup_commands:
         return
 
     commands = [Command.START.value]
@@ -21,7 +21,7 @@ async def commands_setup(bot: Bot, config: AppConfig) -> None:
 
 
 async def commands_delete(bot: Bot, config: AppConfig) -> None:
-    if config.bot.setup_commands is False:
+    if not config.bot.setup_commands:
         return
 
     if await bot.delete_my_commands(scope=BotCommandScopeAllPrivateChats()):

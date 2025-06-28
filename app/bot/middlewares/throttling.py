@@ -45,14 +45,14 @@ class ThrottlingMiddleware(EventTypedMiddleware):
         user: Optional[UserDto] = data.get(USER_KEY)
 
         if user is None:
-            return await handler(event, data)
+            return
 
         key = get_flag(handler=data, name=THROTTLING_KEY, default=self.default_key)
         cache = self.caches.get(key, self.caches[DEFAULT_KEY])
 
         if user.telegram_id in cache:
             self.logger.warning(f"{format_log_user(user)} Throttled")
-            return None
+            return
 
         cache[user.telegram_id] = None
         return await handler(event, data)

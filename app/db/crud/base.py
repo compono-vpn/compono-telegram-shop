@@ -8,7 +8,7 @@ from app.core.config import AppConfig
 class CrudService:
     session_pool: async_sessionmaker[AsyncSession]
     config: AppConfig
-    # TODO: Redis for cache
+    # TODO: Implement caching of database data using Redis
 
     def __init__(
         self,

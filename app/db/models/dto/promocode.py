@@ -6,21 +6,23 @@ from app.core.enums import PromocodeType
 from .base import TrackableModel
 
 
-class PromocodeDto(TrackableModel):
-    id: int
+class PromocodeSchema(TrackableModel):
     code: str
     type: PromocodeType
 
     is_active: bool
     is_multi_use: bool
 
-    lifetime: Optional[int]
-    duration: Optional[int]
-    traffic: Optional[int]
-    # subscription: Optional[str]
-    discount_percent: Optional[int]
+    lifetime: Optional[int] = None
+    duration: Optional[int] = None
+    traffic: Optional[int] = None
+    discount_percent: Optional[int] = None
 
-    activated_by: Optional[int]
+    activated_by: Optional[int] = None
+
+
+class PromocodeDto(PromocodeSchema):
+    id: int
 
     created_at: datetime
     updated_at: datetime

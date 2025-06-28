@@ -1,6 +1,5 @@
-from aiogram_dialog import Dialog, Window
+from aiogram_dialog import Dialog, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Row, Select, Start, SwitchTo
-from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
 from app.bot.conditions import is_dev
@@ -14,104 +13,110 @@ from app.bot.states import (
     MainMenu,
 )
 from app.bot.widgets import Banner, I18nFormat, IgnoreUpdate
-from app.core.enums import BannerName
+from app.core.enums import BannerName, MaintenanceMode
 
 from .handlers import on_maintenance_mode_selected
 from .remnawave.handlers import start_remnawave_window
 
 dashboard = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-dashboard"),
+    I18nFormat("msg-dashboard-main"),
     Row(
         SwitchTo(
-            I18nFormat("btn-dashboard-statistics"),
-            id="dashboard.statistics",
-            state=Dashboard.statistics,
+            text=I18nFormat("btn-dashboard-statistics"),
+            id="statistics",
+            state=Dashboard.STATISTICS,
         ),
         Start(
-            I18nFormat("btn-dashboard-users"),
-            id="dashboard.users",
-            state=DashboardUsers.main,
+            text=I18nFormat("btn-dashboard-users"),
+            id="users",
+            state=DashboardUsers.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
     ),
     Row(
         Start(
-            I18nFormat("btn-dashboard-broadcast"),
-            id="dashboard.broadcast",
-            state=DashboardBroadcast.main,
+            text=I18nFormat("btn-dashboard-broadcast"),
+            id="broadcast",
+            state=DashboardBroadcast.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
         Start(
-            I18nFormat("btn-dashboard-promocodes"),
-            id="dashboard.promocodes",
-            state=DashboardPromocodes.main,
+            text=I18nFormat("btn-dashboard-promocodes"),
+            id="promocodes",
+            state=DashboardPromocodes.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
     ),
     Row(
         SwitchTo(
-            I18nFormat("btn-dashboard-maintenance"),
-            id="dashboard.maintenance",
-            state=Dashboard.maintenance,
+            text=I18nFormat("btn-dashboard-maintenance"),
+            id="maintenance",
+            state=Dashboard.MAINTENANCE,
         ),
     ),
     Row(
         Button(
-            I18nFormat("btn-dashboard-remnawave"),
-            id="dashboard.remnawave",
+            text=I18nFormat("btn-dashboard-remnawave"),
+            id="remnawave",
             on_click=start_remnawave_window,
         ),
         Start(
-            I18nFormat("btn-dashboard-remnashop"),
-            id="dashboard.remnashop",
-            state=DashboardRemnashop.main,
+            text=I18nFormat("btn-dashboard-remnashop"),
+            id="remnashop",
+            state=DashboardRemnashop.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
         when=is_dev,
     ),
     Row(
         Start(
-            I18nFormat("btn-back-menu"),
-            id="back.menu",
-            state=MainMenu.main,
+            text=I18nFormat("btn-back-menu"),
+            id="back",
+            state=MainMenu.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
     ),
     IgnoreUpdate(),
-    state=Dashboard.main,
+    state=Dashboard.MAIN,
 )
 
 statistics = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-dashboard-statistics"),
+    I18nFormat("msg-statistics-main"),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.dashboard",
-            state=Dashboard.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=Dashboard.MAIN,
         ),
     ),
     IgnoreUpdate(),
-    state=Dashboard.statistics,
+    state=Dashboard.STATISTICS,
 )
 
 maintenance = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-dashboard-maintenance"),
+    I18nFormat("msg-maintenance-main"),
     Column(
         Select(
-            text=I18nFormat("btn-maintenance-mode", mode=Format("{item}")),
-            id="maintenance.mode",
-            items="modes",
+            text=I18nFormat("btn-maintenance-mode", mode=F["item"]),
+            id="mode",
             item_id_getter=lambda item: item.value,
+            items="modes",
+            type_factory=MaintenanceMode,
             on_click=on_maintenance_mode_selected,
         ),
     ),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.dashboard",
-            state=Dashboard.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=Dashboard.MAIN,
         ),
     ),
     IgnoreUpdate(),
-    state=Dashboard.maintenance,
+    state=Dashboard.MAINTENANCE,
     getter=maintenance_getter,
 )
 

@@ -1,8 +1,7 @@
-from aiogram_dialog import Dialog, Window
+from aiogram_dialog import Dialog, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import (
     Button,
-    Column,
     Row,
     ScrollingGroup,
     Select,
@@ -16,53 +15,48 @@ from app.bot.states import Dashboard, DashboardUsers
 from app.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from app.core.enums import BannerName
 
-from .getters import blacklist_getter, role_getter, user_getter
-from .handlers import (
-    on_block_toggle,
-    on_role_selected,
-    on_unblock_all,
-    on_user_search,
-    on_user_selected,
-)
+from .getters import blacklist_getter
+from .handlers import on_unblock_all, on_user_search, on_user_selected
 
 users = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-dashboard-users"),
+    I18nFormat("msg-users-main"),
     Row(
         SwitchTo(
-            I18nFormat("btn-users-search"),
-            id="users.search",
-            state=DashboardUsers.search,
+            text=I18nFormat("btn-users-search"),
+            id="search",
+            state=DashboardUsers.SEARCH,
         ),
     ),
     Row(
         Button(
-            I18nFormat("btn-users-recent-registered"),
-            id="users.recent_registered",
+            text=I18nFormat("btn-users-recent-registered"),
+            id="recent_registered",
         ),
     ),
     Row(
         Button(
-            I18nFormat("btn-users-recent-activity"),
-            id="users.recent_activity",
+            text=I18nFormat("btn-users-recent-activity"),
+            id="recent_activity",
         ),
     ),
     Row(
         SwitchTo(
-            I18nFormat("btn-users-blacklist"),
-            id="users.blacklist",
-            state=DashboardUsers.blacklist,
+            text=I18nFormat("btn-users-blacklist"),
+            id="blacklist",
+            state=DashboardUsers.BLACKLIST,
         ),
     ),
     Row(
         Start(
-            I18nFormat("btn-back"),
-            id="back.dashboard",
-            state=Dashboard.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=Dashboard.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
     ),
     IgnoreUpdate(),
-    state=DashboardUsers.main,
+    state=DashboardUsers.MAIN,
 )
 
 search = Window(
@@ -70,36 +64,16 @@ search = Window(
     I18nFormat("msg-users-search"),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.dashboard_users",
-            state=DashboardUsers.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUsers.MAIN,
         ),
     ),
     MessageInput(func=on_user_search),
     IgnoreUpdate(),
-    state=DashboardUsers.search,
+    state=DashboardUsers.SEARCH,
 )
 
-unblock_all = Window(
-    Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-users-unblock-all"),
-    Row(
-        Button(
-            I18nFormat("btn-unblock-all-confirm"),
-            id="blacklist.unblock_all_confirm",
-            on_click=on_unblock_all,
-        ),
-    ),
-    Row(
-        SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.blacklist",
-            state=DashboardUsers.blacklist,
-        ),
-    ),
-    IgnoreUpdate(),
-    state=DashboardUsers.unblock_all,
-)
 
 blacklist = Window(
     Banner(BannerName.DASHBOARD),
@@ -107,115 +81,62 @@ blacklist = Window(
     ScrollingGroup(
         Select(
             text=Format("{item.telegram_id} ({item.name})"),
-            id="blacklist.user",
+            id="user",
             item_id_getter=lambda item: item.telegram_id,
             items="blocked_users",
             type_factory=int,
             on_click=on_user_selected,
         ),
-        id="blacklist.scroll",
+        id="scroll",
         width=1,
         height=7,
         hide_on_single_page=True,
     ),
     Row(
         SwitchTo(
-            I18nFormat("btn-blacklist-unblock-all"),
-            id="blacklist.unblock_all",
-            state=DashboardUsers.unblock_all,
+            text=I18nFormat("btn-users-unblock-all"),
+            id="unblock_all",
+            state=DashboardUsers.UNBLOCK_ALL,
             when=F["blocked_users_exists"],
         ),
     ),
     Row(
         SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.dashboard_users",
-            state=DashboardUsers.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUsers.MAIN,
         ),
     ),
     IgnoreUpdate(),
-    state=DashboardUsers.blacklist,
+    state=DashboardUsers.BLACKLIST,
     getter=blacklist_getter,
 )
 
-user = Window(
+unblock_all = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-users-user"),
+    I18nFormat("msg-users-unblock-all"),
     Row(
         Button(
-            I18nFormat("btn-user-statistics"),
-            id="user.statistics",
-        ),
-        Button(
-            I18nFormat("btn-user-message"),
-            id="user.message",
-        ),
-    ),
-    Row(
-        Button(
-            I18nFormat("btn-user-subscription"),
-            id="user.subscription",
-        ),
-        Button(
-            I18nFormat("btn-user-transactions"),
-            id="user.transactions",
+            text=I18nFormat("btn-users-unblock-all-confirm"),
+            id="unblock_all_confirm",
+            on_click=on_unblock_all,
         ),
     ),
     Row(
         SwitchTo(
-            I18nFormat("btn-user-change-role"),
-            id="user.role",
-            state=DashboardUsers.role,
-        ),
-    ),
-    Row(
-        Button(
-            I18nFormat("btn-user-block-toggle", is_blocked=Format("{is_blocked}")),
-            id="user.block_toggle",
-            on_click=on_block_toggle,
-        ),
-    ),
-    Row(
-        Start(
-            I18nFormat("btn-back-dashboard"),
-            id="back.dashboard",
-            state=Dashboard.main,
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUsers.BLACKLIST,
         ),
     ),
     IgnoreUpdate(),
-    state=DashboardUsers.user,
-    getter=user_getter,
+    state=DashboardUsers.UNBLOCK_ALL,
 )
 
-role = Window(
-    Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-users-user-role"),
-    Column(
-        Select(
-            text=I18nFormat("btn-user-role", role=Format("{item}")),
-            id="select_role",
-            item_id_getter=lambda item: item.value,
-            items="roles",
-            on_click=on_role_selected,
-        )
-    ),
-    Row(
-        SwitchTo(
-            I18nFormat("btn-back"),
-            id="back.dashboard_users",
-            state=DashboardUsers.user,
-        )
-    ),
-    IgnoreUpdate(),
-    state=DashboardUsers.role,
-    getter=role_getter,
-)
 
 router = Dialog(
     users,
     search,
     blacklist,
     unblock_all,
-    user,
-    role,
 )

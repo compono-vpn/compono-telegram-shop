@@ -1,7 +1,7 @@
 import logging
 
 from aiogram.types import CallbackQuery
-from aiogram_dialog import DialogManager
+from aiogram_dialog import DialogManager, StartMode
 from aiogram_dialog.widgets.kbd import Button
 
 from app.bot.models.containers import AppContainer
@@ -16,7 +16,7 @@ async def start_remnawave_window(
     widget: Button,
     dialog_manager: DialogManager,
 ):
-    container: AppContainer = dialog_manager.middleware_data.get(APP_CONTAINER_KEY)
+    container: AppContainer = dialog_manager.middleware_data[APP_CONTAINER_KEY]
 
     try:
         response = await container.remnawave.system.get_stats()
@@ -26,4 +26,4 @@ async def start_remnawave_window(
         await callback.message.answer(f"Failed to connect to Remnawave. {response}")
         return
 
-    await dialog_manager.start(DashboardRemnawave.main)
+    await dialog_manager.start(DashboardRemnawave.MAIN, mode=StartMode.RESET_STACK)

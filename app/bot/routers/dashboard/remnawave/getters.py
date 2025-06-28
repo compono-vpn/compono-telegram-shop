@@ -7,7 +7,7 @@ from remnawave_api.models import (
 )
 
 from app.bot.middlewares.i18n import I18nFormatter
-from app.bot.models.containers import AppContainer
+from app.bot.models import AppContainer, SystemData
 from app.core.constants import UNLIMITED
 from app.core.formatters import (
     format_bytes,
@@ -25,18 +25,20 @@ async def system_getter(
 ) -> dict:
     stats: StatisticResponseDto = await container.remnawave.system.get_stats()
 
-    return {  # NOTE: think about a models for translations
-        "cpu_cores": stats.cpu.physical_cores,
-        "cpu_threads": stats.cpu.cores,
-        "ram_used": format_bytes(value=stats.memory.active, i18n_formatter=i18n_formatter),
-        "ram_total": format_bytes(value=stats.memory.total, i18n_formatter=i18n_formatter),
-        "ram_used_percent": format_percent(part=stats.memory.active, whole=stats.memory.total),
-        "uptime": format_duration(
+    data = SystemData(
+        cpu_cores=stats.cpu.physical_cores,
+        cpu_threads=stats.cpu.cores,
+        ram_used=format_bytes(value=stats.memory.active, i18n_formatter=i18n_formatter),
+        ram_total=format_bytes(value=stats.memory.total, i18n_formatter=i18n_formatter),
+        ram_used_percent=format_percent(part=stats.memory.active, whole=stats.memory.total),
+        uptime=format_duration(
             seconds=stats.uptime,
             i18n_formatter=i18n_formatter,
             round_up=True,
         ),
-    }
+    )
+
+    return data.model_dump()
 
 
 async def users_getter(

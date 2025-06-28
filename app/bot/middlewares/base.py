@@ -1,8 +1,10 @@
 import logging
 from abc import ABC
-from typing import ClassVar, Final
+from typing import ClassVar, Final, Optional, Union
 
 from aiogram import BaseMiddleware, Router
+from aiogram.types import CallbackQuery, ErrorEvent, Message
+from aiogram.types import User as AiogramUser
 
 from app.core.enums import MiddlewareEventType
 
@@ -36,3 +38,16 @@ class EventTypedMiddleware(BaseMiddleware, ABC):
             f"{self.__class__.__name__} set as outer middleware for: "
             f"{', '.join(t.value for t in self.__event_types__)}"
         )
+
+    @staticmethod
+    def _get_aiogram_user(
+        event: Union[Message, CallbackQuery, ErrorEvent],
+    ) -> Optional[AiogramUser]:
+        if isinstance(event, Message) or isinstance(event, CallbackQuery):
+            return event.from_user
+        elif isinstance(event, ErrorEvent):
+            if event.update.callback_query:
+                return event.update.callback_query.from_user
+            elif event.update.message:
+                return event.update.message.from_user
+        return None

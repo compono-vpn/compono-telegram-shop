@@ -1,5 +1,5 @@
-from aiogram_dialog import Dialog, Window
-from aiogram_dialog.widgets.kbd import Button, Row, SwitchTo
+from aiogram_dialog import Dialog, StartMode, Window
+from aiogram_dialog.widgets.kbd import Button, Row, Start
 
 from app.bot.states import Dashboard, DashboardBroadcast
 from app.bot.widgets import Banner, I18nFormat, IgnoreUpdate
@@ -7,48 +7,49 @@ from app.core.enums import BannerName
 
 broadcast = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-dashboard-broadcast"),
+    I18nFormat("msg-broadcast-main"),
     Row(
         Button(
             I18nFormat("btn-broadcast-all"),
-            id="broadcast.all",
+            id="all",
         ),
         Button(
             I18nFormat("btn-broadcast-user"),
-            id="broadcast.user",
+            id="user",
         ),
     ),
     Row(
         Button(
             I18nFormat("btn-broadcast-subscribed"),
-            id="broadcast.subscribed",
+            id="subscribed",
         ),
         Button(
             I18nFormat("btn-broadcast-unsubscribed"),
-            id="broadcast.unsubscribed",
+            id="unsubscribed",
         ),
     ),
     Row(
         Button(
             I18nFormat("btn-broadcast-expired"),
-            id="broadcast.expired",
+            id="expired",
         ),
     ),
     Row(
         Button(
             I18nFormat("btn-broadcast-last-message"),
-            id="broadcast.last_message",
+            id="last_message",
         ),
     ),
     Row(
-        SwitchTo(
+        Start(
             I18nFormat("btn-back"),
-            id="back.dashboard",
-            state=Dashboard.main,
+            id="back",
+            state=Dashboard.MAIN,
+            mode=StartMode.RESET_STACK,
         ),
     ),
     IgnoreUpdate(),
-    state=DashboardBroadcast.main,
+    state=DashboardBroadcast.MAIN,
 )
 
 

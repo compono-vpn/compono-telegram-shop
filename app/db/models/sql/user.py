@@ -1,15 +1,14 @@
-from datetime import datetime
-
-from sqlalchemy import TIMESTAMP, BigInteger, Boolean, Enum, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import UserRole
 from app.db.models.dto import UserDto
 
 from .base import Base
+from .timestamp import TimestampMixin
 
 
-class User(Base):
+class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -25,18 +24,6 @@ class User(Base):
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_bot_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_trial_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True),
-        default=func.now(),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True),
-        default=func.now(),
-        nullable=False,
-        onupdate=func.now(),
-    )
 
     def dto(self) -> UserDto:
         return UserDto.model_validate(self)

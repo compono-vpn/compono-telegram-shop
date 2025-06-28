@@ -9,7 +9,7 @@ from app.db.models.sql import Plan
 from .base import BaseRepository
 
 
-class PlansRepository(BaseRepository):
+class PlanRepository(BaseRepository):
     async def get(self, plan_id: int) -> Optional[Plan]:
         return await self._get(Plan, Plan.id == plan_id)
 
@@ -31,10 +31,10 @@ class PlansRepository(BaseRepository):
         return cast(int, await self.session.scalar(select(count(Plan.id))))
 
     async def filter_by_type(self, plan_type: PlanType) -> list[Plan]:
-        return await self._get_many(Plan, Plan.plan_type == plan_type)
+        return await self._get_many(Plan, Plan.type == plan_type)
 
-    async def filter_by_availability(self, available_for: PlanAvailability) -> list[Plan]:
-        return await self._get_many(Plan, Plan.available_for == available_for)
+    async def filter_by_availability(self, availability: PlanAvailability) -> list[Plan]:
+        return await self._get_many(Plan, Plan.availability == availability)
 
     async def filter_active(self, is_active: bool = True) -> list[Plan]:
         return await self._get_many(Plan, Plan.is_active == is_active)

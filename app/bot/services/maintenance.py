@@ -1,13 +1,9 @@
-import logging
-
 from redis.asyncio import Redis
 
 from app.core.constants import MAINTENANCE_KEY, MAINTENANCE_WAITLIST_KEY
 from app.core.enums import MaintenanceMode
 
 from .base import BaseService
-
-logger = logging.getLogger(__name__)
 
 
 class MaintenanceService(BaseService):
@@ -31,7 +27,6 @@ class MaintenanceService(BaseService):
 
     async def set_mode(self, mode: MaintenanceMode) -> None:
         await self.redis.set(MAINTENANCE_KEY, mode.value)
-        self.logger.info("TEST")
 
     async def is_active(self) -> bool:
         return await self.get_mode() != MaintenanceMode.OFF

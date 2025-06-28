@@ -11,6 +11,7 @@ UNLIMITED = "∞"
 RESOURCE_I18N = ["messages.ftl", "buttons.ftl", "notifications.ftl", "popups.ftl", "utils.ftl"]
 
 # Keys for data
+DIALOG_MANAGER_KEY = "dialog_manager"
 MIDDLEWARE_DATA_KEY = "middleware_data"
 APP_CONTAINER_KEY = "container"
 BOT_KEY = "bot"

@@ -24,9 +24,9 @@ class MaintenanceMiddleware(EventTypedMiddleware):
         user: Optional[UserDto] = data.get(USER_KEY)
 
         if user is None:
-            return await handler(event, data)
+            return
 
-        container: AppContainer = data.get(APP_CONTAINER_KEY)
+        container: AppContainer = data[APP_CONTAINER_KEY]
         maintenance_service = container.services.maintenance
 
         if not await maintenance_service.is_active():
@@ -41,7 +41,7 @@ class MaintenanceMiddleware(EventTypedMiddleware):
             # TODO: Notify user about maintenance
             return
 
-        if await maintenance_service.is_purchase_mode() and self.is_purchase_action(event):
+        if await maintenance_service.is_purchase_mode() and self._is_purchase_action(event):
             self.logger.warning(f"{format_log_user(user)} Access denied (purchase)")
             # TODO: Notify user about maintenance
 
@@ -51,7 +51,7 @@ class MaintenanceMiddleware(EventTypedMiddleware):
 
             return
 
-    def is_purchase_action(self, event: Union[Message, CallbackQuery]) -> bool:
+    def _is_purchase_action(self, event: Union[Message, CallbackQuery]) -> bool:
         if not isinstance(event, (CallbackQuery)) or event.data is None:
             return False
 

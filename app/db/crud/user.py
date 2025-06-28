@@ -1,38 +1,17 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Optional
-
-if TYPE_CHECKING:
-    from app.bot.middlewares import I18nMiddleware
-
-from aiogram.types import User as AiogramUser
+from typing import Any, Optional
 
 from app.core.enums import UserRole
 from app.db import SQLSessionContext
-from app.db.models.dto import UserDto
+from app.db.models.dto import UserDto, UserSchema
 from app.db.models.sql import User
 
 from .base import CrudService
 
 
 class UserService(CrudService):
-    async def create(
-        self,
-        aiogram_user: AiogramUser,
-        i18n: I18nMiddleware,
-        is_dev: bool = False,  # TODO: config in CrudService
-    ) -> UserDto:
+    async def create(self, user_data: UserSchema) -> UserDto:
         async with SQLSessionContext(self.session_pool) as (repository, uow):
-            db_user = User(
-                telegram_id=aiogram_user.id,
-                name=aiogram_user.full_name,
-                language=(
-                    aiogram_user.language_code
-                    if aiogram_user.language_code in i18n.locales
-                    else i18n.default_locale
-                ),
-                role=UserRole.DEV if is_dev else UserRole.USER,
-            )
+            db_user = User(**user_data.model_dump())
             await uow.commit(db_user)
         return db_user.dto()
 

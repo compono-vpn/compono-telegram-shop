@@ -2,41 +2,35 @@ from typing import Any, Optional
 
 from app.core.enums import PlanAvailability, PlanType
 from app.db import SQLSessionContext
-from app.db.models.dto import PlanDto
-from app.db.models.sql import Plan
+from app.db.models.dto import PlanDto, PlanSchema
+from app.db.models.sql import Plan, PlanDuration, PlanPrice
 
 from .base import CrudService
 
 
 class PlanService(CrudService):
-    async def create(
-        self,
-        name: str,
-        plan_type: PlanType,
-        duration_days: int,
-        price: float,
-        *,
-        traffic_limit: Optional[int] = None,
-        device_limit: Optional[int] = None,
-        description: Optional[str] = None,
-        available_for: PlanAvailability = PlanAvailability.ALL,
-        allowed_user_ids: Optional[list[int]] = None,
-        is_active: bool = True,
-    ) -> PlanDto:
+    async def create(self, plan_data: PlanSchema) -> PlanDto:
         async with SQLSessionContext(self.session_pool) as (repository, uow):
-            db_plan = Plan(
-                name=name,
-                plan_type=plan_type,
-                duration_days=duration_days,
-                price=price,
-                traffic_limit=traffic_limit,
-                device_limit=device_limit,
-                description=description,
-                available_for=available_for,
-                allowed_user_ids=allowed_user_ids,
-                is_active=is_active,
-            )
+            plan_dict = plan_data.model_dump(exclude={"durations"})
+            db_plan = Plan(**plan_dict)
+
+            for duration_data in plan_data.durations:
+                db_duration = PlanDuration(
+                    days=duration_data.days,
+                    plan=db_plan,
+                )
+                db_plan.durations.append(db_duration)
+
+                for price_data in duration_data.prices:
+                    db_price = PlanPrice(
+                        currency=price_data.currency,
+                        price=price_data.price,
+                        plan_duration=db_duration,
+                    )
+                    db_duration.prices.append(db_price)
+
             await uow.commit(db_plan)
+            await uow.session.refresh(db_plan)
             return db_plan.dto()
 
     async def get(self, plan_id: int) -> Optional[PlanDto]:
