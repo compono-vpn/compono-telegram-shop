@@ -9,6 +9,14 @@ class Notification(StatesGroup):
     CLOSE = State()
 
 
+class Subscription(StatesGroup):
+    MAIN = State()
+    PLANS = State()
+    DURATION = State()
+    PAYMENT_METHOD = State()
+    CONFIRM = State()
+
+
 class Dashboard(StatesGroup):
     MAIN = State()
     STATISTICS = State()
@@ -57,6 +65,13 @@ class DashboardRemnashop(StatesGroup):
     REFERRAL = State()
     ADVERTISING = State()
     LOGS = State()
+
+
+class RemnashopGateways(StatesGroup):
+    MAIN = State()
+    SHOP = State()
+    TOKEN = State()
+    CURRENCY = State()
 
 
 class RemnashopNotifications(StatesGroup):

@@ -14,6 +14,10 @@ class MaintenanceWaitListKey(StorageKey, prefix="maintenance_wait_list"):
     pass
 
 
+class DefaultCurrencyKey(StorageKey, prefix="default_currency"):
+    pass
+
+
 class SystemNotificationSettingsKey(StorageKey, prefix="system_notification_settings"):
     pass
 

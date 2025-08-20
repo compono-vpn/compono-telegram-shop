@@ -4,7 +4,7 @@ from aiogram_dialog.api.exceptions import UnknownIntent, UnknownState
 
 from src.bot.routers.extra.error import on_unknown_intent, on_unknown_state
 
-from . import dashboard, extra, menu
+from . import dashboard, extra, menu, subscription
 from .dashboard import broadcast, promocodes, remnashop, remnawave, users
 
 __all__ = [
@@ -22,11 +22,14 @@ def setup_routers(router: Router):
         menu.handlers.router,
         menu.dialog.router,
         #
+        subscription.dialog.router,
+        #
         dashboard.dialog.router,
         broadcast.dialog.router,
         promocodes.dialog.router,
         #
         remnashop.dialog.router,
+        remnashop.gateways.dialog.router,
         remnashop.notifications.dialog.router,
         remnashop.plans.dialog.router,
         #

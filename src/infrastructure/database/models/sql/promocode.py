@@ -13,7 +13,7 @@ from .timestamp import TimestampMixin
 class Promocode(Base, TimestampMixin):
     __tablename__ = "promocodes"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     code: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     type: Mapped[PromocodeType] = mapped_column(Enum(PromocodeType), nullable=False)

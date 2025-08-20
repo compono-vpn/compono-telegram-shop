@@ -23,7 +23,7 @@ from .timestamp import TimestampMixin
 class Plan(Base, TimestampMixin):
     __tablename__ = "plans"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     type: Mapped[PlanType] = mapped_column(Enum(PlanType), nullable=False)
@@ -57,7 +57,7 @@ class Plan(Base, TimestampMixin):
 class PlanDuration(Base):
     __tablename__ = "plan_durations"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="CASCADE"), nullable=False)
     days: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -77,7 +77,7 @@ class PlanDuration(Base):
 class PlanPrice(Base):
     __tablename__ = "plan_prices"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plan_duration_id: Mapped[int] = mapped_column(
         ForeignKey("plan_durations.id", ondelete="CASCADE"), nullable=False
     )

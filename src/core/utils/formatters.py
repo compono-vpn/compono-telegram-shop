@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from fluentogram import TranslatorRunner
 
+from src.core.constants import UNLIMITED
 from src.core.i18n_keys import ByteUnitKey, TimeUnitKey
 
 if TYPE_CHECKING:
@@ -75,18 +76,18 @@ def format_duration(
             if round_up:
                 if mod > 0 or any(divmod(remaining, u[1])[0] > 0 for u in units[i + 1 :]):
                     value = ceil(remaining / unit_seconds)
-                return f"{value} {i18n.get(unit, {'value': value})}"
+                return i18n.get(unit, value=value)
 
-            parts = [f"{value} {i18n.get(unit, {'value': value})}"]
+            parts = [i18n.get(unit, value=value)]
             remaining %= unit_seconds
             for unit2, unit_seconds2 in units[i + 1 :]:
                 value2, _ = divmod(remaining, unit_seconds2)
                 if value2 > 0:
-                    parts.append(f"{value2} {i18n.get(unit2, {'value': value2})}")
+                    parts.append(i18n.get(unit2, value=value2))
                     remaining %= unit_seconds2
             return " ".join(parts)
 
-    return f"0 {i18n.get(TimeUnitKey.MINUTE, {'value': 0})}"
+    return i18n.get(TimeUnitKey.MINUTE, value=0)
 
 
 def format_country_code(code: str) -> str:
@@ -94,3 +95,18 @@ def format_country_code(code: str) -> str:
         return "🏴‍☠️"
 
     return "".join(chr(ord("🇦") + ord(c.upper()) - ord("A")) for c in code)
+
+
+def format_subscription_period(days: int, i18n: TranslatorRunner) -> str:
+    if days == -1:
+        return UNLIMITED
+
+    if days % 365 == 0:
+        value = days // 365
+        return i18n.get(TimeUnitKey.YEAR, value=value)
+
+    if days % 30 == 0:
+        value = days // 30
+        return i18n.get(TimeUnitKey.MONTH, value=value)
+
+    return i18n.get(TimeUnitKey.DAY, value=days)

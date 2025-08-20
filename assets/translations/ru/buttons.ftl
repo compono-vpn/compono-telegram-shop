@@ -78,12 +78,30 @@ btn-maintenance-mode = { $mode ->
 
 # RemnaShop
 btn-remnashop-admins = 👮‍♂️ Администраторы
+btn-remnashop-gateways = 🌐 Платежные системы
 btn-remnashop-referral = 👥 Реферальная
 btn-remnashop-advertising = 🎯 Реклама
 btn-remnashop-plans = 📦 Планы
 btn-remnashop-notifications = 🔔 Уведомления
 btn-remnashop-logs = 📄 Логи
 btn-remnashop-audit = 🔍 Аудит
+
+
+# Gateways
+btn-gateway-title = { gateway-type }
+
+btn-gateway-active = { $is_active ->
+    [1] 🟢 Включено
+    *[0] 🔴 Выключено
+    }
+
+btn-gateway-test = 🐞 Тест
+btn-gateways-default-currency = 💸 Валюта по умолчанию
+
+btn-gateways-default-currency-choice = { $enabled -> 
+    [1] 🔘
+    *[0] ⚪
+    } { $symbol } { $currency }
 
 
 # Notifications
@@ -132,6 +150,7 @@ btn-plan-durations-prices = ⏳ Длительности и 💰 Цены
 btn-plan-traffic = 🌐 Трафик
 btn-plan-devices = 📱 Устройства
 btn-plan-allowed = 👥 Разрешенные пользователи
+btn-allowed-user = { $id }
 btn-plan-type-choice = { $type -> 
     [traffic] 🌐 Трафик
     [devices] 📱 Устройства
@@ -162,3 +181,17 @@ btn-remnawave-users = 👥 Пользователи
 btn-remnawave-hosts = 🌐 Хосты
 btn-remnawave-nodes = 🖥️ Ноды
 btn-remnawave-inbounds = 🔌 Инбаунды
+
+
+# Subscription
+btn-subscription-purchase = 💸 Купить подписку
+btn-subscription-renew = 🔄 Продлить подписку
+btn-subscription-change = 🔃 Изменить подписку
+
+btn-subscription-plan = { $name }
+btn-subscription-duration = { $period } | { $price } { $currency }
+btn-subscription-payment-method = { gateway-type } { $price } { $currency }
+
+btn-subscription-back-plans = ⬅️ Назад к выбору плана
+btn-subscription-back-duration = ⬅️ Изменить длительность
+btn-subscription-back-payment-method = ⬅️ Изменить способ оплаты

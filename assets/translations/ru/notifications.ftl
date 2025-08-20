@@ -75,5 +75,18 @@ ntf-plan-wrong-number= <i>❌ Некорректное число</i>
 ntf-plan-negative-number= <i>❌ Отрицательное число недопустимо</i>
 ntf-plan-save-error = <i>❌ Ошибка сохранения плана</i>
 ntf-plan-name-already-exists = <i>❌ План с таким именем уже существует</i>
+ntf-plan-wrong-allowed-id = <i>❌ Некорректный ID пользователя</i>
+ntf-plan-no-user-found = <i>❌ Пользователь не найден</i>
+ntf-plan-user-already-allowed = <i>❌ Пользователь уже добавлен в список разрешенных</i>
 ntf-plan-updated-success = <i>✅ План успешно обновлен</i>
 ntf-plan-created-success = <i>✅ План успешно создан</i>
+
+
+ntf-gateway-not-configured = <i>❌ Платежный шлюз не настроен</i>
+ntf-gateway-not-configurable = <i>❌ Платежный шлюз не может быть настроен</i>
+ntf-gateway-wrong-id = <i>❌ Некорректный ID</i>
+ntf-gateway-wrong-token = <i>❌ Некорректный TOKEN</i>
+
+
+ntf-subscription-plans-not-available = <i>❌ Нет доступных планов</i>
+ntf-subscription-gateways-not-available = <i>❌ Нет доступных платежных систем</i>

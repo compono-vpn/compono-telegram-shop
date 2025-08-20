@@ -213,6 +213,32 @@ msg-remnashop-main = <b>🛍 RemnaShop</b>
 msg-admins-main = <b>👮‍♂️ Администраторы</b>
 
 
+# Gateways
+msg-gateways-main = <b>🌐 Платежные системы</b>
+msg-gateways-shop = 
+    <b>🌐 { gateway-type }</b>
+
+    Введите { $type ->
+    [yookassa] SHOP ID <a href="https://yookassa.ru/my/shop-settings">(*)</a>
+    [yoomoney] WALLET ID <a href="https://yoomoney.ru/settings">(*)</a>
+    [cryptomus] MERCHANT ID <a href="https://app.cryptomus.com/">(*)</a>
+    [heleket] MERCHANT ID <a href="https://heleket.com/">(*)</a>
+    *[other] { $type }
+    }
+msg-gateways-token =
+    <b>🌐 { gateway-type }</b>
+
+    Введите { $type ->
+    [yookassa] API KEY <a href="https://yookassa.ru/my/merchant/integration/api-keys">(*)</a>
+    [yoomoney] NOTIFICATION SECRET <a href="https://yoomoney.ru/transfer/myservices/http-notification">(*)</a>
+    [cryptomus] API KEY <a href="https://app.cryptomus.com/">(*)</a>
+    [heleket] API KEY <a href="https://heleket.com/">(*)</a>
+    *[other] { $type }
+    }
+
+msg-gateways-default-currency = <b>💸 Валюта по умолчанию</b>
+
+
 # Plans
 msg-plans-main = <b>📦 Планы</b>
 msg-plan-config =
@@ -315,7 +341,56 @@ msg-plan-price =
 
     Введите новую цену для валюты { $currency }
 
+msg-plan-allowed-users = 
+    <b>👥 Изменить список разрешенных пользователей</b>
+
+    Введите ID пользователя для добавления в список
+
+
 # Notifications
 msg-notifications-main = <b>🔔 Настройка уведомлений</b>
 msg-notifications-user = <b>👥 Пользовательские уведомления</b>
 msg-notifications-system = <b>⚙️ Системные уведомления</b>
+
+
+# Subscription
+msg-subscription-duration-details =
+    { $period -> 
+    [0] {space}
+    *[has] • Длительность: { $period }
+    }
+
+msg-subscription-details =
+    { $plan }
+    <blockquote>
+    { $type ->
+    [devices]
+    • Кол-во устройств: { $devices }
+    • Лимит трафика: { unlimited } { unit-gigabyte }
+    { msg-subscription-duration-details }
+    [traffic]
+    • Кол-во устройств: { unlimited }
+    • Лимит трафика: { $traffic } { unit-gigabyte }
+    { msg-subscription-duration-details }
+    [unlimited]
+    • Кол-во устройств: { unlimited }
+    • Лимит трафика: { unlimited } { unit-gigabyte }
+    { msg-subscription-duration-details }
+    *[both]
+    • Кол-во устройств: { $devices }
+    • Лимит трафика: { $traffic } { unit-gigabyte }
+    { msg-subscription-duration-details }
+    }
+    </blockquote>
+
+msg-subscription-main = <b>💳 Подписка</b>
+msg-subscription-plans = <b>📦 Выберите план</b>
+msg-subscription-duration = 
+    <b>⏳ Выберите длительность</b>
+
+    { msg-subscription-details }
+
+msg-subscription-payment-method =
+    <b>💳 Выберите способ оплаты</b>
+
+    { msg-subscription-details }

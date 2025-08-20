@@ -113,6 +113,15 @@ class Currency(str, Enum):
         return cls(code)
 
 
+class PaymentGatewayType(StrEnum):
+    TELEGRAM_STARS = auto()
+    YOOKASSA = auto()
+    YOOMONEY = auto()
+    CRYPTOMUS = auto()
+    HELEKET = auto()
+    # TRIBUTE = auto()
+
+
 class MaintenanceMode(StrEnum):
     GLOBAL = auto()
     PURCHASE = auto()

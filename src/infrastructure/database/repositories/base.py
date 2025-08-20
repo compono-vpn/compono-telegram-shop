@@ -49,7 +49,7 @@ class BaseRepository:
         query = select(model).where(*conditions)
 
         if order_by is not None:
-            query = query.order_by(order_by)
+            query = query.order_by(*order_by)
         if limit is not None:
             query = query.limit(limit)
         if offset is not None:

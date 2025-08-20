@@ -15,23 +15,36 @@ from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_log_user
 from src.infrastructure.database.models.dto import PlanDto, PlanDurationDto, PlanPriceDto, UserDto
 from src.services import NotificationService, PlanService
+from src.services.user import UserService
 
 
 @inject
 async def on_plan_selected(
     callback: CallbackQuery,
-    widget: Select,
-    dialog_manager: DialogManager,
-    selected_plan: int,
+    widget: Button,
+    sub_manager: SubManager,
     plan_service: FromDishka[PlanService],
 ) -> None:
-    logger.critical(f"Selected plan ID: {selected_plan}")
-    plan: PlanDto = await plan_service.get(plan_id=selected_plan)
+    plan: PlanDto = await plan_service.get(plan_id=int(sub_manager.item_id))
+    logger.debug(f"Selected plan ID: {plan.id}")
 
-    adapter = DialogDataAdapter(dialog_manager)
+    adapter = DialogDataAdapter(sub_manager.manager)
     adapter.save(plan)
 
-    await dialog_manager.switch_to(state=RemnashopPlans.PLAN)
+    await sub_manager.switch_to(state=RemnashopPlans.PLAN)
+
+
+@inject
+async def on_plan_removed(
+    callback: CallbackQuery,
+    widget: Button,
+    sub_manager: SubManager,
+    plan_service: FromDishka[PlanService],
+) -> None:
+    await sub_manager.load_data()
+    plan_id = int(sub_manager.item_id)
+    await plan_service.delete(plan_id)
+    # TODO: Add action confirmation
 
 
 @inject
@@ -367,6 +380,64 @@ async def on_price_input(
 
 
 @inject
+async def on_allowed_user_input(
+    message: Message,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+    user_service: FromDishka[UserService],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    dialog_manager.show_mode = ShowMode.EDIT
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+
+    logger.debug(f"{format_log_user(user)} Attempted to set allowed id for plan")
+
+    if message.text is None or not message.text.isdigit():
+        logger.warning(f"{format_log_user(user)} Provided non-numeric user ID")
+        await notification_service.notify_user(user=user, text_key="ntf-plan-wrong-allowed-id")
+        return
+
+    adapter = DialogDataAdapter(dialog_manager)
+    plan = adapter.load(PlanDto)
+    allowed_user = await user_service.get(telegram_id=int(message.text))
+
+    if not allowed_user:
+        logger.warning(f"{format_log_user(user)} No user found with Telegram ID '{message.text}'")
+        await notification_service.notify_user(user=user, text_key="ntf-plan-no-user-found")
+        return  # TODO: Allow adding non-existent users to the list?
+
+    if plan.allowed_user_ids is None:
+        plan.allowed_user_ids = []
+
+    if allowed_user.telegram_id in plan.allowed_user_ids:
+        logger.warning(
+            f"{format_log_user(user)} User '{allowed_user.telegram_id}' is already allowed for plan"
+        )
+        await notification_service.notify_user(user=user, text_key="ntf-plan-user-already-allowed")
+        return
+
+    plan.allowed_user_ids.append(allowed_user.telegram_id)
+    adapter.save(plan)
+
+
+@inject
+async def on_allowed_user_removed(
+    callback: CallbackQuery,
+    widget: Button,
+    sub_manager: SubManager,
+    plan_service: FromDishka[PlanService],
+) -> None:
+    await sub_manager.load_data()
+    user_id = int(sub_manager.item_id)
+
+    adapter = DialogDataAdapter(sub_manager.manager)
+    plan = adapter.load(PlanDto)
+
+    plan.allowed_user_ids.remove(user_id)
+    adapter.save(plan)
+
+
+@inject
 async def on_confirm_plan(
     callback: CallbackQuery,
     widget: Button,
@@ -398,6 +469,9 @@ async def on_confirm_plan(
 
     if plan_data.availability != PlanAvailability.ALLOWED:
         plan_data.allowed_user_ids = None
+
+    if plan_data.allowed_user_ids is None:
+        plan_data.allowed_user_ids = []
 
     if plan_data.id:
         logger.info(f"{format_log_user(user)} Updating existing plan with ID '{plan_data.id}'")

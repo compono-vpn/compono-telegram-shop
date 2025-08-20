@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 from src.core.config import AppConfig
 from src.core.enums import PlanAvailability, PlanType
 from src.infrastructure.database import UnitOfWork
-from src.infrastructure.database.models.dto import PlanDto
+from src.infrastructure.database.models.dto import PlanDto, UserDto
 from src.infrastructure.database.models.sql import Plan, PlanDuration, PlanPrice
 from src.infrastructure.redis import RedisRepository
 
@@ -109,3 +109,27 @@ class PlanService(BaseService):
     async def filter_active(self, is_active: bool = True) -> list[PlanDto]:
         plans = await self.uow.repository.plans.filter_active(is_active)
         return [plan.dto() for plan in plans]
+
+    async def get_available_plans(self, user: UserDto) -> list[PlanDto]:
+        plans: list[PlanDto] = await self.filter_active()
+        # is_new_user = user.subscription_status is None
+        # is_existing_user = user.subscription_status is not None
+        # is_invited_user = user.is_invited
+
+        filtered_plans = [
+            plan
+            for plan in plans
+            if (
+                plan.availability == PlanAvailability.ALL
+                # or (plan.availability == PlanAvailability.NEW and is_new_user)
+                # or (plan.availability == PlanAvailability.EXISTING and is_existing_user)
+                # or (plan.availability == PlanAvailability.INVITED and is_invited_user)
+                or (
+                    plan.availability == PlanAvailability.ALLOWED
+                    and hasattr(plan, "allowed_user_ids")
+                    and user.telegram_id in plan.allowed_user_ids
+                )
+            )
+        ]
+
+        return filtered_plans

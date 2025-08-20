@@ -10,7 +10,8 @@ LOG_DIR: Final[Path] = BASE_DIR / "logs"
 
 DOMAIN_REGEX: Final[str] = r"^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$"
 API_V1: Final[str] = "/api/v1"
-WEBHOOK_PATH: Final[str] = "/telegram"
+BOT_WEBHOOK_PATH: Final[str] = "/telegram"
+YOOKASSA_WEBHOOK_PATH: Final[str] = "/yookassa"
 
 TIMEZONE: Final[timezone] = timezone.utc
 UNLIMITED: Final[str] = "∞"

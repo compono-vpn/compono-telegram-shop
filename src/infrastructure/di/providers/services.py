@@ -4,6 +4,7 @@ from src.services import (
     CommandService,
     MaintenanceService,
     NotificationService,
+    PaymentGatewayService,
     PlanService,
     UserService,
     WebhookService,
@@ -19,6 +20,7 @@ class ServicesProvider(Provider):
     maintenance_service = provide(source=MaintenanceService)
     notification_service = provide(source=NotificationService)
 
+    payment_gateway_service = provide(source=PaymentGatewayService, scope=Scope.REQUEST)
     user_service = provide(source=UserService, scope=Scope.REQUEST)
     # promocode_service = provide(PromocodeService)
     plan_service = provide(source=PlanService, scope=Scope.REQUEST)

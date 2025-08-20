@@ -32,6 +32,9 @@ class PlanDto(TrackableModel):
     def is_unlimited_devices(self) -> bool:
         return self.device_limit is None or self.device_limit == 0
 
+    def get_duration(self, days: int) -> Optional["PlanDurationDto"]:
+        return next((d for d in self.durations if d.days == days), None)
+
 
 class PlanDurationDto(TrackableModel):
     id: Optional[int] = Field(default=None, frozen=True)
@@ -42,6 +45,9 @@ class PlanDurationDto(TrackableModel):
     @property
     def total_duration(self) -> timedelta:
         return timedelta(days=self.days)
+
+    def get_price(self, currency: Currency) -> Optional["PlanPriceDto"]:
+        return next((p for p in self.prices if p.currency == currency), None)
 
     def get_price_per_day(self, currency: Currency) -> Optional[Decimal]:
         if self.days <= 0:

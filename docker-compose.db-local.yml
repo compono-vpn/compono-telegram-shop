@@ -1,0 +1,23 @@
+services:
+  remnashop-db-local:
+    image: postgres:17
+    container_name: "remnashop-db-local"
+    hostname: remnashop-db-local
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
+      - TZ=UTC
+    volumes:
+      - remnashop-db-local-data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  remnashop-db-local-data:
+    name: remnashop-db-local-data
+    driver: local
+    external: false

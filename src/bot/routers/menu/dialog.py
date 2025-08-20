@@ -4,7 +4,7 @@ from aiogram_dialog.widgets.kbd import Button, Row, Start
 
 from src.bot.routers.dashboard.users.handlers import on_user_search
 from src.bot.routers.extra.test import show_dev_popup
-from src.bot.states import Dashboard, MainMenu
+from src.bot.states import Dashboard, MainMenu, Subscription
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.enums import BannerName
 
@@ -32,10 +32,10 @@ menu = Window(
         #     text=I18nFormat(ButtonKey.PROMOCODE),
         #     id="promocode",
         # ),
-        Button(
+        Start(
             text=I18nFormat("btn-menu-subscription"),
             id="subscription",
-            on_click=show_dev_popup,
+            state=Subscription.MAIN,
         ),
     ),
     Row(

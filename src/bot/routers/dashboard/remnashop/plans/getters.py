@@ -14,10 +14,10 @@ from src.services import PlanService
 @inject
 async def plans_getter(
     dialog_manager: DialogManager,
-    plans_service: FromDishka[PlanService],
+    plan_service: FromDishka[PlanService],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans: list[PlanDto] = await plans_service.get_all()
+    plans: list[PlanDto] = await plan_service.get_all()
     formatted_plans = [
         {
             "id": plan.id,
@@ -120,3 +120,10 @@ async def price_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         "duration": duration_selected,
         "currency": currency_selected,
     }
+
+
+async def allowed_users_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
+    adapter = DialogDataAdapter(dialog_manager)
+    plan = adapter.load(PlanDto)
+
+    return {"allowed_users": plan.allowed_user_ids if plan.allowed_user_ids else []}

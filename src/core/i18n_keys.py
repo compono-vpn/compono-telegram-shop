@@ -10,15 +10,17 @@ class UtilKey(StrEnum):
 
 
 class ByteUnitKey(StrEnum):
-    BYTE = "unit-bytes"
-    KILOBYTE = "unit-kilobytes"
-    MEGABYTE = "unit-megabytes"
-    GIGABYTE = "unit-gigabytes"
-    TERABYTE = "unit-terabytes"
+    BYTE = "unit-byte"
+    KILOBYTE = "unit-kilobyte"
+    MEGABYTE = "unit-megabyte"
+    GIGABYTE = "unit-gigabyte"
+    TERABYTE = "unit-terabyte"
 
 
 class TimeUnitKey(StrEnum):
-    SECOND = "unit-seconds"
-    MINUTE = "unit-minutes"
-    HOUR = "unit-hours"
-    DAY = "unit-days"
+    SECOND = "unit-second"
+    MINUTE = "unit-minute"
+    HOUR = "unit-hour"
+    DAY = "unit-day"
+    MONTH = "unit-month"
+    YEAR = "unit-year"

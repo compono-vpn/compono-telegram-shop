@@ -27,32 +27,55 @@ role =
 
 
 # Units
-unit-bytes = Б
-unit-kilobytes = КБ
-unit-megabytes = МБ
-unit-gigabytes = ГБ
-unit-terabytes = ТБ
+unit-byte = Б
+unit-kilobyte = КБ
+unit-megabyte = МБ
+unit-gigabyte = ГБ
+unit-terabyte = ТБ
 
-unit-seconds = { $value ->
+unit-second = { $value } { $value ->
     [one] секунда
     [few] секунды
     *[other] секунд
 }
 
-unit-minutes = { $value ->
+unit-minute = { $value } { $value ->
     [one] минута
     [few] минуты
     *[other] минут
 }
 
-unit-hours = { $value ->
+unit-hour = { $value } { $value ->
     [one] час
     [few] часа
     *[other] часов
 }
 
-unit-days = { $value ->
+unit-day = { $value } { $value ->
     [one] день
     [few] дня
     *[other] дней
+}
+
+unit-month = { $value } { $value ->
+    [one] месяц
+    [few] месяца
+    *[other] месяцев
+}
+
+unit-year = { $value } { $value ->
+    [one] год
+    [few] года
+    *[other] лет
+}
+
+
+# Gateways
+gateway-type = { $type ->
+    [telegram_stars] Звезды
+    [yookassa] ЮKassa
+    [yoomoney] ЮMoney
+    [cryptomus] Cryptomus
+    [heleket] Heleket
+    *[other] { $type }
 }

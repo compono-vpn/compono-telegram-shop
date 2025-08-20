@@ -41,6 +41,7 @@ class WebhookService(BaseService):
         webhook_info: WebhookInfo = await self.bot.get_webhook_info()
         if webhook_info.last_error_message:
             logger.warning(f"Webhook has a last error message: {webhook_info.last_error_message}")
+            # TODO: Send notify
 
     async def delete(self) -> None:
         if not self.config.bot.reset_webhook:

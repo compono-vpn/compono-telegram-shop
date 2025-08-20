@@ -38,7 +38,6 @@ async def on_user_search(
             f"{format_log_user(user)} Searching for user by "
             f"forwarded message ID '{target_telegram_id}'"
         )
-        search_query = str(target_telegram_id)
         single_user = await user_service.get(telegram_id=target_telegram_id)
         if single_user:
             found_users.append(single_user)

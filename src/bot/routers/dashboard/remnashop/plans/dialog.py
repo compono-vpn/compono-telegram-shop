@@ -3,6 +3,7 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import (
     Button,
     Column,
+    CopyText,
     ListGroup,
     Row,
     Select,
@@ -12,11 +13,13 @@ from aiogram_dialog.widgets.kbd import (
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
+from src.bot.routers.extra.test import show_dev_popup
 from src.bot.states import DashboardRemnashop, RemnashopPlans
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.enums import BannerName, Currency, PlanAvailability, PlanType
 
 from .getters import (
+    allowed_users_getter,
     availability_getter,
     durations_getter,
     plan_getter,
@@ -27,6 +30,8 @@ from .getters import (
 )
 from .handlers import (
     on_active_toggle,
+    on_allowed_user_input,
+    on_allowed_user_removed,
     on_availability_selected,
     on_confirm_plan,
     on_currency_selected,
@@ -35,6 +40,7 @@ from .handlers import (
     on_duration_removed,
     on_duration_selected,
     on_name_input,
+    on_plan_removed,
     on_plan_selected,
     on_price_input,
     on_traffic_input,
@@ -45,10 +51,11 @@ plans = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-plans-main"),
     Row(
-        SwitchTo(
+        Button(
             text=I18nFormat("btn-plans-statistics"),
             id="statistics",
-            state=RemnashopPlans.STATISTICS,
+            # state=RemnashopPlans.STATISTICS,
+            on_click=show_dev_popup,
         ),
         SwitchTo(
             I18nFormat("btn-plans-create"),
@@ -56,19 +63,26 @@ plans = Window(
             state=RemnashopPlans.PLAN,
         ),
     ),
-    Column(
-        Select(
-            text=I18nFormat(
-                "btn-plan",
-                name=F["item"]["name"],
-                is_active=F["item"]["is_active"],
+    ListGroup(
+        Row(
+            Button(
+                text=I18nFormat(
+                    "btn-plan",
+                    name=F["item"]["name"],
+                    is_active=F["item"]["is_active"],
+                ),
+                id="select_plan",
+                on_click=on_plan_selected,
             ),
-            id="select_plan",
-            item_id_getter=lambda item: item["id"],
-            items="plans",
-            type_factory=int,
-            on_click=on_plan_selected,
+            Button(
+                text=Format("❌"),
+                id="remove_plan",
+                on_click=on_plan_removed,
+            ),
         ),
+        id="plans_list",
+        item_id_getter=lambda item: item["id"],
+        items="plans",
     ),
     Row(
         Start(
@@ -354,6 +368,37 @@ plan_price = Window(
     getter=price_getter,
 )
 
+plan_allowed_users = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-plan-allowed-users"),
+    ListGroup(
+        Row(
+            CopyText(
+                text=Format("{item}"),
+                copy_text=Format("{item}"),
+            ),
+            Button(
+                text=Format("❌"),
+                id="remove_allowed_user",
+                on_click=on_allowed_user_removed,
+            ),
+        ),
+        id="allowed_users_list",
+        item_id_getter=lambda item: item,
+        items="allowed_users",
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=RemnashopPlans.PLAN,
+        ),
+    ),
+    MessageInput(func=on_allowed_user_input),
+    IgnoreUpdate(),
+    state=RemnashopPlans.ALLOWED,
+    getter=allowed_users_getter,
+)
 
 router = Dialog(
     plans,
@@ -367,4 +412,5 @@ router = Dialog(
     plan_durations_add,
     plan_prices,
     plan_price,
+    plan_allowed_users,
 )

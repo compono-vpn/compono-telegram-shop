@@ -3,7 +3,7 @@ from typing import Type
 from pydantic import SecretStr, field_validator
 from pydantic_core.core_schema import FieldValidationInfo
 
-from src.core.constants import API_V1, WEBHOOK_PATH
+from src.core.constants import API_V1, BOT_WEBHOOK_PATH
 
 from .base import BaseConfig
 from .validators import validate_not_change_me
@@ -31,7 +31,7 @@ class BotConfig(BaseConfig, env_prefix="BOT_"):
 
     @property
     def webhook_path(self) -> str:
-        return f"{API_V1}{WEBHOOK_PATH}"
+        return f"{API_V1}{BOT_WEBHOOK_PATH}"
 
     def webhook_url(self, domain: SecretStr) -> SecretStr:
         url = f"https://{domain.get_secret_value()}{self.webhook_path}"

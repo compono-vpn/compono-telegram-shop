@@ -6,6 +6,7 @@ from src.bot.routers.extra.test import show_dev_popup
 from src.bot.states import (
     Dashboard,
     DashboardRemnashop,
+    RemnashopGateways,
     RemnashopNotifications,
     RemnashopPlans,
 )
@@ -23,6 +24,13 @@ remnashop = Window(
             text=I18nFormat("btn-remnashop-admins"),
             id="admins",
             state=DashboardRemnashop.ADMINS,
+        ),
+    ),
+    Row(
+        Start(
+            text=I18nFormat("btn-remnashop-gateways"),
+            id="gateways",
+            state=RemnashopGateways.MAIN,
         ),
     ),
     Row(
@@ -76,7 +84,6 @@ remnashop = Window(
     state=DashboardRemnashop.MAIN,
 )
 
-
 admins = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-admins-main"),
@@ -85,12 +92,12 @@ admins = Window(
             Button(
                 text=Format("{item.telegram_id} ({item.name})"),
                 id="select_user",
-                on_click=on_user_selected,  # type: ignore
+                on_click=on_user_selected,
             ),
             Button(
                 text=Format("❌"),
                 id="remove_role",
-                on_click=on_user_role_removed,  # type: ignore
+                on_click=on_user_role_removed,
             ),
         ),
         id="admins_list",
