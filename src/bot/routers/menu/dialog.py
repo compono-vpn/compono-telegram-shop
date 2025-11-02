@@ -85,7 +85,7 @@ menu = Window(
 )
 
 devices = Window(
-    Banner(BannerName.DASHBOARD),
+    Banner(BannerName.MENU),
     I18nFormat("msg-menu-devices"),
     Row(
         Button(

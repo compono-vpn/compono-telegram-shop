@@ -1,4 +1,5 @@
 import traceback
+from datetime import timedelta
 from typing import Optional, cast
 
 from aiogram.utils.formatting import Text
@@ -115,7 +116,7 @@ async def purchase_subscription_task(
     subscription: Optional[SubscriptionDto],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
-    transaction_service: FromDishka["TransactionService"],
+    transaction_service: FromDishka[TransactionService],
 ) -> None:
     purchase_type = transaction.purchase_type
     user = cast(UserDto, transaction.user)
@@ -150,11 +151,15 @@ async def purchase_subscription_task(
             if not subscription:
                 raise ValueError(f"No subscription found for renewal for user '{user.telegram_id}'")
 
+            new_expire = subscription.expire_at + timedelta(days=transaction.plan.duration)
+            subscription.expire_at = new_expire
+
             updated_user = await remnawave_service.updated_user(
                 user=user,
                 uuid=subscription.user_remna_id,
                 subscription=subscription,
             )
+
             subscription.expire_at = updated_user.expire_at  # type: ignore[assignment]
             subscription.plan = plan
             await subscription_service.update(subscription)

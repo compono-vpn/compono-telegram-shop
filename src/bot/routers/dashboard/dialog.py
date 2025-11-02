@@ -3,6 +3,7 @@ from aiogram_dialog.widgets.kbd import Button, Row, Start
 from magic_filter import F
 
 from src.bot.keyboards import back_main_menu_button
+from src.bot.routers.extra.test import show_dev_popup
 from src.bot.states import (
     Dashboard,
     DashboardAccess,
@@ -40,11 +41,12 @@ dashboard = Window(
             state=DashboardBroadcast.MAIN,
             mode=StartMode.RESET_STACK,
         ),
-        Start(
+        Button(
             text=I18nFormat("btn-dashboard-promocodes"),
             id="promocodes",
-            state=DashboardPromocodes.MAIN,
-            mode=StartMode.RESET_STACK,
+            on_click=show_dev_popup,
+            # state=DashboardPromocodes.MAIN,
+            # mode=StartMode.RESET_STACK,
         ),
     ),
     Row(

@@ -330,6 +330,7 @@ async def transaction_getter(
     return {
         "is_test": transaction.is_test,
         "payment_id": str(transaction.payment_id),
+        "purchase_type": transaction.purchase_type,
         "transaction_status": transaction.status,
         "gateway_type": transaction.gateway_type,
         "final_amount": transaction.pricing.final_amount,

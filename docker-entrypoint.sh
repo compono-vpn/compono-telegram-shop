@@ -5,15 +5,20 @@ ASSETS_DIR="/opt/remnashop/assets"
 DEFAULT_DIR="/opt/remnashop/assets.default"
 BACKUP_DIR="/opt/remnashop/assets_backup"
 
-if [ -d "$ASSETS_DIR" ] && [ "$(ls -A "$ASSETS_DIR")" ]; then
-    mkdir -p "$BACKUP_DIR"
-    timestamp=$(date +"%Y%m%d_%H%M%S")
-    tar czf "$BACKUP_DIR/assets_backup_$timestamp.tar.gz" -C "$ASSETS_DIR" .
-    echo "Backup saved to $BACKUP_DIR/assets_backup_$timestamp.tar.gz"
-fi
+if [ "$SKIP_ASSETS_RESET" = "true" ]; then
+    echo "Skipping asset backup and reset."
+else
+    if [ -d "$ASSETS_DIR" ] && [ "$(ls -A "$ASSETS_DIR")" ]; then
+        mkdir -p "$BACKUP_DIR"
+        timestamp=$(date +"%Y%m%d_%H%M%S")
+        tar czf "$BACKUP_DIR/assets_backup_$timestamp.tar.gz" -C "$ASSETS_DIR" .
+        echo "Backup saved to $BACKUP_DIR/assets_backup_$timestamp.tar.gz"
+    fi
 
-rm -rf "$ASSETS_DIR"/*
-cp -r "$DEFAULT_DIR"/* "$ASSETS_DIR"
+    rm -rf "$ASSETS_DIR"/*
+    cp -r "$DEFAULT_DIR"/* "$ASSETS_DIR"
+    echo "Assets directory reset and updated from defaults."
+fi
 
 echo "Migrating database..."
 

@@ -72,7 +72,6 @@ services:
       - ./src:/opt/remnashop/src
       - ./logs:/opt/remnashop/logs
       - ./assets:/opt/remnashop/assets
-      - ./assets_backup:/opt/remnashop/assets_backup
 
     networks:
       - remnawave-network

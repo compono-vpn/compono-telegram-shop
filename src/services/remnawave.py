@@ -102,7 +102,7 @@ class RemnawaveService(BaseService):
                 description=user.remna_description,
                 # tag=,
                 telegram_id=user.telegram_id,
-                hwidDeviceLimit=format_device_count(plan.device_limit),
+                hwid_device_limit=format_device_count(plan.device_limit),
                 active_internal_squads=plan.internal_squads,
                 # external_squad_uuid=,
             )
@@ -153,7 +153,7 @@ class RemnawaveService(BaseService):
                 description=user.remna_description,
                 # tag=,
                 expire_at=expire_at,
-                hwidDeviceLimit=format_device_count(device_limit),
+                hwid_device_limit=format_device_count(device_limit),
                 status=status,
                 telegram_id=user.telegram_id,
                 traffic_limit_bytes=format_gb_to_bytes(traffic_limit),

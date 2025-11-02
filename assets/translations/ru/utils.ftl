@@ -3,7 +3,7 @@ space = {" "}
 separator = {"\u00A0"}
 btn-test = Кнопка
 msg-test = Сообщение
-development = В разработке
+development = Временно недоступно!
 test-payment = Тестовый платеж
 unlimited = ∞
 unknown = —
@@ -281,6 +281,13 @@ subscription-status = { $subscription_status ->
     *[OTHER] { $subscription_status }
 }
 
+purchase-type = { $purchase_type ->
+    [NEW] Покупка
+    [RENEW] Продление
+    [CHANGE] Изменение
+    *[OTHER] { $purchase_type }
+}
+
 language = { $language ->
     [ar] Арабский
     [az] Азербайджанский
@@ -313,6 +320,7 @@ language = { $language ->
 }
 
 
+
 # RemnaShop
 # Кто удалит - у того пипирка отпадет
 ntf-remnashop-info = 
@@ -320,7 +328,7 @@ ntf-remnashop-info =
 
     Данный проект был создан и поддерживается всего одним <strike>разработчиком</strike> электриком. Поскольку бот полностью БЕСПЛАТНЫЙ и с открытым исходным кодом, он существует только благодаря вашей поддержке.
 
-    ⭐ <i>Поставьте звёздочку на <a href="https://github.com/snoups/remnashop">GitHub</a> и присоединяйтесь к нашему <a href="https://t.me/@remna_shop">сообществу</a>.</i>
+    ⭐ <i>Поставьте звездочку на <a href="https://github.com/snoups/remnashop">GitHub</a> и присоединяйтесь к нашему <a href="https://t.me/@remna_shop">сообществу</a>.</i>
 
 btn-remnashop-github = ⭐ GitHub
 btn-remnashop-telegram = 👪 Telegram

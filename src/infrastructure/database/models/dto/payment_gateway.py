@@ -41,10 +41,6 @@ class GatewaySettingsDto(TrackableDto):
         ]
 
 
-# class TelegramStarsGatewaySettingsDto(GatewaySettingsDto):
-# #    type: PaymentGatewayType = PaymentGatewayType.TELEGRAM_STARS
-
-
 class YookassaGatewaySettingsDto(GatewaySettingsDto):
     type: PaymentGatewayType = PaymentGatewayType.YOOKASSA
     shop_id: Optional[str] = None
@@ -79,7 +75,6 @@ class UrlpayGatewaySettingsDto(GatewaySettingsDto):
 
 
 AnyGatewaySettingsDto = Union[
-    # TelegramStarsGatewaySettingsDto,
     YookassaGatewaySettingsDto,
     YoomoneyGatewaySettingsDto,
     CryptomusGatewaySettingsDto,

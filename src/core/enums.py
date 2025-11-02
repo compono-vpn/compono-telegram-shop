@@ -72,6 +72,8 @@ class BannerName(StrEnum):
     MENU = auto()
     DASHBOARD = auto()
     SUBSCRIPTION = auto()
+    PROMOCODE = auto()
+    REFERRAL = auto()
 
 
 class BannerFormat(StrEnum):

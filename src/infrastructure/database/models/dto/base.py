@@ -71,11 +71,7 @@ class TrackableDto(BaseDto):
         if isinstance(value, dict):
             return {k: self._process_value(v, encrypt) for k, v in value.items()}
         if isinstance(value, TrackableDto):
-            return (
-                value.prepare_init_data(encrypt)
-                # if value is self
-                # else value.prepare_changed_data(encrypt)
-            )
+            return value.prepare_init_data(encrypt)
         return value
 
     def prepare_init_data(self, encrypt: bool = False) -> dict[str, Any]:

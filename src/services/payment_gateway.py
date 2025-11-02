@@ -89,18 +89,18 @@ class PaymentGatewayService(BaseService):
                 case PaymentGatewayType.YOOKASSA:
                     is_active = False
                     settings = YookassaGatewaySettingsDto()
-                case PaymentGatewayType.YOOMONEY:
-                    is_active = False
-                    settings = YoomoneyGatewaySettingsDto()
-                case PaymentGatewayType.CRYPTOMUS:
-                    is_active = False
-                    settings = CryptomusGatewaySettingsDto()
-                case PaymentGatewayType.HELEKET:
-                    is_active = False
-                    settings = HeleketGatewaySettingsDto()
-                case PaymentGatewayType.URLPAY:
-                    is_active = False
-                    settings = UrlpayGatewaySettingsDto()
+                # case PaymentGatewayType.YOOMONEY:
+                #     is_active = False
+                #     settings = YoomoneyGatewaySettingsDto()
+                # case PaymentGatewayType.CRYPTOMUS:
+                #     is_active = False
+                #     settings = CryptomusGatewaySettingsDto()
+                # case PaymentGatewayType.HELEKET:
+                #     is_active = False
+                #     settings = HeleketGatewaySettingsDto()
+                # case PaymentGatewayType.URLPAY:
+                #     is_active = False
+                #     settings = UrlpayGatewaySettingsDto()
                 case _:
                     logger.warning(
                         f"{self.tag} Unhandled payment gateway type '{gateway_type}' — skipping"
@@ -290,7 +290,7 @@ class PaymentGatewayService(BaseService):
             await send_test_transaction_notification_task.kiq(user=transaction.user)
             return
 
-        # TODO: Add refferal logic
+        # TODO: Add referral logic
 
         i18n_keys = {
             PurchaseType.NEW: "ntf-event-subscription-new",
