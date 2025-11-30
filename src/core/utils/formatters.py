@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, Optional, Union
 
+from src.core.constants import T_ME
 from src.core.enums import PlanType
 
 if TYPE_CHECKING:
@@ -27,7 +28,7 @@ def format_user_log(user: Union[BaseUserDto, UserDto]) -> str:
 def format_username_to_url(username: str, text: Optional[str]) -> str:
     clean_username = username.lstrip("@")
     encoded_text = quote(text or "")
-    return f"https://t.me/{clean_username}?text={encoded_text}"
+    return f"{T_ME}{clean_username}?text={encoded_text}"
 
 
 def format_days_to_datetime(value: int, year: int = 2099) -> datetime:

@@ -64,4 +64,4 @@ class Transaction(BaseSql, TimestampMixin):
     )
     plan: Mapped[PlanSnapshotDto] = mapped_column(JSON, nullable=False)
 
-    user: Mapped["User"] = relationship("User", back_populates="transactions", lazy="selectin")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_telegram_id], lazy="selectin")

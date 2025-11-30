@@ -9,6 +9,7 @@ from fastapi import Request
 from httpx import AsyncClient, Timeout
 from loguru import logger
 
+from src.core.constants import T_ME
 from src.core.enums import TransactionStatus
 from src.infrastructure.database.models.dto import PaymentGatewayDto, PaymentResult
 
@@ -49,7 +50,7 @@ class BasePaymentGateway(ABC):
     async def _get_bot_redirect_url(self) -> str:
         if self._bot_username is None:
             self._bot_username = (await self.bot.get_me()).username
-        return f"https://t.me/{self._bot_username}"
+        return f"{T_ME}{self._bot_username}"
 
     def _make_client(
         self,

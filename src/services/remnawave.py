@@ -283,10 +283,11 @@ class RemnawaveService(BaseService):
         subscription = await self.subscription_service.get_current(telegram_id=user.telegram_id)
         remna_subscription = RemnaSubscriptionDto.from_remna_user(remna_user.model_dump())
 
+        if not remna_subscription.url:
+            remna_subscription.url = await self.get_subscription_url(remna_user.uuid)  # type: ignore[assignment]
+
         if not subscription:
-            if not remna_subscription.url:
-                subscription_url = await self.get_subscription_url(remna_user.uuid)
-                remna_subscription.url = subscription_url  # type: ignore[assignment]
+            logger.info(f"No subscription found for '{user.telegram_id}', creating")
 
             temp_plan = PlanSnapshotDto(
                 id=-1,
@@ -320,14 +321,15 @@ class RemnawaveService(BaseService):
             )
 
             await self.subscription_service.create(user, subscription)
+            logger.info(f"Subscription created for '{user.telegram_id}'")
 
         else:
-            logger.info(f"Starting subscription sync for user '{user.telegram_id}'")
+            logger.info(f"Synchronizing subscription for '{user.telegram_id}'")
             subscription = subscription.apply_sync(remna_subscription)
             await self.subscription_service.update(subscription)
-            logger.info(f"Subscription for '{user.telegram_id}' successfully synchronized")
+            logger.info(f"Subscription updated for '{user.telegram_id}'")
 
-        logger.info(f"User and subscription successfully created for '{remna_user.telegram_id}'")
+        logger.info(f"Sync completed for user '{remna_user.telegram_id}'")
 
     #
 

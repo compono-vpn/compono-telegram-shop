@@ -83,7 +83,6 @@ class YookassaGateway(BasePaymentGateway):
 
     async def handle_webhook(self, request: Request) -> tuple[UUID, TransactionStatus]:
         client_ip = request.headers.get("X-Forwarded-For", "")
-        logger.critical(request.headers)
 
         if not self._is_ip_trusted(client_ip):
             logger.warning(f"Webhook received from untrusted IP: '{client_ip}'")

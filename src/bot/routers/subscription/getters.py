@@ -19,7 +19,6 @@ from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.pricing import PricingService
 from src.services.settings import SettingsService
-from src.services.subscription import SubscriptionService
 
 
 @inject
@@ -40,12 +39,10 @@ async def subscription_getter(
 async def plans_getter(
     dialog_manager: DialogManager,
     user: UserDto,
-    subscription_service: FromDishka[SubscriptionService],
     plan_service: FromDishka[PlanService],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    is_new_user = not await subscription_service.has_any_subscription(user)
-    plans = await plan_service.get_available_plans(user, is_new_user)
+    plans = await plan_service.get_available_plans(user)
 
     formatted_plans = [
         {
@@ -77,6 +74,7 @@ async def duration_getter(
 
     currency = await settings_service.get_default_currency()
     only_single_plan = dialog_manager.dialog_data.get("only_single_plan", False)
+    dialog_manager.dialog_data["is_free"] = False
     durations = []
 
     for duration in plan.durations:
@@ -169,6 +167,7 @@ async def confirm_getter(
 
     selected_duration = dialog_manager.dialog_data["selected_duration"]
     only_single_duration = dialog_manager.dialog_data.get("only_single_duration", False)
+    is_free = dialog_manager.dialog_data.get("is_free", False)
     selected_payment_method = dialog_manager.dialog_data["selected_payment_method"]
     purchase_type = dialog_manager.dialog_data["purchase_type"]
     payment_gateway = await payment_gateway_service.get_by_type(selected_payment_method)
@@ -203,6 +202,7 @@ async def confirm_getter(
         "url": result_url,
         "only_single_gateway": len(gateways) == 1,
         "only_single_duration": only_single_duration,
+        "is_free": is_free,
     }
 
 

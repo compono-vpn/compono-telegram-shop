@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .user import User
 
-from sqlalchemy import BigInteger, Enum, ForeignKey, Integer
+from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.enums import ReferralLevel, ReferralRewardType
@@ -40,13 +40,21 @@ class Referral(BaseSql, TimestampMixin):
     )
 
     referrer: Mapped["User"] = relationship(
-        "User", back_populates="referrals", foreign_keys=[referrer_telegram_id]
+        "User",
+        foreign_keys=[referrer_telegram_id],
+        lazy="selectin",
     )
     referred: Mapped["User"] = relationship(
-        "User", back_populates="referrer", foreign_keys=[referred_telegram_id]
+        "User",
+        back_populates="referral",
+        foreign_keys=[referred_telegram_id],
+        lazy="selectin",
     )
     rewards: Mapped[list["ReferralReward"]] = relationship(
-        "ReferralReward", back_populates="referral", lazy="selectin"
+        "ReferralReward",
+        back_populates="referral",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
 
@@ -61,7 +69,7 @@ class ReferralReward(BaseSql, TimestampMixin):
         nullable=False,
     )
 
-    reward_type: Mapped[ReferralRewardType] = mapped_column(
+    type: Mapped[ReferralRewardType] = mapped_column(
         Enum(
             ReferralRewardType,
             name="referral_reward_type",
@@ -70,7 +78,18 @@ class ReferralReward(BaseSql, TimestampMixin):
         ),
         nullable=False,
     )
-    reward_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_issued: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
-    referral: Mapped["Referral"] = relationship("Referral", back_populates="rewards")
-    user: Mapped["User"] = relationship("User", back_populates="rewards_received")
+    referral: Mapped["Referral"] = relationship(
+        "Referral",
+        back_populates="rewards",
+        foreign_keys=[referral_id],
+        lazy="selectin",
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[user_telegram_id],
+        lazy="selectin",
+    )

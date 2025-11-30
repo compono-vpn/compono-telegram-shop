@@ -19,7 +19,6 @@ class ReferralDto(TrackableDto):
 
     referrer: "BaseUserDto"
     referred: "BaseUserDto"
-    rewards: list["ReferralRewardDto"]
 
     created_at: Optional[datetime] = Field(default=None, frozen=True)
     updated_at: Optional[datetime] = Field(default=None, frozen=True)
@@ -28,11 +27,9 @@ class ReferralDto(TrackableDto):
 class ReferralRewardDto(TrackableDto):
     id: Optional[int] = Field(default=None, frozen=True)
 
-    reward_type: ReferralRewardType
-    reward_amount: int
-
-    # referral: "ReferralDto"
-    # user: "UserDto"
+    type: ReferralRewardType
+    amount: int
+    is_issued: bool = False
 
     created_at: Optional[datetime] = Field(default=None, frozen=True)
     updated_at: Optional[datetime] = Field(default=None, frozen=True)

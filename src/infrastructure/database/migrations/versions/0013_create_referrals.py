@@ -47,6 +47,9 @@ def upgrade() -> None:
             server_default="",
         ),
     )
+    op.add_column(
+        "users", sa.Column("points", sa.Integer(), nullable=False, server_default=sa.text("0"))
+    )
     op.create_unique_constraint("uq_users_referral_code", "users", ["referral_code"])
 
     conn = op.get_bind()
@@ -66,11 +69,9 @@ def upgrade() -> None:
     referral_level_enum = sa.Enum(
         "FIRST",
         "SECOND",
-        "THIRD",
         name="referral_level",
     )
     referral_reward_type_enum = sa.Enum(
-        "NO_REWARD",
         "POINTS",
         "EXTRA_DAYS",
         name="referral_reward_type",
@@ -104,8 +105,9 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("referral_id", sa.Integer(), nullable=False),
         sa.Column("user_telegram_id", sa.BigInteger(), nullable=False),
-        sa.Column("reward_type", referral_reward_type_enum, nullable=False),
-        sa.Column("reward_amount", sa.Integer(), nullable=False),
+        sa.Column("type", referral_reward_type_enum, nullable=False),
+        sa.Column("amount", sa.Integer(), nullable=False),
+        sa.Column("is_issued", sa.Boolean(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -154,6 +156,19 @@ def upgrade() -> None:
         nullable=False,
     )
 
+    new_gateways = [
+        "CRYPTOPAY",
+        "ROBOKASSA",
+        "WATAPAY",
+        "FREEKASSA",
+        "TRIBUTE",
+        "MULENPAY",
+        "KASSAI",
+    ]
+
+    for gateway in new_gateways:
+        op.execute(f"ALTER TYPE payment_gateway_type ADD VALUE IF NOT EXISTS '{gateway}'")
+
 
 def downgrade() -> None:
     op.drop_table("referral_rewards")
@@ -173,3 +188,4 @@ def downgrade() -> None:
     )
     op.drop_constraint("uq_users_referral_code", "users", type_="unique")
     op.drop_column("users", "referral_code")
+    op.drop_column("users", "points")

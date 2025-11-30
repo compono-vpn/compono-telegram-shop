@@ -1,7 +1,8 @@
-from typing import Optional, Union
+from typing import Optional
 
 from pydantic import Field, SecretStr
 
+from src.core.constants import T_ME
 from src.core.enums import (
     AccessMode,
     Currency,
@@ -39,6 +40,8 @@ class UserNotificationDto(TrackableDto):  # == UserNotificationType
     expires_in_1_days: bool = True
     expired: bool = True
     limited: bool = True
+    referral_attached: bool = True
+    referral_reward: bool = True
 
     def is_enabled(self, ntf_type: UserNotificationType) -> bool:
         return getattr(self, ntf_type.value.lower(), False)
@@ -48,6 +51,19 @@ class ReferralRewardSettingsDto(BaseDto):
     type: ReferralRewardType = ReferralRewardType.EXTRA_DAYS
     strategy: ReferralRewardStrategy = ReferralRewardStrategy.AMOUNT
     config: dict[ReferralLevel, int] = {ReferralLevel.FIRST: 5}
+
+    @property
+    def is_identical(self) -> bool:
+        values = list(self.config.values())
+        return len(values) <= 1 or all(v == values[0] for v in values)
+
+    @property
+    def is_points(self) -> bool:
+        return self.type == ReferralRewardType.POINTS
+
+    @property
+    def is_extra_days(self) -> bool:
+        return self.type == ReferralRewardType.EXTRA_DAYS
 
 
 class ReferralSettingsDto(TrackableDto):
@@ -82,6 +98,6 @@ class SettingsDto(TrackableDto):
     @property
     def get_url_channel_link(self) -> str:
         if self.channel_has_username:
-            return f"t.me/{self.channel_link.get_secret_value()[1:]}"
+            return f"{T_ME}{self.channel_link.get_secret_value()[1:]}"
         else:
             return self.channel_link.get_secret_value()

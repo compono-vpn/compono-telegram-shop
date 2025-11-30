@@ -22,7 +22,7 @@ from src.services.notification import NotificationService
 from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.pricing import PricingService
-from src.services.subscription import SubscriptionService
+from src.services.settings import SettingsService
 
 PAYMENT_CACHE_KEY = "payment_cache"
 CURRENT_DURATION_KEY = "selected_duration"
@@ -122,14 +122,12 @@ async def _create_payment_and_get_data(
 async def on_purchase_type_select(
     purchase_type: PurchaseType,
     dialog_manager: DialogManager,
-    subscription_service: FromDishka[SubscriptionService],
     plan_service: FromDishka[PlanService],
     payment_gateway_service: FromDishka[PaymentGatewayService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    is_new_user = not await subscription_service.has_any_subscription(user)
-    plans: list[PlanDto] = await plan_service.get_available_plans(user, is_new_user)
+    plans: list[PlanDto] = await plan_service.get_available_plans(user)
     gateways = await payment_gateway_service.filter_active()
     dialog_manager.dialog_data["purchase_type"] = purchase_type
     dialog_manager.dialog_data.pop(CURRENT_DURATION_KEY, None)
@@ -186,7 +184,6 @@ async def on_subscription_plans(  # noqa: C901
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    subscription_service: FromDishka[SubscriptionService],
     plan_service: FromDishka[PlanService],
     payment_gateway_service: FromDishka[PaymentGatewayService],
     notification_service: FromDishka[NotificationService],
@@ -195,8 +192,7 @@ async def on_subscription_plans(  # noqa: C901
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Opened subscription plans menu")
 
-    is_new_user = not await subscription_service.has_any_subscription(user)
-    plans: list[PlanDto] = await plan_service.get_available_plans(user, is_new_user)
+    plans: list[PlanDto] = await plan_service.get_available_plans(user)
     gateways = await payment_gateway_service.filter_active()
 
     if not callback.data:
@@ -322,6 +318,7 @@ async def on_duration_select(
     widget: Select,
     dialog_manager: DialogManager,
     selected_duration: int,
+    settings_service: FromDishka[SettingsService],
     payment_gateway_service: FromDishka[PaymentGatewayService],
     notification_service: FromDishka[NotificationService],
     pricing_service: FromDishka[PricingService],
@@ -330,9 +327,22 @@ async def on_duration_select(
     logger.info(f"{log(user)} Selected subscription duration '{selected_duration}' days")
     dialog_manager.dialog_data[CURRENT_DURATION_KEY] = selected_duration
 
-    gateways = await payment_gateway_service.filter_active()
+    adapter = DialogDataAdapter(dialog_manager)
+    plan = adapter.load(PlanDto)
 
-    if len(gateways) == 1:
+    if not plan:
+        raise ValueError("PlanDto not found in dialog data")
+
+    gateways = await payment_gateway_service.filter_active()
+    currency = await settings_service.get_default_currency()
+    price = pricing_service.calculate(
+        user=user,
+        price=plan.get_duration(selected_duration).get_price(currency),  # type: ignore[union-attr]
+        currency=currency,
+    )
+    dialog_manager.dialog_data["is_free"] = price.is_free
+
+    if len(gateways) == 1 or price.is_free:
         selected_payment_method = gateways[0].type
         dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
 
@@ -346,12 +356,6 @@ async def on_duration_select(
             return
 
         logger.info(f"{log(user)} Auto-selected single gateway '{selected_payment_method}'")
-
-        adapter = DialogDataAdapter(dialog_manager)
-        plan = adapter.load(PlanDto)
-
-        if not plan:
-            raise ValueError("PlanDto not found in dialog data")
 
         payment_data = await _create_payment_and_get_data(
             dialog_manager=dialog_manager,

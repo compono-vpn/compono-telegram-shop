@@ -20,15 +20,14 @@ async def referral_getter(
     settings_service: FromDishka[SettingsService],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    settings = await settings_service.get()
+    settings = await settings_service.get_referral_settings()
 
     return {
-        "is_enable": settings.referral.enable,
-        "referral_level": settings.referral.level,
-        "reward_type": settings.referral.reward.type,
-        "accrual_strategy_type": settings.referral.accrual_strategy,
-        "reward_strategy_type": settings.referral.reward.strategy,
-        "with_reward": settings.referral.reward.type != ReferralRewardType.NO_REWARD,
+        "is_enable": settings.enable,
+        "referral_level": settings.level,
+        "reward_type": settings.reward.type,
+        "accrual_strategy_type": settings.accrual_strategy,
+        "reward_strategy_type": settings.reward.strategy,
     }
 
 
@@ -55,11 +54,11 @@ async def reward_getter(
     settings_service: FromDishka[SettingsService],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    settings = await settings_service.get()
-    reward_config = settings.referral.reward.config
+    settings = await settings_service.get_referral_settings()
+    reward_config = settings.reward.config
 
     levels_strings = []
-    max_level = settings.referral.level.value
+    max_level = settings.level.value
     for lvl, val in reward_config.items():
         if lvl.value <= max_level:
             levels_strings.append(
@@ -67,8 +66,8 @@ async def reward_getter(
                     "msg-referral-reward-level",
                     level=lvl.value,
                     value=val,
-                    reward_type=settings.referral.reward.type,
-                    reward_strategy_type=settings.referral.reward.strategy,
+                    reward_type=settings.reward.type,
+                    reward_strategy_type=settings.reward.strategy,
                 )
             )
 
@@ -76,6 +75,6 @@ async def reward_getter(
 
     return {
         "reward": reward_string,
-        "reward_type": settings.referral.reward.type,
-        "reward_strategy_type": settings.referral.reward.strategy,
+        "reward_type": settings.reward.type,
+        "reward_strategy_type": settings.reward.strategy,
     }

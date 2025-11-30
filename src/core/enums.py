@@ -12,7 +12,6 @@ class UpperStrEnum(StrEnum):
 
 
 class ReferralRewardType(UpperStrEnum):
-    NO_REWARD = auto()
     POINTS = auto()
     EXTRA_DAYS = auto()
 
@@ -20,18 +19,16 @@ class ReferralRewardType(UpperStrEnum):
 class ReferralLevel(IntEnum):
     FIRST = auto()
     SECOND = auto()
-    THIRD = auto()
 
 
 class ReferralAccrualStrategy(UpperStrEnum):
     ON_FIRST_PAYMENT = auto()
     ON_EACH_PAYMENT = auto()
-    ON_RENEWAL = auto()
 
 
 class ReferralRewardStrategy(UpperStrEnum):
     AMOUNT = auto()
-    PERCENTAGE = auto()
+    PERCENT = auto()
 
 
 class BroadcastStatus(UpperStrEnum):
@@ -150,6 +147,9 @@ class UserNotificationType(UpperStrEnum):  # == UserNotificationDto
     EXPIRES_IN_1_DAYS = auto()
     EXPIRED = auto()
     LIMITED = auto()
+    #
+    REFERRAL_ATTACHED = auto()
+    REFERRAL_REWARD = auto()
 
 
 class UserRoleHierarchy(Enum):

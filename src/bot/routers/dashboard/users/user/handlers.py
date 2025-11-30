@@ -306,6 +306,93 @@ async def on_discount_input(
 
 
 @inject
+async def on_points_input(
+    message: Message,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+    user_service: FromDishka[UserService],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    dialog_manager.show_mode = ShowMode.EDIT
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
+    target_user = await user_service.get(telegram_id=target_telegram_id)
+
+    if not target_user:
+        raise ValueError(f"User '{target_telegram_id}' not found")
+
+    number = parse_int(message.text)
+
+    if number is None:
+        logger.warning(f"{log(user)} Invalid points input: '{message.text}'")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-user-invalid-number"),
+        )
+        return
+
+    new_points = target_user.points + number
+
+    if new_points < 0:
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(
+                i18n_key="ntf-user-invalid-points",
+                i18n_kwargs={"operation": "ADD" if number > 0 else "SUB"},
+            ),
+        )
+        return
+
+    target_user.points = new_points
+    await user_service.update(user=target_user)
+
+    logger.info(
+        f"{log(user)} {'Added' if number > 0 else 'Subtracted'} "
+        f"'{abs(number)}' points for '{target_telegram_id}'"
+    )
+
+
+@inject
+async def on_points_select(
+    callback: CallbackQuery,
+    widget: Select[int],
+    dialog_manager: DialogManager,
+    selected_points: int,
+    user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
+    notification_service: FromDishka[NotificationService],
+    remnawave_service: FromDishka[RemnawaveService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    logger.info(f"{log(user)} Selected points '{selected_points}'")
+    target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
+    target_user = await user_service.get(telegram_id=target_telegram_id)
+
+    if not target_user:
+        raise ValueError(f"User '{target_telegram_id}' not found")
+
+    new_points = target_user.points + selected_points
+
+    if new_points < 0:
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(
+                i18n_key="ntf-user-invalid-points",
+                i18n_kwargs={"operation": "ADD" if selected_points > 0 else "SUB"},
+            ),
+        )
+        return
+
+    target_user.points = new_points
+    await user_service.update(target_user)
+
+    logger.info(
+        f"{log(user)} {'Added' if selected_points > 0 else 'Subtracted'} "
+        f"'{abs(selected_points)}' points for '{target_telegram_id}'"
+    )
+
+
+@inject
 async def on_traffic_limit_select(
     callback: CallbackQuery,
     widget: Select[int],
@@ -472,7 +559,7 @@ async def on_device_limit_input(
 
 
 @inject
-async def on_squad_select(
+async def on_internal_squad_select(
     callback: CallbackQuery,
     widget: Select[UUID],
     dialog_manager: DialogManager,
@@ -495,12 +582,49 @@ async def on_squad_select(
 
     if selected_squad in subscription.internal_squads:
         updated_internal_squads = [s for s in subscription.internal_squads if s != selected_squad]
-        logger.info(f"{log(user)} Unset squad '{selected_squad}'")
+        logger.info(f"{log(user)} Unset internal squad '{selected_squad}'")
     else:
         updated_internal_squads = [*subscription.internal_squads, selected_squad]
-        logger.info(f"{log(user)} Set squad '{selected_squad}'")
+        logger.info(f"{log(user)} Set internal squad '{selected_squad}'")
 
     subscription.internal_squads = updated_internal_squads
+    await subscription_service.update(subscription)
+    await remnawave_service.updated_user(
+        user=target_user,
+        uuid=subscription.user_remna_id,
+        subscription=subscription,
+    )
+
+
+@inject
+async def on_external_squad_select(
+    callback: CallbackQuery,
+    widget: Select[UUID],
+    dialog_manager: DialogManager,
+    selected_squad: UUID,
+    user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
+    remnawave_service: FromDishka[RemnawaveService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
+    target_user = await user_service.get(telegram_id=target_telegram_id)
+
+    if not target_user:
+        raise ValueError(f"User '{target_telegram_id}' not found")
+
+    subscription = await subscription_service.get_current(target_telegram_id)
+
+    if not subscription:
+        raise ValueError(f"Current subscription for user '{target_telegram_id}' not found")
+
+    if selected_squad == subscription.external_squad:
+        subscription.external_squad = None
+        logger.info(f"{log(user)} Unset external squad '{selected_squad}'")
+    else:
+        subscription.external_squad = selected_squad
+        logger.info(f"{log(user)} Set external squad '{selected_squad}'")
+
     await subscription_service.update(subscription)
     await remnawave_service.updated_user(
         user=target_user,
@@ -780,6 +904,10 @@ async def on_sync(
             )
         else:
             await remnawave_service.sync_user(result[0], creating=False)
+            await notification_service.notify_user(
+                user=user,
+                payload=MessagePayload(i18n_key="ntf-user-sync-success"),
+            )
 
     except Exception as exception:
         await notification_service.notify_user(
@@ -798,7 +926,6 @@ async def on_give_subscription(
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
     plan_service: FromDishka[PlanService],
-    subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -808,8 +935,7 @@ async def on_give_subscription(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    is_new_user = not await subscription_service.has_any_subscription(target_user)
-    plans = await plan_service.get_available_plans(target_user, is_new_user)
+    plans = await plan_service.get_available_plans(target_user)
 
     if not plans:
         await notification_service.notify_user(
@@ -867,12 +993,10 @@ async def on_subscription_duration_select(
         remna_user = await remnawave_service.create_user(user, plan_snapshot)
 
     subscription_url = remna_user.subscription_url
-    logger.success(subscription_url)
 
     if not subscription_url:
         subscription_url = await remnawave_service.get_subscription_url(remna_user.uuid)
 
-    logger.success(subscription_url)
     new_subscription = SubscriptionDto(
         user_remna_id=remna_user.uuid,
         status=remna_user.status,

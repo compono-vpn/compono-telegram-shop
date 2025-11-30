@@ -7,7 +7,7 @@ class MainMenu(StatesGroup):
     MAIN = State()
     DEVICES = State()
     INVITE = State()
-    INVITED_USERS = State()
+    INVITE_ABOUT = State()
 
 
 class Notification(StatesGroup):
@@ -79,8 +79,11 @@ class DashboardUser(StatesGroup):
     DEVICE_LIMIT = State()
     EXPIRE_TIME = State()
     SQUADS = State()
+    INTERNAL_SQUADS = State()
+    EXTERNAL_SQUADS = State()
     DEVICES_LIST = State()
     DISCOUNT = State()
+    POINTS = State()
     STATISTICS = State()
     ROLE = State()
     TRANSACTIONS_LIST = State()

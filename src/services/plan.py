@@ -122,28 +122,45 @@ class PlanService(BaseService):
         logger.debug("No active trial plan found")
         return None
 
-    async def get_available_plans(self, user_dto: UserDto, is_new_user: bool) -> list[PlanDto]:
-        logger.debug(f"Fetching available plans for user '{user_dto.telegram_id}'")
+    async def get_available_plans(self, user: UserDto) -> list[PlanDto]:
+        logger.debug(f"Fetching available plans for user '{user.telegram_id}'")
 
         db_plans: list[Plan] = await self.uow.repository.plans.filter_active(is_active=True)
+        logger.debug(f"Total active plans retrieved: '{len(db_plans)}'")
         db_filtered_plans = []
 
         for db_plan in db_plans:
             match db_plan.availability:
                 case PlanAvailability.ALL:
                     db_filtered_plans.append(db_plan)
-                case PlanAvailability.NEW if is_new_user:
-                    db_filtered_plans.append(db_plan)
-                case PlanAvailability.EXISTING if not is_new_user:
-                    db_filtered_plans.append(db_plan)
-                # case PlanAvailability.INVITED if is_invited_user:
-                #     db_filtered_plans.append(db_plan)
-                case PlanAvailability.ALLOWED if user_dto.telegram_id in db_plan.allowed_user_ids:
+                case PlanAvailability.NEW if not user.has_any_subscription:
+                    logger.debug(
+                        f"User {user.telegram_id} has no subscription, "
+                        f"eligible for new user plan '{db_plan.name}'"
+                    )
                     db_filtered_plans.append(db_plan)
 
+                case PlanAvailability.EXISTING if user.has_any_subscription:
+                    logger.debug(
+                        f"User {user.telegram_id} has an existing subscription, "
+                        f"eligible for existing user plan '{db_plan.name}'"
+                    )
+                    db_filtered_plans.append(db_plan)
+
+                case PlanAvailability.INVITED if user.is_invited_user:
+                    logger.debug(
+                        f"User {user.telegram_id} was invited, "
+                        f"eligible for invited user plan '{db_plan.name}'"
+                    )
+                    db_filtered_plans.append(db_plan)
+
+                case PlanAvailability.ALLOWED if user.telegram_id in db_plan.allowed_user_ids:
+                    logger.debug(
+                        f"User {user.telegram_id} is explicitly allowed for plan '{db_plan.name}'"
+                    )
+                    db_filtered_plans.append(db_plan)
         logger.info(
-            f"Available plans filtered: '{len(db_filtered_plans)}' "
-            f"for user '{user_dto.telegram_id}'"
+            f"Available plans filtered: '{len(db_filtered_plans)}' for user '{user.telegram_id}'"
         )
         return PlanDto.from_model_list(db_filtered_plans)
 

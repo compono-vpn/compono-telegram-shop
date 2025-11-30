@@ -335,5 +335,5 @@ class NotificationService(BaseService):
             role=UserRole.DEV,
         )
 
-        logger.warning("Dev is empty! Adding a fallback dev from environment config")
+        logger.warning("Fallback to temporary dev user from environment for notifications")
         return temp_dev

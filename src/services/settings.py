@@ -11,7 +11,7 @@ from src.core.enums import AccessMode, Currency, SystemNotificationType, UserNot
 from src.core.storage.key_builder import build_key
 from src.core.utils.types import AnyNotification
 from src.infrastructure.database import UnitOfWork
-from src.infrastructure.database.models.dto import SettingsDto
+from src.infrastructure.database.models.dto import ReferralSettingsDto, SettingsDto
 from src.infrastructure.database.models.sql import Settings
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
@@ -166,6 +166,10 @@ class SettingsService(BaseService):
         ]
 
     #
+
+    async def get_referral_settings(self) -> ReferralSettingsDto:
+        settings = await self.get()
+        return settings.referral
 
     async def is_referral_enable(self) -> bool:
         settings = await self.get()

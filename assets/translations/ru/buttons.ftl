@@ -42,10 +42,11 @@ btn-menu-devices = 📱 Мои устройства
 btn-menu-devices-empty = ⚠️ Нет привязанных устройств
 btn-menu-subscription = 💳 Подписка
 btn-menu-invite = 👥 Пригласить
+btn-menu-invite-about = ❓ Подробнее о награде
 btn-menu-invite-copy = 🔗 Скопировать ссылку
 btn-menu-invite-send = 📩 Пригласить
-btn-menu-invite-users = 👥 Список приглашенных
 btn-menu-invite-qr = 🧾 QR-код
+btn-menu-invite-withdraw-points = 💎 Обменять баллы
 btn-menu-support = 🆘 Поддержка
 btn-menu-dashboard = 🛠 Панель управления
 
@@ -95,6 +96,7 @@ btn-users-unblock-all = 🔓 Разблокировать всех
 
 # User
 btn-user-discount = 💸 Изменить скидку
+btn-user-points = 💎 Изменить баллы
 btn-user-statistics = 📊 Статистика
 btn-user-message = 📩 Сообщение
 btn-user-role = 👮‍♂️ Изменить роль
@@ -114,11 +116,8 @@ btn-user-message-preview = 👀 Предпросмотр
 btn-user-message-confirm = ✅ Отправить
 btn-user-sync = 🌀 Синхронизировать
 btn-user-give-subscription = 🎁 Выдать подписку
-
-btn-user-subscription-duration = { $operation ->
-    [ADD] +
-    *[SUB] -
-    } { $duration }
+btn-user-subscription-internal-squads = ⏺️ Внутренние сквады
+btn-user-subscription-external-squads = ⏹️ Внешний сквад
 
 btn-user-allowed-plan-choice = { $selected ->
     [1] 🔘
@@ -255,7 +254,6 @@ btn-referral-level-choice = { $type ->
     }
 
 btn-referral-reward-choice = { $type -> 
-    [NO_REWARD] ❌ Без награды
     [POINTS] 💎 Баллы
     [EXTRA_DAYS] ⏳ Дни
     *[OTHER] { $type }
@@ -264,13 +262,12 @@ btn-referral-reward-choice = { $type ->
 btn-referral-accrual-strategy-choice = { $type -> 
     [ON_FIRST_PAYMENT] 💳 Первый платеж
     [ON_EACH_PAYMENT] 💸 Каждый платеж
-    [ON_RENEWAL] 🔁 Каждое продление
     *[OTHER] { $type }
     }
 
 btn-referral-reward-strategy-choice = { $type -> 
     [AMOUNT] 🔸 Фиксированная
-    [PERCENTAGE] 🔹 Процентная
+    [PERCENT] 🔹 Процентная
     *[OTHER] { $type }
     }
 
@@ -284,11 +281,14 @@ btn-notifications-user-choice = { $enabled ->
     } { $type ->
     [EXPIRES_IN_3_DAYS] Подписка истекает (3 дня)
     [EXPIRES_IN_2_DAYS] Подписка истекает (2 дня)
-    [EXPIRES_IN_1_DAYS] Подписка истекает (1 дня)
+    [EXPIRES_IN_1_DAYS] Подписка истекает (1 день)
     [EXPIRED] Подписка истекла
     [LIMITED] Трафик исчерпан
+    [REFERRAL_ATTACHED] Реферал закреплен
+    [REFERRAL_REWARD] Получено вознаграждение
     *[OTHER] { $type }
     }
+
 btn-notifications-system = ⚙️ Системные
 
 btn-notifications-system-choice = { $enabled -> 

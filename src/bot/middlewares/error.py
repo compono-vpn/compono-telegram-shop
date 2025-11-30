@@ -4,12 +4,16 @@ from typing import Any, Awaitable, Callable, Optional, cast
 from aiogram.types import ErrorEvent, TelegramObject
 from aiogram.types import User as AiogramUser
 from aiogram.utils.formatting import Text
+from dishka import AsyncContainer
 
 from src.bot.keyboards import get_user_keyboard
+from src.core.constants import CONTAINER_KEY
 from src.core.enums import MiddlewareEventType
 from src.core.utils.message_payload import MessagePayload
+from src.infrastructure.database.models.dto import UserDto
 from src.infrastructure.taskiq.tasks.notifications import send_error_notification_task
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
+from src.services.user import UserService
 
 from .base import EventTypedMiddleware
 
@@ -44,7 +48,13 @@ class ErrorMiddleware(EventTypedMiddleware):
 
         if aiogram_user:
             reply_markup = get_user_keyboard(aiogram_user.id)
-            await redirect_to_main_menu_task.kiq(aiogram_user.id)
+            container: AsyncContainer = data[CONTAINER_KEY]
+            user_service: UserService = await container.get(UserService)
+            user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
+
+            if user:
+                await redirect_to_main_menu_task.kiq(aiogram_user.id)
+
         else:
             reply_markup = None
 
@@ -61,4 +71,4 @@ class ErrorMiddleware(EventTypedMiddleware):
             ),
         )
 
-        return await handler(event, data)
+        # return await handler(event, data)

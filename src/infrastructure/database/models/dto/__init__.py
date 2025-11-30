@@ -28,7 +28,7 @@ PromocodeActivationDto.model_rebuild()
 BaseTransactionDto.model_rebuild()
 TransactionDto.model_rebuild()
 PaymentGatewayDto.model_rebuild()
-
+ReferralDto.model_rebuild()
 
 __all__ = [
     "BaseDto",

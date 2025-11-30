@@ -17,6 +17,7 @@ from src.infrastructure.taskiq.tasks.notifications import (
     send_access_opened_notifications_task,
 )
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
+from src.services.referral import ReferralService
 from src.services.settings import SettingsService
 from src.services.user import UserService
 
@@ -26,6 +27,7 @@ from .base import BaseService
 class AccessService(BaseService):
     settings_service: SettingsService
     user_service: UserService
+    referral_service: ReferralService
 
     def __init__(
         self,
@@ -37,23 +39,34 @@ class AccessService(BaseService):
         #
         settings_service: SettingsService,
         user_service: UserService,
+        referral_service: ReferralService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.settings_service = settings_service
         self.user_service = user_service
+        self.referral_service = referral_service
 
     async def is_access_allowed(self, aiogram_user: AiogramUser, event: TelegramObject) -> bool:  # noqa: C901
         user = await self.user_service.get(aiogram_user.id)
         mode = await self.settings_service.get_access_mode()
 
         if not user:
-            if mode in (AccessMode.REG_BLOCKED, AccessMode.RESTRICTED):
+            if mode == AccessMode.INVITED and await self.referral_service.is_referral_event(
+                event, aiogram_user.id
+            ):
+                logger.info(f"Access allowed for referral event for user '{aiogram_user.id}'")
+                return True
+
+            if mode in (AccessMode.REG_BLOCKED, AccessMode.INVITED, AccessMode.RESTRICTED):
                 logger.info(f"Access denied for new user '{aiogram_user.id}' (mode: {mode})")
-                i18n_key = (
-                    "ntf-access-denied"
-                    if mode == AccessMode.RESTRICTED
-                    else "ntf-access-denied-registration"
-                )
+
+                if mode == AccessMode.REG_BLOCKED:
+                    i18n_key = "ntf-access-denied-registration"
+                elif mode == AccessMode.INVITED:
+                    i18n_key = "ntf-access-denied-only-invited"
+                else:
+                    i18n_key = "ntf-access-denied"
+
                 temp_user = UserDto(
                     telegram_id=aiogram_user.id,
                     name=aiogram_user.full_name,
@@ -107,23 +120,12 @@ class AccessService(BaseService):
                 return True
 
             case AccessMode.INVITED:
-                invited = await self.is_invited(user)
-
-                if invited:
-                    logger.info(f"Access allowed for user '{user.telegram_id}' (mode: INVITED)")
-                    return True
-
-                logger.info(f"Access denied for user '{user.telegram_id}' (not invited)")
-                return False
+                logger.info(f"Access allowed for user '{user.telegram_id}' (mode: INVITED)")
+                return True
 
             case _:
                 logger.warning(f"Unknown access mode '{mode}'")
                 return True
-
-    async def is_invited(self, user: UserDto) -> bool:
-        result = True  # TODO: Replace with actual referral check
-        logger.debug(f"Invited check for user '{user.telegram_id}': {result}")
-        return result
 
     async def get_available_modes(self) -> list[AccessMode]:
         current = await self.settings_service.get_access_mode()

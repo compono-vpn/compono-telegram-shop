@@ -18,6 +18,17 @@ from src.services.user import UserService
 
 @broker.task
 @inject
+async def send_user_notification_task(
+    user: UserDto,
+    ntf_type: UserNotificationType,
+    payload: MessagePayload,
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    await notification_service.notify_user(user=user, payload=payload, ntf_type=ntf_type)
+
+
+@broker.task
+@inject
 async def send_system_notification_task(
     ntf_type: SystemNotificationType,
     payload: MessagePayload,

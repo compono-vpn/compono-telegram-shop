@@ -44,7 +44,6 @@ referral = Window(
             text=I18nFormat("btn-referral-level"),
             id="level",
             state=RemnashopReferral.LEVEL,
-            when=F["with_reward"],
         ),
         SwitchTo(
             text=I18nFormat("btn-referral-reward-type"),
@@ -58,7 +57,6 @@ referral = Window(
             id="accrual_strategy",
             state=RemnashopReferral.ACCRUAL_STRATEGY,
         ),
-        when=F["with_reward"],
     ),
     Row(
         SwitchTo(
@@ -66,7 +64,6 @@ referral = Window(
             id="reward_strategy",
             state=RemnashopReferral.REWARD_STRATEGY,
         ),
-        when=F["with_reward"],
     ),
     Row(
         SwitchTo(
@@ -74,7 +71,6 @@ referral = Window(
             id="reward",
             state=RemnashopReferral.REWARD,
         ),
-        when=F["with_reward"],
     ),
     Row(
         Start(

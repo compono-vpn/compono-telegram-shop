@@ -1,5 +1,8 @@
 from typing import Any, List, Optional
 
+from sqlalchemy import func, select
+
+from src.core.enums import ReferralRewardType
 from src.infrastructure.database.models.sql import Referral, ReferralReward
 
 from .base import BaseRepository
@@ -32,3 +35,26 @@ class ReferralRepository(BaseRepository):
 
     async def get_rewards_by_referral(self, referral_id: int) -> List[ReferralReward]:
         return await self._get_many(ReferralReward, ReferralReward.referral_id == referral_id)
+
+    async def count_referrals_by_referrer(self, telegram_id: int) -> int:
+        return await self._count(Referral, Referral.referrer_telegram_id == telegram_id)
+
+    async def count_rewards_by_referrer(self, telegram_id: int) -> int:
+        subquery = (
+            select(Referral.id).where(Referral.referrer_telegram_id == telegram_id).subquery()
+        )
+        return await self._count(ReferralReward, ReferralReward.referral_id.in_(select(subquery)))
+
+    async def sum_rewards_by_user(self, telegram_id: int, reward_type: ReferralRewardType) -> int:
+        conditions = [
+            ReferralReward.user_telegram_id == telegram_id,
+            ReferralReward.type == reward_type,
+        ]
+
+        query = select(func.sum(ReferralReward.amount)).where(*conditions)
+
+        result = await self.session.scalar(query)
+        return result or 0
+
+    async def update_reward(self, reward_id: int, **data: Any) -> Optional[ReferralReward]:
+        return await self._update(ReferralReward, ReferralReward.id == reward_id, **data)

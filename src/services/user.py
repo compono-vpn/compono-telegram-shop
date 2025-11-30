@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from aiogram import Bot
 from aiogram.types import Message
@@ -22,6 +22,7 @@ from src.core.utils.generators import generate_referral_code
 from src.core.utils.types import RemnaUserDto
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import UserDto
+from src.infrastructure.database.models.dto.user import BaseUserDto
 from src.infrastructure.database.models.sql import User
 from src.infrastructure.redis import RedisRepository, redis_cache
 
@@ -62,6 +63,7 @@ class UserService(BaseService):
         )
         db_user = User(**user.model_dump())
         db_created_user = await self.uow.repository.users.create(db_user)
+        await self.uow.commit()
 
         await self.add_to_recent_registered(user.telegram_id)
         await self.clear_user_cache(user.telegram_id)
@@ -81,6 +83,7 @@ class UserService(BaseService):
         )
         db_user = User(**user.model_dump())
         db_created_user = await self.uow.repository.users.create(db_user)
+        await self.uow.commit()
 
         await self.add_to_recent_registered(user.telegram_id)
         await self.clear_user_cache(user.telegram_id)
@@ -332,6 +335,14 @@ class UserService(BaseService):
         )
         await self.clear_user_cache(telegram_id)
         logger.info(f"Delete current subscription for user '{telegram_id}'")
+
+    async def add_points(self, user: Union[BaseUserDto, UserDto], points: int) -> None:
+        await self.uow.repository.users.update(
+            telegram_id=user.telegram_id,
+            points=user.points + points,
+        )
+        await self.clear_user_cache(user.telegram_id)
+        logger.info(f"Add '{points}' points for user '{user.telegram_id}'")
 
     #
 

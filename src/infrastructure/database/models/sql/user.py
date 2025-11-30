@@ -3,10 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from .promocode import PromocodeActivation
-    from .referral import Referral, ReferralReward
+    from .referral import Referral
     from .subscription import Subscription
-    from .transaction import Transaction
 
 from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -47,6 +45,7 @@ class User(BaseSql, TimestampMixin):
 
     personal_discount: Mapped[int] = mapped_column(Integer, nullable=False)
     purchase_discount: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
 
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_bot_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -65,32 +64,15 @@ class User(BaseSql, TimestampMixin):
     subscriptions: Mapped[list["Subscription"]] = relationship(
         "Subscription",
         back_populates="user",
-        cascade="all, delete-orphan",
         primaryjoin="User.telegram_id==Subscription.user_telegram_id",
-        foreign_keys="Subscription.user_telegram_id",
-    )
-    promocode_activations: Mapped[list["PromocodeActivation"]] = relationship(
-        "PromocodeActivation",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-    transactions: Mapped[list["Transaction"]] = relationship(
-        "Transaction",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-    referrer: Mapped[Optional["Referral"]] = relationship(
-        "Referral",
-        back_populates="referred",
-        foreign_keys="[Referral.referred_telegram_id]",
-        uselist=False,
-    )
-    referrals: Mapped[list["Referral"]] = relationship(
-        "Referral",
-        back_populates="referrer",
-        foreign_keys="[Referral.referrer_telegram_id]",
+        foreign_keys="[Subscription.user_telegram_id]",
         lazy="selectin",
     )
-    rewards_received: Mapped[list["ReferralReward"]] = relationship(
-        "ReferralReward", back_populates="user", lazy="selectin"
+
+    referral: Mapped[Optional["Referral"]] = relationship(
+        "Referral",
+        back_populates="referred",
+        primaryjoin="User.telegram_id==Referral.referred_telegram_id",
+        uselist=False,
+        lazy="selectin",
     )
