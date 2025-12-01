@@ -966,6 +966,7 @@ async def on_subscription_duration_select(
     widget: Select[int],
     dialog_manager: DialogManager,
     selected_duration: int,
+    user_service: FromDishka[UserService],
     plan_service: FromDishka[PlanService],
     subscription_service: FromDishka[SubscriptionService],
     remnawave_service: FromDishka[RemnawaveService],
@@ -973,6 +974,7 @@ async def on_subscription_duration_select(
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected duration '{selected_duration}'")
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
+    target_user = await user_service.get(telegram_id=target_telegram_id)
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
     plan = await plan_service.get(selected_plan_id)
 
@@ -984,13 +986,13 @@ async def on_subscription_duration_select(
 
     if subscription:
         remna_user = await remnawave_service.updated_user(
-            user=user,
+            user=target_user,
             uuid=subscription.user_remna_id,
             plan=plan_snapshot,
             reset_traffic=True,
         )
     else:
-        remna_user = await remnawave_service.create_user(user, plan_snapshot)
+        remna_user = await remnawave_service.create_user(target_user, plan_snapshot)
 
     subscription_url = remna_user.subscription_url
 
@@ -1008,7 +1010,7 @@ async def on_subscription_duration_select(
         url=subscription_url,
         plan=plan_snapshot,
     )
-    await subscription_service.create(user, new_subscription)
+    await subscription_service.create(target_user, new_subscription)
 
     logger.info(f"{log(user)} Set plan '{selected_plan_id}' for user '{target_telegram_id}'")
     await dialog_manager.switch_to(state=DashboardUser.MAIN)
