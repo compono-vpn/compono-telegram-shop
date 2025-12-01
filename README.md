@@ -225,7 +225,7 @@ Now, open the .env file and update the variables:
 - **`REMNAWAVE_WEBHOOK_SECRET`** : Must match the value of `WEBHOOK_SECRET_HEADER` from `.env` the panel.
 
 > [!WARNING]
-> Depending on your configuration, also pay attention to the following variables: **`BOT_MINI_APP_URL`**, **`REMNAWAVE_CADDY_TOKEN`**, **`REMNAWAVE_COOKIE`**.
+> Depending on your configuration, also pay attention to the following variables: **`BOT_MINI_APP`**, **`REMNAWAVE_CADDY_TOKEN`**, **`REMNAWAVE_COOKIE`**.
 
 > [!IMPORTANT]
 > The bot requires a properly configured webhook to function.  

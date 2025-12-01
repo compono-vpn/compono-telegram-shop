@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.enums import AccessMode, Currency
 from src.infrastructure.database.models.dto import (
+    ReferralSettingsDto,
     SystemNotificationDto,
     UserNotificationDto,
 )
@@ -43,5 +44,19 @@ class Settings(BaseSql):
         nullable=False,
     )
 
-    user_notifications: Mapped[UserNotificationDto] = mapped_column(JSON, nullable=True)
-    system_notifications: Mapped[SystemNotificationDto] = mapped_column(JSON, nullable=True)
+    user_notifications: Mapped[UserNotificationDto] = mapped_column(
+        JSON,
+        default=lambda: UserNotificationDto().model_dump(),
+        nullable=False,
+    )
+    system_notifications: Mapped[SystemNotificationDto] = mapped_column(
+        JSON,
+        default=lambda: SystemNotificationDto().model_dump(),
+        nullable=False,
+    )
+
+    referral: Mapped[ReferralSettingsDto] = mapped_column(
+        JSON,
+        default=lambda: ReferralSettingsDto().model_dump(),
+        nullable=False,
+    )

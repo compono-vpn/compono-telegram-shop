@@ -18,9 +18,17 @@ unit-unlimited = { $value ->
 payment-invoice-description = { purchase-type } подписки { $name } на { $duration }
 contact-support-help = Здравствуйте! Мне нужна помощь.
 contact-support-paysupport = Здравствуйте! Я бы хотел запросить возврат средств.
+contact-support-withdraw-points = Здравствуйте! Я бы хотел запросить обмен баллов.
 cmd-start = Перезапустить бота
 cmd-paysupport = Возврат средств
 cmd-help = Помощь
+
+referral-invite-message =
+    { space }
+    🚀 Привет! Хочешь стабильный и быстрый VPN?  
+    
+    ↘️ ЖМИ СЮДА И ПОПРОБУЙ БЕСПЛАТНО!
+    { $url }
 
 
 # Headers
@@ -67,6 +75,10 @@ frg-user-details =
     }
     • <b>Роль</b>: { role }
     • <b>Язык</b>: { language }
+    { $show_points ->
+    [1] • <b>Баллы</b>: { $points }
+    *[0] { empty }
+    }
     </blockquote>
 
 frg-user-discounts-details =
@@ -304,6 +316,24 @@ traffic-strategy = { $strategy_type ->
     [WEEK] Каждую неделю
     [MONTH] Каждый месяц
     *[OTHER] { $strategy_type }
+    }
+
+reward-type = { $reward_type -> 
+    [POINTS] Баллы
+    [EXTRA_DAYS] Дни
+    *[OTHER] { $reward_type }
+    }
+
+accrual-strategy = { $accrual_strategy_type -> 
+    [ON_FIRST_PAYMENT] Первый платеж
+    [ON_EACH_PAYMENT] Каждый платеж
+    *[OTHER] { $accrual_strategy_type }
+    }
+
+reward-strategy = { $reward_strategy_type -> 
+    [AMOUNT] Фиксированная
+    [PERCENT] Процентная
+    *[OTHER] { $reward_strategy_type }
     }
 
 language = { $language ->

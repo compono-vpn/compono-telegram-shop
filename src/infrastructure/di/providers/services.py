@@ -9,6 +9,7 @@ from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.pricing import PricingService
 from src.services.promocode import PromocodeService
+from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
@@ -35,3 +36,4 @@ class ServicesProvider(Provider):
     broadcast_service = provide(source=BroadcastService, scope=Scope.REQUEST)
     pricing_service = provide(source=PricingService)
     importer_service = provide(source=ImporterService)
+    referral_service = provide(source=ReferralService, scope=Scope.REQUEST)

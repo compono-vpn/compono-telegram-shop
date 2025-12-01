@@ -8,7 +8,7 @@ from loguru import logger
 from pydantic import SecretStr
 
 from src.bot.states import DashboardAccess
-from src.core.constants import USER_KEY
+from src.core.constants import T_ME, USER_KEY
 from src.core.enums import AccessMode
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
@@ -122,7 +122,7 @@ async def on_channel_input(
             payload=MessagePayload(i18n_key="ntf-access-id-saved"),
         )
 
-    elif is_valid_username(input_text) or input_text.startswith("https://t.me/"):
+    elif is_valid_username(input_text) or input_text.startswith(T_ME):
         settings.channel_link = SecretStr(input_text)
         logger.info(f"{log(user)} Saved channel link: '{input_text}'")
         await notification_service.notify_user(

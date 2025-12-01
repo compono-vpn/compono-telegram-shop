@@ -11,6 +11,7 @@ from src.bot.states import (
     RemnashopGateways,
     RemnashopNotifications,
     RemnashopPlans,
+    RemnashopReferral,
 )
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.enums import BannerName
@@ -36,11 +37,10 @@ remnashop = Window(
         ),
     ),
     Row(
-        Button(
+        Start(
             text=I18nFormat("btn-remnashop-referral"),
             id="referral",
-            # state=DashboardRemnashop.REFERRAL,
-            on_click=show_dev_popup,
+            state=RemnashopReferral.MAIN,
         ),
         Button(
             text=I18nFormat("btn-remnashop-advertising"),

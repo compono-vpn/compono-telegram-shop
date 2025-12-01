@@ -9,7 +9,7 @@ from magic_filter import F
 
 from src.bot.states import DashboardUser, MainMenu, Subscription
 from src.bot.widgets.i18n_format import I18nFormat
-from src.core.constants import GOTO_PREFIX, PURCHASE_PREFIX
+from src.core.constants import GOTO_PREFIX, PURCHASE_PREFIX, T_ME
 from src.core.enums import PurchaseType
 from src.core.utils.formatters import format_username_to_url
 
@@ -33,15 +33,15 @@ goto_buttons = [
 connect_buttons = (
     WebApp(
         text=I18nFormat("btn-menu-connect"),
-        url=Format("{miniapp_url}"),
+        url=Format("{url}"),
         id="connect_miniapp",
-        when=F["miniapp_url"] & F["connetable"],
+        when=F["is_app"] & F["connectable"],
     ),
     Url(
         text=I18nFormat("btn-menu-connect"),
-        url=Format("{subscription_url}"),
+        url=Format("{url}"),
         id="connect_sub_page",
-        when=~F["miniapp_url"] & F["connetable"],
+        when=~F["is_app"] & F["connectable"],
     ),
 )
 
@@ -126,12 +126,12 @@ def get_remnashop_keyboard() -> InlineKeyboardMarkup:
         ),
         InlineKeyboardButton(
             text="btn-remnashop-telegram",
-            url="https://t.me/remna_shop",
+            url=f"{T_ME}remna_shop",
         ),
-        InlineKeyboardButton(
-            text="btn-remnashop-guide",
-            url="https://t.me/remna_shop",
-        ),
+        # InlineKeyboardButton(
+        #     text="btn-remnashop-guide",
+        #     url=f"{T_ME}remna_shop",
+        # ),
     )
 
     builder.row(

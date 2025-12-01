@@ -1,3 +1,5 @@
+from typing import Union
+
 from pydantic import SecretStr, field_validator
 from pydantic_core.core_schema import FieldValidationInfo
 
@@ -12,16 +14,30 @@ class BotConfig(BaseConfig, env_prefix="BOT_"):
     secret_token: SecretStr
     dev_id: int
     support_username: SecretStr
-    mini_app_url: SecretStr = SecretStr("")
+    mini_app: Union[bool, SecretStr] = False
 
-    reset_webhook: bool
-    drop_pending_updates: bool
-    setup_commands: bool
-    use_banners: bool
+    reset_webhook: bool = False
+    drop_pending_updates: bool = False
+    setup_commands: bool = True
+    use_banners: bool = True
 
     @property
     def webhook_path(self) -> str:
         return f"{API_V1}{BOT_WEBHOOK_PATH}"
+
+    @property
+    def is_mini_app(self) -> bool:
+        if isinstance(self.mini_app, bool):
+            return self.mini_app
+        return bool(self.mini_app_url)
+
+    @property
+    def mini_app_url(self) -> Union[bool, str]:
+        if isinstance(self.mini_app, SecretStr):
+            value = self.mini_app.get_secret_value().strip()
+            if value and URL_PATTERN.match(value):
+                return value
+        return False
 
     def webhook_url(self, domain: SecretStr) -> SecretStr:
         url = f"https://{domain.get_secret_value()}{self.webhook_path}"
@@ -42,14 +58,20 @@ class BotConfig(BaseConfig, env_prefix="BOT_"):
         validate_username(field, info)
         return field
 
-    @field_validator("mini_app_url")
+    @field_validator("mini_app")
     @classmethod
-    def validate_mini_app_url(cls, field: SecretStr, info: FieldValidationInfo) -> SecretStr:
-        mini_app_url = field.get_secret_value()
-
-        if not mini_app_url or URL_PATTERN.match(mini_app_url):
-            return field
-
-        raise ValueError(
-            "BOT_MINI_APP_URL must be empty or a valid url (e.g., https://example.com/)"
-        )
+    def validate_mini_app(
+        cls,
+        field: Union[bool, SecretStr],
+        info: FieldValidationInfo,
+    ) -> Union[bool, SecretStr]:
+        if isinstance(field, SecretStr):
+            value = field.get_secret_value().strip().lower()
+            if value.lower() == "true":
+                return True
+            if value.lower() == "false" or not value:
+                return False
+            if URL_PATTERN.match(value):
+                return SecretStr(value)
+            raise ValueError("BOT_MINI_APP must be empty, True, False or a valid URL")
+        return field

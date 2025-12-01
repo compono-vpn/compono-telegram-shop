@@ -1,5 +1,5 @@
 from aiogram_dialog import Dialog, StartMode, Window
-from aiogram_dialog.widgets.kbd import Row, Start, SwitchTo
+from aiogram_dialog.widgets.kbd import NumberedPager, Row, Start, StubScroll, SwitchTo
 
 from src.bot.keyboards import main_menu_button
 from src.bot.states import Dashboard, DashboardRemnawave
@@ -73,6 +73,8 @@ users = Window(
 hosts = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-remnawave-hosts"),
+    StubScroll(id="scroll_hosts", pages="pages"),
+    NumberedPager(scroll="scroll_hosts"),
     Row(
         SwitchTo(
             text=I18nFormat("btn-back"),
@@ -83,11 +85,14 @@ hosts = Window(
     IgnoreUpdate(),
     state=DashboardRemnawave.HOSTS,
     getter=hosts_getter,
+    preview_data=hosts_getter,
 )
 
 nodes = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-remnawave-nodes"),
+    StubScroll(id="scroll_nodes", pages="pages"),
+    NumberedPager(scroll="scroll_nodes"),
     Row(
         SwitchTo(
             text=I18nFormat("btn-back"),
@@ -98,11 +103,14 @@ nodes = Window(
     IgnoreUpdate(),
     state=DashboardRemnawave.NODES,
     getter=nodes_getter,
+    preview_data=nodes_getter,
 )
 
 inbounds = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-remnawave-inbounds"),
+    StubScroll(id="scroll_inbounds", pages="pages"),
+    NumberedPager(scroll="scroll_inbounds"),
     Row(
         SwitchTo(
             text=I18nFormat("btn-back"),
@@ -113,8 +121,8 @@ inbounds = Window(
     IgnoreUpdate(),
     state=DashboardRemnawave.INBOUNDS,
     getter=inbounds_getter,
+    preview_data=inbounds_getter,
 )
-
 
 router = Dialog(
     remnawave,

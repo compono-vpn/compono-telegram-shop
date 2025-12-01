@@ -49,6 +49,7 @@ def setup_routers(router: Router) -> None:
         #
         remnashop.dialog.router,
         remnashop.gateways.dialog.router,
+        remnashop.referral.dialog.router,
         remnashop.notifications.dialog.router,
         remnashop.plans.dialog.router,
         #

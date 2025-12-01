@@ -1,4 +1,5 @@
 import hashlib
+import string
 from typing import Any
 
 from cryptography.fernet import Fernet
@@ -42,3 +43,20 @@ def deep_decrypt(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: deep_decrypt(v) for k, v in value.items()}
     return value
+
+
+def base62_encode(number: int) -> str:
+    alphabet = string.ascii_letters + string.digits
+
+    if number == 0:
+        return alphabet[0]
+
+    arr = []
+    base = len(alphabet)
+
+    while number:
+        number, rem = divmod(number, base)
+        arr.append(alphabet[rem])
+
+    arr.reverse()
+    return "".join(arr)

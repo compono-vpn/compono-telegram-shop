@@ -13,7 +13,8 @@ from src.core.config import AppConfig
 from src.infrastructure.database.models.sql import BaseSql
 
 config = context.config
-db_config = AppConfig.get().database
+app_config = AppConfig.get()
+db_config = app_config.database
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -48,6 +49,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         process_revision_directives=process_revision_directives,
+        crypt_key=app_config.crypt_key.get_secret_value(),
     )
 
     with context.begin_transaction():
@@ -59,6 +61,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         process_revision_directives=process_revision_directives,
+        crypt_key=app_config.crypt_key.get_secret_value(),
     )
 
     with context.begin_transaction():

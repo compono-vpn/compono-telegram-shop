@@ -285,7 +285,6 @@ plan_tag = Window(
     getter=tag_getter,
 )
 
-
 plan_type = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-plan-type"),
@@ -380,7 +379,6 @@ plan_devices = Window(
     IgnoreUpdate(),
     state=RemnashopPlans.DEVICES,
 )
-
 
 plan_durations = Window(
     Banner(BannerName.DASHBOARD),

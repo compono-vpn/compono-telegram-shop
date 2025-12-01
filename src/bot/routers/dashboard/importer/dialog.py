@@ -15,7 +15,6 @@ from .handlers import (
     on_database_input,
     on_import_active_xui,
     on_import_all_xui,
-    on_import_from_bot,
     on_squad_select,
     on_squads,
     on_sync,
@@ -30,11 +29,11 @@ importer = Window(
             id="xui",
             state=DashboardImporter.FROM_XUI,
         ),
-        Button(
-            text=I18nFormat("btn-importer-from-xui-shop"),
-            id="xui_shop",
-            on_click=on_import_from_bot,
-        ),
+        # Button(
+        #     text=I18nFormat("btn-importer-from-xui-shop"),
+        #     id="xui_shop",
+        #     on_click=on_import_from_bot,
+        # ),
     ),
     Row(
         Button(

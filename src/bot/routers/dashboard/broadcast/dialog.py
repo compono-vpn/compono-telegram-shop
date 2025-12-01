@@ -176,7 +176,7 @@ view = Window(
 
 plan = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-broadcast-plan-choice"),
+    I18nFormat("msg-broadcast-plan-select"),
     Column(
         Select(
             text=I18nFormat(

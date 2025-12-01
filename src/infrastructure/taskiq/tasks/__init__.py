@@ -1,4 +1,4 @@
-from . import notifications, payments, redirects, subscriptions, updates
+from . import notifications, payments, redirects, referrals, subscriptions, updates
 
 __all__ = [
     "notifications",
@@ -6,4 +6,5 @@ __all__ = [
     "redirects",
     "subscriptions",
     "updates",
+    "referrals",
 ]

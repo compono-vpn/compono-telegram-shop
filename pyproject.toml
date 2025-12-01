@@ -27,6 +27,7 @@ dependencies = [
     "uvicorn>=0.38.0",
     "cryptography>=46.0.3",
     "sqlalchemy[mypy]>=2.0.0",
+    "qrcode[pil]>=8.2",
 ]
 
 [project.urls]
@@ -83,7 +84,7 @@ extra_checks = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["fluentogram.*", "remnawave.*"]
+module = ["fluentogram.*", "remnawave.*", "qrcode.*"]
 follow_untyped_imports = true
 
 [[tool.mypy.overrides]]

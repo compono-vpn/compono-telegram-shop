@@ -107,3 +107,12 @@ All translation keys must follow a unified structure:
 | Button: confirm deletion              | `btn-plan-confirm-delete`         |
 | Message: plan created successfully    | `msg-plan-created-success`        |
 | Notification: gateway test failed     | `ntf-gateway-test-payment-failed` |
+
+
+# `QR Code Logo`
+
+You can customize the appearance of the generated invitation QR code by adding your logo to the center of the code.
+
+* **Path:** `assets/logo.png`
+* **Purpose:** If this file exists, the system will use it as a logo, overlaying it in the center of the generated QR code image for branding purposes.
+* **Format:** The logo must be a `PNG` file, preferably with a transparent background.

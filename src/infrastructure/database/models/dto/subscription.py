@@ -116,9 +116,11 @@ class BaseSubscriptionDto(TrackableDto):
 
         return (
             self.plan.id == plan.id
+            and self.plan.tag == plan.tag
             and self.plan.type == plan.type
             and self.plan.traffic_limit == plan.traffic_limit
             and self.plan.device_limit == plan.device_limit
+            and self.plan.traffic_limit_strategy == plan.traffic_limit_strategy
             and self.plan.internal_squads == plan.internal_squads
             and self.plan.external_squad == plan.external_squad
         )

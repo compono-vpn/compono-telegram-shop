@@ -11,7 +11,7 @@ from .validators import validate_not_change_me
 
 
 class RemnawaveConfig(BaseConfig, env_prefix="REMNAWAVE_"):
-    host: SecretStr
+    host: SecretStr = SecretStr("remnawave")
     port: int = 3000
     token: SecretStr
     caddy_token: SecretStr = SecretStr("")

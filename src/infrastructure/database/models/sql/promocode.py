@@ -70,4 +70,4 @@ class PromocodeActivation(BaseSql):
     )
 
     promocode: Mapped["Promocode"] = relationship("Promocode", back_populates="activations")
-    user: Mapped["User"] = relationship("User", back_populates="promocode_activations")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_telegram_id], lazy="selectin")

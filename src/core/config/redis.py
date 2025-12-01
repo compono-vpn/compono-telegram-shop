@@ -6,9 +6,9 @@ from .validators import validate_not_change_me
 
 
 class RedisConfig(BaseConfig, env_prefix="REDIS_"):
-    host: str
-    port: int
-    name: str
+    host: str = "remnashop-redis"
+    port: int = 6379
+    name: str = "0"
     password: SecretStr
 
     @property

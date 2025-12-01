@@ -13,7 +13,8 @@ from .payment_gateway import (
 )
 from .plan import PlanDto, PlanDurationDto, PlanPriceDto, PlanSnapshotDto
 from .promocode import PromocodeActivationDto, PromocodeDto
-from .settings import SettingsDto, SystemNotificationDto, UserNotificationDto
+from .referral import ReferralDto, ReferralRewardDto
+from .settings import ReferralSettingsDto, SettingsDto, SystemNotificationDto, UserNotificationDto
 from .subscription import BaseSubscriptionDto, RemnaSubscriptionDto, SubscriptionDto
 from .transaction import BaseTransactionDto, PriceDetailsDto, TransactionDto
 from .user import BaseUserDto, UserDto
@@ -27,7 +28,7 @@ PromocodeActivationDto.model_rebuild()
 BaseTransactionDto.model_rebuild()
 TransactionDto.model_rebuild()
 PaymentGatewayDto.model_rebuild()
-
+ReferralDto.model_rebuild()
 
 __all__ = [
     "BaseDto",
@@ -49,7 +50,10 @@ __all__ = [
     "PlanSnapshotDto",
     "PromocodeDto",
     "PromocodeActivationDto",
+    "ReferralDto",
+    "ReferralRewardDto",
     "SettingsDto",
+    "ReferralSettingsDto",
     "SystemNotificationDto",
     "UserNotificationDto",
     "SubscriptionDto",

@@ -46,6 +46,7 @@ from src.infrastructure.taskiq.tasks.notifications import (
     send_test_transaction_notification_task,
 )
 from src.infrastructure.taskiq.tasks.subscriptions import purchase_subscription_task
+from src.services.referral import ReferralService
 from src.services.subscription import SubscriptionService
 
 from .base import BaseService
@@ -57,6 +58,7 @@ class PaymentGatewayService(BaseService):
     transaction_service: TransactionService
     subscription_service: SubscriptionService
     payment_gateway_factory: PaymentGatewayFactory
+    referral_service: ReferralService
 
     def __init__(
         self,
@@ -70,12 +72,14 @@ class PaymentGatewayService(BaseService):
         transaction_service: TransactionService,
         subscription_service: SubscriptionService,
         payment_gateway_factory: PaymentGatewayFactory,
+        referral_service: ReferralService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.uow = uow
         self.transaction_service = transaction_service
         self.subscription_service = subscription_service
         self.payment_gateway_factory = payment_gateway_factory
+        self.referral_service = referral_service
 
     async def create_default(self) -> None:
         for gateway_type in PaymentGatewayType:
@@ -108,7 +112,7 @@ class PaymentGatewayService(BaseService):
                 #     settings = RobokassaGatewaySettingsDto()
                 case _:
                     logger.warning(f"Unhandled payment gateway type '{gateway_type}' — skipping")
-                    return
+                    continue
 
             order_index = await self.uow.repository.gateways.get_max_index()
             order_index = (order_index or 0) + 1
@@ -309,8 +313,6 @@ class PaymentGatewayService(BaseService):
             await send_test_transaction_notification_task.kiq(user=transaction.user)
             return
 
-        # TODO: Add referral logic
-
         i18n_keys = {
             PurchaseType.NEW: "ntf-event-subscription-new",
             PurchaseType.RENEW: "ntf-event-subscription-renew",
@@ -366,6 +368,10 @@ class PaymentGatewayService(BaseService):
         )
 
         await purchase_subscription_task.kiq(transaction, subscription)
+
+        if not transaction.pricing.is_free:
+            await self.referral_service.assign_referral_rewards(transaction=transaction)
+
         logger.debug(f"Called tasks payment for user '{transaction.user.telegram_id}'")
 
     async def handle_payment_canceled(self, payment_id: UUID) -> None:

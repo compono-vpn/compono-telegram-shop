@@ -29,9 +29,14 @@ from .getters import (
     devices_getter,
     discount_getter,
     expire_time_getter,
+    external_squads_getter,
     give_access_getter,
+    give_subscription_getter,
+    internal_squads_getter,
+    points_getter,
     role_getter,
     squads_getter,
+    subscription_duration_getter,
     subscription_getter,
     traffic_limit_getter,
     transaction_getter,
@@ -50,13 +55,20 @@ from .handlers import (
     on_discount_select,
     on_duration_input,
     on_duration_select,
+    on_external_squad_select,
     on_give_access,
+    on_give_subscription,
+    on_internal_squad_select,
     on_plan_select,
+    on_points_input,
+    on_points_select,
     on_reset_traffic,
     on_role_select,
     on_send,
-    on_squad_select,
     on_subscription_delete,
+    on_subscription_duration_select,
+    on_subscription_select,
+    on_sync,
     on_traffic_limit_input,
     on_traffic_limit_select,
     on_transaction_select,
@@ -71,24 +83,43 @@ user = Window(
             text=I18nFormat("btn-user-current-subscription"),
             id="subscription",
             on_click=on_current_subscription,
-            when=F["has_subscription"],
         ),
+        when=F["has_subscription"],
+    ),
+    Row(
         Button(
             text=I18nFormat("btn-user-statistics"),
             id="statistics",
             on_click=show_dev_popup,
         ),
-    ),
-    Row(
         Button(
             text=I18nFormat("btn-user-transactions"),
             id="transactions",
             on_click=on_transactions,
         ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-user-sync"),
+            id="sync",
+            on_click=on_sync,
+        ),
+        Button(
+            text=I18nFormat("btn-user-give-subscription"),
+            id="give_subscription",
+            on_click=on_give_subscription,
+        ),
+    ),
+    Row(
         SwitchTo(
             text=I18nFormat("btn-user-message"),
             id="message",
             state=DashboardUser.MESSAGE,
+        ),
+        Button(
+            text=I18nFormat("btn-user-give-access"),
+            id="give_access",
+            on_click=on_give_access,
         ),
     ),
     Row(
@@ -97,10 +128,11 @@ user = Window(
             id="discount",
             state=DashboardUser.DISCOUNT,
         ),
-        Button(
-            text=I18nFormat("btn-user-give-access"),
-            id="give_access",
-            on_click=on_give_access,
+        SwitchTo(
+            text=I18nFormat("btn-user-points"),
+            id="points",
+            state=DashboardUser.POINTS,
+            when=F["show_points"],
         ),
     ),
     Row(
@@ -262,11 +294,7 @@ expire_time = Window(
     I18nFormat("msg-user-subscription-expire-time"),
     Group(
         Select(
-            text=I18nFormat(
-                "btn-user-subscription-duration",
-                operation=F["item"]["operation"],
-                duration=F["item"]["duration"],
-            ),
+            text=Format("{item[operation]}{item[duration]}"),
             id="duration_select",
             item_id_getter=lambda item: item["days"],
             items="durations",
@@ -291,18 +319,19 @@ expire_time = Window(
 squads = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-user-subscription-squads"),
-    Column(
-        Select(
-            text=I18nFormat(
-                "btn-squad-choice",
-                name=F["item"]["name"],
-                selected=F["item"]["selected"],
-            ),
-            id="select_squad",
-            item_id_getter=lambda item: item["uuid"],
-            items="squads",
-            type_factory=UUID,
-            on_click=on_squad_select,
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-user-subscription-internal-squads"),
+            id="internal",
+            state=DashboardUser.INTERNAL_SQUADS,
+        ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-user-subscription-external-squads"),
+            id="external",
+            # state=DashboardUser.EXTERNAL_SQUADS,
+            on_click=show_dev_popup,
         ),
     ),
     Row(
@@ -315,6 +344,64 @@ squads = Window(
     IgnoreUpdate(),
     state=DashboardUser.SQUADS,
     getter=squads_getter,
+)
+
+internal_squads = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-user-subscription-internal-squads"),
+    Column(
+        Select(
+            text=I18nFormat(
+                "btn-squad-choice",
+                name=F["item"]["name"],
+                selected=F["item"]["selected"],
+            ),
+            id="select_squad",
+            item_id_getter=lambda item: item["uuid"],
+            items="squads",
+            type_factory=UUID,
+            on_click=on_internal_squad_select,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUser.SQUADS,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardUser.INTERNAL_SQUADS,
+    getter=internal_squads_getter,
+)
+
+external_squads = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-user-subscription-external-squads"),
+    Column(
+        Select(
+            text=I18nFormat(
+                "btn-squad-choice",
+                name=F["item"]["name"],
+                selected=F["item"]["selected"],
+            ),
+            id="select_squad",
+            item_id_getter=lambda item: item["uuid"],
+            items="squads",
+            type_factory=UUID,
+            on_click=on_external_squad_select,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUser.SQUADS,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardUser.EXTERNAL_SQUADS,
+    getter=external_squads_getter,
 )
 
 devices_list = Window(
@@ -348,19 +435,18 @@ devices_list = Window(
     getter=devices_getter,
 )
 
-discount = Window(
+give_subscription = Window(
     Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-user-discount"),
-    Group(
+    I18nFormat("msg-user-give-subscription"),
+    Column(
         Select(
-            text=Format("{item}%"),
-            id="discount_select",
-            item_id_getter=lambda item: item,
-            items="percentages",
+            text=Format("{item[plan_name]}"),
+            id="plan_select",
+            item_id_getter=lambda item: item["plan_id"],
+            items="plans",
             type_factory=int,
-            on_click=on_discount_select,
+            on_click=on_subscription_select,
         ),
-        width=3,
     ),
     Row(
         SwitchTo(
@@ -369,10 +455,38 @@ discount = Window(
             state=DashboardUser.MAIN,
         ),
     ),
-    MessageInput(func=on_discount_input),
     IgnoreUpdate(),
-    state=DashboardUser.DISCOUNT,
-    getter=discount_getter,
+    state=DashboardUser.GIVE_SUBSCRIPTION,
+    getter=give_subscription_getter,
+)
+
+subscription_duration = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-user-give-subscription-duration"),
+    Group(
+        Select(
+            text=I18nFormat(
+                "btn-plan-duration",
+                value=F["item"]["days"],
+            ),
+            id="duration_select",
+            item_id_getter=lambda item: item["days"],
+            items="durations",
+            type_factory=int,
+            on_click=on_subscription_duration_select,
+        ),
+        width=2,
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUser.GIVE_SUBSCRIPTION,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardUser.SUBSCRIPTION_DURATION,
+    getter=subscription_duration_getter,
 )
 
 transactions_list = Window(
@@ -423,58 +537,6 @@ transaction = Window(
     getter=transaction_getter,
 )
 
-role = Window(
-    Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-user-role"),
-    Column(
-        Select(
-            text=I18nFormat("role", role=F["item"]),
-            id="role_select",
-            item_id_getter=lambda item: item.value,
-            items="roles",
-            type_factory=UserRole,
-            on_click=on_role_select,
-        ),
-    ),
-    Row(
-        SwitchTo(
-            text=I18nFormat("btn-back"),
-            id="back",
-            state=DashboardUser.MAIN,
-        ),
-    ),
-    IgnoreUpdate(),
-    state=DashboardUser.ROLE,
-    getter=role_getter,
-)
-
-give_access = Window(
-    Banner(BannerName.DASHBOARD),
-    I18nFormat("msg-user-give-access"),
-    Select(
-        text=I18nFormat(
-            "btn-user-allowed-plan-choice",
-            plan_name=F["item"]["plan_name"],
-            selected=F["item"]["selected"],
-        ),
-        id="plan_select",
-        item_id_getter=lambda item: item["plan_id"],
-        items="plans",
-        type_factory=int,
-        on_click=on_plan_select,
-    ),
-    Row(
-        SwitchTo(
-            text=I18nFormat("btn-back"),
-            id="back",
-            state=DashboardUser.MAIN,
-        ),
-    ),
-    IgnoreUpdate(),
-    state=DashboardUser.GIVE_ACCESS,
-    getter=give_access_getter,
-)
-
 message = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-user-message"),
@@ -504,18 +566,131 @@ message = Window(
     state=DashboardUser.MESSAGE,
 )
 
+discount = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-user-discount"),
+    Group(
+        Select(
+            text=Format("{item}%"),
+            id="discount_select",
+            item_id_getter=lambda item: item,
+            items="percentages",
+            type_factory=int,
+            on_click=on_discount_select,
+        ),
+        width=3,
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUser.MAIN,
+        ),
+    ),
+    MessageInput(func=on_discount_input),
+    IgnoreUpdate(),
+    state=DashboardUser.DISCOUNT,
+    getter=discount_getter,
+)
+
+points = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-user-points"),
+    Group(
+        Select(
+            text=Format("{item[operation]}{item[points]} 💎"),
+            id="points_select",
+            item_id_getter=lambda item: item["points"],
+            items="points",
+            type_factory=int,
+            on_click=on_points_select,
+        ),
+        width=2,
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUser.MAIN,
+        ),
+    ),
+    MessageInput(func=on_points_input),
+    IgnoreUpdate(),
+    state=DashboardUser.POINTS,
+    getter=points_getter,
+)
+
+give_access = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-user-give-access"),
+    Column(
+        Select(
+            text=I18nFormat(
+                "btn-user-allowed-plan-choice",
+                plan_name=F["item"]["plan_name"],
+                selected=F["item"]["selected"],
+            ),
+            id="plan_select",
+            item_id_getter=lambda item: item["plan_id"],
+            items="plans",
+            type_factory=int,
+            on_click=on_plan_select,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUser.MAIN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardUser.GIVE_ACCESS,
+    getter=give_access_getter,
+)
+
+role = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-user-role"),
+    Column(
+        Select(
+            text=I18nFormat("role", role=F["item"]),
+            id="role_select",
+            item_id_getter=lambda item: item.value,
+            items="roles",
+            type_factory=UserRole,
+            on_click=on_role_select,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardUser.MAIN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardUser.ROLE,
+    getter=role_getter,
+)
+
 router = Dialog(
     user,
     subscription,
     traffic_limit,
     device_limit,
-    devices_list,
     expire_time,
     squads,
-    discount,
+    internal_squads,
+    external_squads,
+    devices_list,
+    give_subscription,
+    subscription_duration,
     transactions_list,
     transaction,
-    role,
-    give_access,
     message,
+    discount,
+    points,
+    give_access,
+    role,
 )

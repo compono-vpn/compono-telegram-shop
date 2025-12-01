@@ -21,7 +21,6 @@ from src.core.utils.formatters import (
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import (
     PlanSnapshotDto,
-    RemnaSubscriptionDto,
     SubscriptionDto,
     TransactionDto,
     UserDto,
@@ -287,30 +286,3 @@ async def update_status_current_subscription_task(
 
     subscription.status = status
     await subscription_service.update(subscription)
-
-
-@broker.task
-@inject
-async def sync_current_subscription_task(
-    telegram_id: int,
-    remna_subscription: RemnaSubscriptionDto,
-    user_service: FromDishka[UserService],
-    subscription_service: FromDishka[SubscriptionService],
-) -> None:
-    logger.info(f"Starting subscription sync for user '{telegram_id}'")
-
-    user = await user_service.get(telegram_id)
-
-    if not user:
-        logger.debug(f"User '{telegram_id}' not found, skipping")
-        return
-
-    subscription = await subscription_service.get_current(user.telegram_id)
-
-    if not subscription:
-        logger.debug(f"No active subscription for user '{user.telegram_id}'")
-        return
-
-    subscription = subscription.apply_sync(remna_subscription)
-    await subscription_service.update(subscription)
-    logger.info(f"Subscription for '{telegram_id}' successfully synchronized")

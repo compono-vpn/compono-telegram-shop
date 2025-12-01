@@ -15,14 +15,20 @@ from magic_filter import F
 
 from src.bot.keyboards import connect_buttons
 from src.bot.routers.dashboard.users.handlers import on_user_search
-from src.bot.routers.extra.test import show_dev_popup
 from src.bot.states import Dashboard, MainMenu, Subscription
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import MIDDLEWARE_DATA_KEY, PURCHASE_PREFIX, USER_KEY
 from src.core.enums import BannerName
 
-from .getters import devices_getter, menu_getter
-from .handlers import on_device_delete, on_get_trial, show_reason
+from .getters import devices_getter, invite_about_getter, invite_getter, menu_getter
+from .handlers import (
+    on_device_delete,
+    on_get_trial,
+    on_invite,
+    on_show_qr,
+    on_withdraw_points,
+    show_reason,
+)
 
 menu = Window(
     Banner(BannerName.MENU),
@@ -33,7 +39,7 @@ menu = Window(
             text=I18nFormat("btn-menu-connect-not-available"),
             id="not_available",
             on_click=show_reason,
-            when=~F["connetable"],
+            when=~F["connectable"],
         ),
         when=F["has_subscription"],
     ),
@@ -59,12 +65,21 @@ menu = Window(
         ),
     ),
     Row(
-        # Button(
-        #     text=I18nFormat("btn-menu-invite"),
-        #     id="invite",
-        #     on_click=show_dev_popup,
-        #     # state=MainMenu.INVITE,
-        # ),
+        Button(
+            text=I18nFormat("btn-menu-invite"),
+            id="invite",
+            on_click=on_invite,
+            when=F["is_referral_enable"],
+        ),
+        SwitchInlineQueryChosenChatButton(
+            text=I18nFormat("btn-menu-invite"),
+            query=Format("{invite}"),
+            allow_user_chats=True,
+            allow_group_chats=True,
+            allow_channel_chats=True,
+            id="send",
+            when=~F["is_referral_enable"],
+        ),
         Url(
             text=I18nFormat("btn-menu-support"),
             id="support",
@@ -128,19 +143,27 @@ invite = Window(
     Banner(BannerName.MENU),
     I18nFormat("msg-menu-invite"),
     Row(
+        SwitchTo(
+            text=I18nFormat("btn-menu-invite-about"),
+            id="about",
+            state=MainMenu.INVITE_ABOUT,
+        ),
+    ),
+    Row(
         CopyText(
             text=I18nFormat("btn-menu-invite-copy"),
-            copy_text=Format("copy"),
+            copy_text=Format("{referral_link}"),
         ),
     ),
     Row(
         Button(
             text=I18nFormat("btn-menu-invite-qr"),
             id="qr",
+            on_click=on_show_qr,
         ),
         SwitchInlineQueryChosenChatButton(
             text=I18nFormat("btn-menu-invite-send"),
-            query=Format("query"),
+            query=Format("{invite}"),
             allow_user_chats=True,
             allow_group_chats=True,
             allow_channel_chats=True,
@@ -148,11 +171,19 @@ invite = Window(
         ),
     ),
     Row(
-        SwitchTo(
-            text=I18nFormat("btn-menu-invite-users"),
-            id="users",
-            state=MainMenu.INVITED_USERS,
+        Button(
+            text=I18nFormat("btn-menu-invite-withdraw-points"),
+            id="withdraw_points",
+            on_click=on_withdraw_points,
+            when=~F["has_points"],
         ),
+        Url(
+            text=I18nFormat("btn-menu-invite-withdraw-points"),
+            id="withdraw_points",
+            url=Format("{withdraw}"),
+            when=F["has_points"],
+        ),
+        when=F["is_points_reward"],
     ),
     Row(
         SwitchTo(
@@ -163,11 +194,27 @@ invite = Window(
     ),
     IgnoreUpdate(),
     state=MainMenu.INVITE,
-    # getter=invite_getter,
+    getter=invite_getter,
+)
+
+invite_about = Window(
+    Banner(BannerName.MENU),
+    I18nFormat("msg-menu-invite-about"),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=MainMenu.INVITE,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=MainMenu.INVITE_ABOUT,
+    getter=invite_about_getter,
 )
 
 router = Dialog(
     menu,
     devices,
     invite,
+    invite_about,
 )

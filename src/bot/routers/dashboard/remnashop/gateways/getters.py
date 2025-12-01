@@ -54,7 +54,6 @@ async def gateway_getter(
         "gateway_type": gateway.type,
         "is_active": gateway.is_active,
         "settings": gateway.settings.get_settings_as_list_data,
-        "url": "t.me/remna_shop",
         "webhook": config.get_webhook(gateway.type),
     }
 

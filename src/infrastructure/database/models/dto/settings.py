@@ -2,9 +2,19 @@ from typing import Optional
 
 from pydantic import Field, SecretStr
 
-from src.core.enums import AccessMode, Currency, SystemNotificationType, UserNotificationType
+from src.core.constants import T_ME
+from src.core.enums import (
+    AccessMode,
+    Currency,
+    ReferralAccrualStrategy,
+    ReferralLevel,
+    ReferralRewardStrategy,
+    ReferralRewardType,
+    SystemNotificationType,
+    UserNotificationType,
+)
 
-from .base import TrackableDto
+from .base import BaseDto, TrackableDto
 
 
 class SystemNotificationDto(TrackableDto):  # == SystemNotificationType
@@ -31,9 +41,37 @@ class UserNotificationDto(TrackableDto):  # == UserNotificationType
     expired: bool = True
     limited: bool = True
     expired_1_day_ago: bool = True
+    referral_attached: bool = True
+    referral_reward: bool = True
 
     def is_enabled(self, ntf_type: UserNotificationType) -> bool:
         return getattr(self, ntf_type.value.lower(), False)
+
+
+class ReferralRewardSettingsDto(BaseDto):
+    type: ReferralRewardType = ReferralRewardType.EXTRA_DAYS
+    strategy: ReferralRewardStrategy = ReferralRewardStrategy.AMOUNT
+    config: dict[ReferralLevel, int] = {ReferralLevel.FIRST: 5}
+
+    @property
+    def is_identical(self) -> bool:
+        values = list(self.config.values())
+        return len(values) <= 1 or all(v == values[0] for v in values)
+
+    @property
+    def is_points(self) -> bool:
+        return self.type == ReferralRewardType.POINTS
+
+    @property
+    def is_extra_days(self) -> bool:
+        return self.type == ReferralRewardType.EXTRA_DAYS
+
+
+class ReferralSettingsDto(TrackableDto):
+    enable: bool = True
+    level: ReferralLevel = ReferralLevel.FIRST
+    accrual_strategy: ReferralAccrualStrategy = ReferralAccrualStrategy.ON_FIRST_PAYMENT
+    reward: ReferralRewardSettingsDto = ReferralRewardSettingsDto()
 
 
 class SettingsDto(TrackableDto):
@@ -52,6 +90,8 @@ class SettingsDto(TrackableDto):
     user_notifications: UserNotificationDto = UserNotificationDto()
     system_notifications: SystemNotificationDto = SystemNotificationDto()
 
+    referral: ReferralSettingsDto = ReferralSettingsDto()
+
     @property
     def channel_has_username(self) -> bool:
         return self.channel_link.get_secret_value().startswith("@")
@@ -59,6 +99,6 @@ class SettingsDto(TrackableDto):
     @property
     def get_url_channel_link(self) -> str:
         if self.channel_has_username:
-            return f"t.me/{self.channel_link.get_secret_value()[1:]}"
+            return f"{T_ME}{self.channel_link.get_secret_value()[1:]}"
         else:
             return self.channel_link.get_secret_value()

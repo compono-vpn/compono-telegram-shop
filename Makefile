@@ -18,10 +18,12 @@ migrate:
 
 .PHONY: downgrade
 downgrade:
-ifndef rev
-	$(error rev is undefined. Use: make downgrade rev=<revision>)
-endif
-	alembic -c $(ALEMBIC_INI) downgrade $(rev)
+	@if [ -z "$(rev)" ]; then \
+		echo "No revision specified. Downgrading by 1 step."; \
+		alembic -c $(ALEMBIC_INI) downgrade -1; \
+	else \
+		alembic -c $(ALEMBIC_INI) downgrade $(rev); \
+	fi
 
 .PHONY: run-local
 run-local:

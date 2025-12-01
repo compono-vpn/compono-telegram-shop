@@ -26,6 +26,9 @@ class UserRepository(BaseRepository):
         ]
         return await self._get_many(User, or_(*conditions))
 
+    async def get_by_referral_code(self, referral_code: str) -> Optional[User]:
+        return await self._get_one(User, User.referral_code == referral_code)
+
     async def get_all(self) -> list[User]:
         return await self._get_many(User)
 

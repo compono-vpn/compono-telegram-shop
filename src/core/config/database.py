@@ -6,18 +6,18 @@ from .validators import validate_not_change_me
 
 
 class DatabaseConfig(BaseConfig, env_prefix="DATABASE_"):
-    host: str
-    port: int
-    name: str
-    user: str
+    host: str = "remnashop-db"
+    port: int = 5432
+    name: str = "remnashop"
+    user: str = "remnashop"
     password: SecretStr
 
-    echo: bool
-    echo_pool: bool
-    pool_size: int
-    max_overflow: int
-    pool_timeout: int
-    pool_recycle: int
+    echo: bool = False
+    echo_pool: bool = False
+    pool_size: int = 25
+    max_overflow: int = 25
+    pool_timeout: int = 10
+    pool_recycle: int = 3600
 
     @property
     def dsn(self) -> str:

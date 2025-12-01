@@ -1,3 +1,4 @@
+import html
 import uuid
 from typing import Any, Optional
 from uuid import UUID
@@ -191,7 +192,7 @@ async def on_content_input(
 
     _update_payload(
         dialog_manager,
-        i18n_kwargs={"content": message.html_text},
+        i18n_kwargs={"content": html.unescape(message.html_text)},
         media_type=media_type,
         media_id=file_id,
     )

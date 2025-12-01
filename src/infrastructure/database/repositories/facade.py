@@ -4,6 +4,7 @@ from .broadcast import BroadcastRepository
 from .payment_gateway import PaymentGatewayRepository
 from .plan import PlanRepository
 from .promocode import PromocodeRepository
+from .referral import ReferralRepository
 from .settings import SettingsRepository
 from .subscription import SubscriptionRepository
 from .transaction import TransactionRepository
@@ -21,6 +22,7 @@ class RepositoriesFacade:
     users: UserRepository
     settings: SettingsRepository
     broadcasts: BroadcastRepository
+    referrals: ReferralRepository
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -33,3 +35,4 @@ class RepositoriesFacade:
         self.users = UserRepository(session)
         self.settings = SettingsRepository(session)
         self.broadcasts = BroadcastRepository(session)
+        self.referrals = ReferralRepository(session)

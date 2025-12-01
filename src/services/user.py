@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from aiogram import Bot
 from aiogram.types import Message
@@ -18,9 +18,11 @@ from src.core.constants import (
 from src.core.enums import Locale, UserRole
 from src.core.storage.key_builder import StorageKey, build_key
 from src.core.storage.keys import RecentActivityUsersKey, RecentRegisteredUsersKey
+from src.core.utils.generators import generate_referral_code
 from src.core.utils.types import RemnaUserDto
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import UserDto
+from src.infrastructure.database.models.dto.user import BaseUserDto
 from src.infrastructure.database.models.sql import User
 from src.infrastructure.redis import RedisRepository, redis_cache
 
@@ -47,6 +49,10 @@ class UserService(BaseService):
         user = UserDto(
             telegram_id=aiogram_user.id,
             username=aiogram_user.username,
+            referral_code=generate_referral_code(
+                aiogram_user.id,
+                secret=self.config.crypt_key.get_secret_value(),
+            ),
             name=aiogram_user.full_name,
             role=(UserRole.DEV if self.config.bot.dev_id == aiogram_user.id else UserRole.USER),
             language=(
@@ -57,6 +63,7 @@ class UserService(BaseService):
         )
         db_user = User(**user.model_dump())
         db_created_user = await self.uow.repository.users.create(db_user)
+        await self.uow.commit()
 
         await self.add_to_recent_registered(user.telegram_id)
         await self.clear_user_cache(user.telegram_id)
@@ -66,12 +73,17 @@ class UserService(BaseService):
     async def create_from_panel(self, remna_user: RemnaUserDto) -> UserDto:
         user = UserDto(
             telegram_id=remna_user.telegram_id,
+            referral_code=generate_referral_code(
+                remna_user.telegram_id,  # type: ignore[arg-type]
+                secret=self.config.crypt_key.get_secret_value(),
+            ),
             name=str(remna_user.telegram_id),
             role=UserRole.USER,
             language=self.config.default_locale,
         )
         db_user = User(**user.model_dump())
         db_created_user = await self.uow.repository.users.create(db_user)
+        await self.uow.commit()
 
         await self.add_to_recent_registered(user.telegram_id)
         await self.clear_user_cache(user.telegram_id)
@@ -159,6 +171,10 @@ class UserService(BaseService):
         db_users = await self.uow.repository.users.get_by_partial_name(query)
         logger.debug(f"Retrieved '{len(db_users)}' users for query '{query}'")
         return UserDto.from_model_list(db_users)
+
+    async def get_by_referral_code(self, referral_code: str) -> Optional[UserDto]:
+        user = await self.uow.repository.users.get_by_referral_code(referral_code)
+        return UserDto.from_model(user)
 
     @redis_cache(prefix="users_count", ttl=TIME_10M)
     async def count(self) -> int:
@@ -319,6 +335,14 @@ class UserService(BaseService):
         )
         await self.clear_user_cache(telegram_id)
         logger.info(f"Delete current subscription for user '{telegram_id}'")
+
+    async def add_points(self, user: Union[BaseUserDto, UserDto], points: int) -> None:
+        await self.uow.repository.users.update(
+            telegram_id=user.telegram_id,
+            points=user.points + points,
+        )
+        await self.clear_user_cache(user.telegram_id)
+        logger.info(f"Add '{points}' points for user '{user.telegram_id}'")
 
     #
 

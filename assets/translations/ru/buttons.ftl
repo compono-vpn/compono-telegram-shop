@@ -21,6 +21,48 @@ btn-channel-confirm = ✅ Подтвердить
 btn-notification-close = ❌ Закрыть
 btn-contact-support = 📩 Перейти в поддержку
 
+btn-squad-choice = { $selected -> 
+    [1] 🔘
+    *[0] ⚪
+    } { $name }
+
+
+# Menu
+btn-menu-connect = 🚀 Подключиться
+
+btn-menu-connect-not-available =
+    ⚠️ { $status -> 
+    [LIMITED] ПРЕВЫШЕН ЛИМИТ ТРАФИКА
+    [EXPIRED] СРОК ДЕЙСТВИЯ ИСТЕК
+    *[OTHER] ВАША ПОДПИСКА НЕ РАБОТАЕТ
+    } ⚠️
+
+btn-menu-trial = 🎁 ПОПРОБОВАТЬ БЕСПЛАТНО
+btn-menu-devices = 📱 Мои устройства
+btn-menu-devices-empty = ⚠️ Нет привязанных устройств
+btn-menu-subscription = 💳 Подписка
+btn-menu-invite = 👥 Пригласить
+btn-menu-invite-about = ❓ Подробнее о награде
+btn-menu-invite-copy = 🔗 Скопировать ссылку
+btn-menu-invite-send = 📩 Пригласить
+btn-menu-invite-qr = 🧾 QR-код
+btn-menu-invite-withdraw-points = 💎 Обменять баллы
+btn-menu-support = 🆘 Поддержка
+btn-menu-dashboard = 🛠 Панель управления
+
+
+# Dashboard
+btn-dashboard-statistics = 📊 Статистика
+btn-dashboard-users = 👥 Пользователи
+btn-dashboard-broadcast = 📢 Рассылка
+btn-dashboard-promocodes = 🎟 Промокоды
+btn-dashboard-access = 🔓 Режим доступа
+btn-dashboard-remnawave = 🌊 RemnaWave
+btn-dashboard-remnashop = 🛍 RemnaShop
+btn-dashboard-importer = 📥 Импорт пользователей
+
+
+# Statistics
 btn-statistics-page =
     { $target_page1 ->
     [1] 👥
@@ -43,45 +85,6 @@ btn-statistics-current-page =
     *[OTHER] [page]
     }
 
-btn-squad-choice = { $selected -> 
-    [1] 🔘
-    *[0] ⚪
-    } { $name }
-
-
-# Menu
-btn-menu-connect = 🚀 Подключиться
-
-btn-menu-connect-not-available =
-    ⚠️ { $status -> 
-    [LIMITED] ПРЕВЫШЕН ЛИМИТ ТРАФИКА
-    [EXPIRED] СРОК ДЕЙСТВИЯ ИСТЕК
-    *[OTHER] ВАША ПОДПИСКА НЕ РАБОТАЕТ
-    } ⚠️
-
-btn-menu-trial = 🎁 ПОПРОБОВАТЬ БЕСПЛАТНО
-btn-menu-devices = 📱 Мои устройства
-btn-menu-devices-empty = ⚠️ Нет привязанных устройств
-btn-menu-subscription = 💳 Подписка
-btn-menu-invite = 👥 Пригласить
-btn-menu-invite-copy = 🔗 Скопировать ссылку
-btn-menu-invite-send = 📩 Пригласить
-btn-menu-invite-users = 👥 Список приглашенных
-btn-menu-invite-qr = 🧾 QR-код
-btn-menu-support = 🆘 Поддержка
-btn-menu-dashboard = 🛠 Панель управления
-
-
-# Dashboard
-btn-dashboard-statistics = 📊 Статистика
-btn-dashboard-users = 👥 Пользователи
-btn-dashboard-broadcast = 📢 Рассылка
-btn-dashboard-promocodes = 🎟 Промокоды
-btn-dashboard-access = 🔓 Режим доступа
-btn-dashboard-remnawave = 🌊 RemnaWave
-btn-dashboard-remnashop = 🛍 RemnaShop
-btn-dashboard-importer = 📥 Импорт пользователей
-
 
 # Users
 btn-users-search = 🔍 Поиск пользователя
@@ -93,6 +96,7 @@ btn-users-unblock-all = 🔓 Разблокировать всех
 
 # User
 btn-user-discount = 💸 Изменить скидку
+btn-user-points = 💎 Изменить баллы
 btn-user-statistics = 📊 Статистика
 btn-user-message = 📩 Сообщение
 btn-user-role = 👮‍♂️ Изменить роль
@@ -110,12 +114,10 @@ btn-user-subscription-set = ✅ Установить подписку
 btn-user-subscription-delete = ❌ Удалить
 btn-user-message-preview = 👀 Предпросмотр
 btn-user-message-confirm = ✅ Отправить
-
-
-btn-user-subscription-duration = { $operation ->
-    [ADD] +
-    *[SUB] -
-    } { $duration }
+btn-user-sync = 🌀 Синхронизировать
+btn-user-give-subscription = 🎁 Выдать подписку
+btn-user-subscription-internal-squads = ⏺️ Внутренние сквады
+btn-user-subscription-external-squads = ⏹️ Внешний сквад
 
 btn-user-allowed-plan-choice = { $selected ->
     [1] 🔘
@@ -204,7 +206,7 @@ btn-access-condition-toggle = { $enabled ->
 # RemnaShop
 btn-remnashop-admins = 👮‍♂️ Администраторы
 btn-remnashop-gateways = 🌐 Платежные системы
-btn-remnashop-referral = 👥 Реферальная
+btn-remnashop-referral = 👥 Реф. система
 btn-remnashop-advertising = 🎯 Реклама
 btn-remnashop-plans = 📦 Планы
 btn-remnashop-notifications = 🔔 Уведомления
@@ -232,6 +234,44 @@ btn-gateways-default-currency-choice = { $enabled ->
     } { $symbol } { $currency }
 
 
+# Referral
+btn-referral-level = 🔢 Уровень
+btn-referral-reward-type = 🎀 Тип награды
+btn-referral-accrual-strategy = 📍 Условие начисления
+btn-referral-reward-strategy = ⚖️ Форма начисления
+btn-referral-reward = 🎁 Награда
+
+btn-referral-enable = { $is_enable -> 
+    [1] 🟢 Включена
+    *[0] 🔴 Выключена
+    }
+
+btn-referral-level-choice = { $type -> 
+    [1] 1️⃣
+    [2] 2️⃣
+    [3] 3️⃣
+    *[OTHER] { $type }
+    }
+
+btn-referral-reward-choice = { $type -> 
+    [POINTS] 💎 Баллы
+    [EXTRA_DAYS] ⏳ Дни
+    *[OTHER] { $type }
+    }
+
+btn-referral-accrual-strategy-choice = { $type -> 
+    [ON_FIRST_PAYMENT] 💳 Первый платеж
+    [ON_EACH_PAYMENT] 💸 Каждый платеж
+    *[OTHER] { $type }
+    }
+
+btn-referral-reward-strategy-choice = { $type -> 
+    [AMOUNT] 🔸 Фиксированная
+    [PERCENT] 🔹 Процентная
+    *[OTHER] { $type }
+    }
+
+
 # Notifications
 btn-notifications-user = 👥 Пользовательские
 
@@ -241,12 +281,15 @@ btn-notifications-user-choice = { $enabled ->
     } { $type ->
     [EXPIRES_IN_3_DAYS] Подписка истекает (3 дня)
     [EXPIRES_IN_2_DAYS] Подписка истекает (2 дня)
-    [EXPIRES_IN_1_DAYS] Подписка истекает (1 дня)
+    [EXPIRES_IN_1_DAYS] Подписка истекает (1 день)
     [EXPIRED] Подписка истекла
     [LIMITED] Трафик исчерпан
     [EXPIRED_1_DAY_AGO] Подписка истекла (1 день)
+    [REFERRAL_ATTACHED] Реферал закреплен
+    [REFERRAL_REWARD] Получено вознаграждение
     *[OTHER] { $type }
     }
+
 btn-notifications-system = ⚙️ Системные
 
 btn-notifications-system-choice = { $enabled -> 
@@ -337,7 +380,7 @@ btn-remnawave-inbounds = 🔌 Инбаунды
 
 
 # Importer
-btn-importer-from-xui = 💩 Панель 3X-UI
+btn-importer-from-xui = 💩 Импорт из панели 3X-UI
 btn-importer-from-xui-shop = 🛒 Бот 3xui-shop
 btn-importer-sync = 🌀 Запустить синхронизацию
 btn-importer-squads = 🔗 Внутренние сквады

@@ -19,15 +19,15 @@ from .validators import validate_not_change_me
 
 class AppConfig(BaseConfig, env_prefix="APP_"):
     domain: SecretStr
-    host: str
-    port: int
+    host: str = "0.0.0.0"
+    port: int = 5000
 
-    locales: LocaleList
-    default_locale: Locale
+    locales: LocaleList = LocaleList([Locale.EN])
+    default_locale: Locale = Locale.EN
 
     crypt_key: SecretStr
-    assets_dir: Path = Field(default_factory=lambda: ASSETS_DIR)
-    origins: StringList = StringList("")  # for miniapp
+    assets_dir: Path = ASSETS_DIR
+    origins: StringList = StringList("")
 
     bot: BotConfig = Field(default_factory=BotConfig)
     remnawave: RemnawaveConfig = Field(default_factory=RemnawaveConfig)
