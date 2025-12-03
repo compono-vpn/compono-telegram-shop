@@ -25,16 +25,7 @@ async def on_test_command(
 ) -> None:
     logger.info(f"{log(user)} Test command executed")
 
-    # remna_user = await remnawave.users.get_user_by_uuid(
-    #     UUID("c5f0afd5-e682-41f6-82d9-ade08feba776")
-    # )
-    # remna_user = await remnawave.users.get_users_by_telegram_id(str(user.telegram_id))
-    # logger.critical(remna_user)
-    # logger.critical(user.transactions)
-    # logger.critical(user.subscriptions)
-    # logger.critical(user.promocode_activations)
-    # raise UnknownState("test_state")
-    # raise UnknownIntent("test_intent")
+    #
 
 
 @inject

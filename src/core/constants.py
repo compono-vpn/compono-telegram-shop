@@ -34,7 +34,6 @@ CONTAINER_KEY: Final[str] = "dishka_container"
 CONFIG_KEY: Final[str] = "config"
 USER_KEY: Final[str] = "user"
 IS_SUPER_DEV_KEY: Final[str] = "is_super_dev"
-IS_NEW_USER: Final[str] = "is_new_user"
 
 TIME_1M: Final[int] = 60
 TIME_5M: Final[int] = TIME_1M * 5

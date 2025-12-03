@@ -90,6 +90,8 @@ class DashboardUser(StatesGroup):
     TRANSACTION = State()
     GIVE_ACCESS = State()
     MESSAGE = State()
+    SYNC = State()
+    SYNC_WAITING = State()
     GIVE_SUBSCRIPTION = State()
     SUBSCRIPTION_DURATION = State()
 

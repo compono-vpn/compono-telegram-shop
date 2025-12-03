@@ -1,13 +1,10 @@
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable
 
 from aiogram.types import CallbackQuery, Message, TelegramObject
-from aiogram.types import User as AiogramUser
 from dishka import AsyncContainer
-from loguru import logger
 
 from src.bot.keyboards import CALLBACK_RULES_ACCEPT, get_rules_keyboard
-from src.core.config import AppConfig
-from src.core.constants import CONTAINER_KEY
+from src.core.constants import CONTAINER_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import UserDto
@@ -27,43 +24,27 @@ class RulesMiddleware(EventTypedMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        aiogram_user: Optional[AiogramUser] = self._get_aiogram_user(event)
-
-        if aiogram_user is None or aiogram_user.is_bot:
-            logger.warning("Terminating middleware: event from bot or missing user")
-            return
-
         container: AsyncContainer = data[CONTAINER_KEY]
+        user: UserDto = data[USER_KEY]
         settings_service: SettingsService = await container.get(SettingsService)
 
         if not await settings_service.is_rules_required():
             return await handler(event, data)
 
-        config: AppConfig = await container.get(AppConfig)
-        notification_service: NotificationService = await container.get(NotificationService)
         user_service: UserService = await container.get(UserService)
+        notification_service: NotificationService = await container.get(NotificationService)
 
         settings = await settings_service.get()
-        user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
-
-        fake_user = UserDto(
-            telegram_id=aiogram_user.id,
-            username=aiogram_user.username,
-            name=aiogram_user.full_name,
-            language=(
-                aiogram_user.language_code
-                if aiogram_user.language_code in config.locales
-                else config.default_locale
-            ),
-        )
 
         if self._is_click_accept(event):
+            user.is_rules_accepted = True
+            await user_service.update(user)
             await self._delete_rules_message(event)
             return await handler(event, data)
 
-        if user is None:
+        if not user.is_rules_accepted:
             await notification_service.notify_user(
-                user=fake_user,
+                user=user,
                 payload=MessagePayload(
                     i18n_key="ntf-rules-accept-required",
                     i18n_kwargs={"url": settings.rules_link.get_secret_value()},

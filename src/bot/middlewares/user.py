@@ -8,7 +8,7 @@ from loguru import logger
 
 from src.bot.keyboards import get_user_keyboard
 from src.core.config import AppConfig
-from src.core.constants import CONTAINER_KEY, IS_NEW_USER, IS_SUPER_DEV_KEY, USER_KEY
+from src.core.constants import CONTAINER_KEY, IS_SUPER_DEV_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType, SystemNotificationType
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import UserDto
@@ -47,7 +47,6 @@ class UserMiddleware(EventTypedMiddleware):
         user_service: UserService = await container.get(UserService)
         referral_service: ReferralService = await container.get(ReferralService)
         user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
-        is_new_user = user is None
 
         if user is None:
             user = await user_service.create(aiogram_user)
@@ -77,12 +76,17 @@ class UserMiddleware(EventTypedMiddleware):
                 ),
                 ntf_type=SystemNotificationType.USER_REGISTERED,
             )
+
+            if await referral_service.is_referral_event(event, user.telegram_id):
+                referral_code = await referral_service.get_ref_code_by_event(event)
+                logger.info(f"Registered with referral code: '{referral_code}'")
+                await referral_service.handle_referral(user, referral_code)
+
         elif not isinstance(aiogram_user, FakeUser):
             await user_service.compare_and_update(user, aiogram_user)
 
         await user_service.update_recent_activity(telegram_id=user.telegram_id)
         data[USER_KEY] = user
         data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
-        data[IS_NEW_USER] = is_new_user
 
         return await handler(event, data)

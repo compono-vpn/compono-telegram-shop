@@ -45,7 +45,7 @@ async def check_bot_update(
             last = await redis_repository.get(key, str)
 
             if last == remote_version:
-                logger.debug(f"Version {remote_version} already notified.")
+                logger.debug(f"Version {remote_version} already notified")
                 return
 
             await redis_repository.set(key, value=remote_version)

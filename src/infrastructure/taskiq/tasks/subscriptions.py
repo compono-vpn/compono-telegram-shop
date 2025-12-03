@@ -53,7 +53,7 @@ async def trial_subscription_task(
     logger.info(f"Started trial for user '{user.telegram_id}'")
 
     try:
-        created_user = await remnawave_service.create_user(user, plan)
+        created_user = await remnawave_service.create_user(user, plan=plan)
         trial_subscription = SubscriptionDto(
             user_remna_id=created_user.uuid,
             status=created_user.status,
@@ -138,7 +138,7 @@ async def purchase_subscription_task(
 
     try:
         if purchase_type == PurchaseType.NEW and not has_trial:
-            created_user = await remnawave_service.create_user(user, plan)
+            created_user = await remnawave_service.create_user(user, plan=plan)
             new_subscription = SubscriptionDto(
                 user_remna_id=created_user.uuid,
                 status=created_user.status,

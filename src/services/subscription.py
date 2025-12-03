@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, TypeVar, Union
 
 from aiogram import Bot
 from fluentogram import TranslatorHub
@@ -10,11 +10,15 @@ from src.core.config import AppConfig
 from src.core.enums import SubscriptionStatus
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import SubscriptionDto, UserDto
+from src.infrastructure.database.models.dto.plan import PlanDto, PlanSnapshotDto
+from src.infrastructure.database.models.dto.subscription import RemnaSubscriptionDto
 from src.infrastructure.database.models.sql import Subscription, User
 from src.infrastructure.redis import RedisRepository
 from src.services.user import UserService
 
 from .base import BaseService
+
+T = TypeVar("T", SubscriptionDto, RemnaSubscriptionDto)
 
 
 class SubscriptionService(BaseService):
@@ -190,3 +194,64 @@ class SubscriptionService(BaseService):
 
         count = await self.uow.repository.subscriptions._count(Subscription, conditions)
         return count > 0
+
+    @staticmethod
+    def subscriptions_match(
+        bot_subscription: Optional[SubscriptionDto],
+        remna_subscription: Optional[RemnaSubscriptionDto],
+    ) -> bool:
+        if not bot_subscription or not remna_subscription:
+            return False
+
+        return (
+            bot_subscription.status == remna_subscription.status
+            and bot_subscription.url == remna_subscription.url
+            and bot_subscription.traffic_limit == remna_subscription.traffic_limit
+            and bot_subscription.device_limit == remna_subscription.device_limit
+            and bot_subscription.expire_at == remna_subscription.expire_at
+            and bot_subscription.external_squad == remna_subscription.external_squad
+            and bot_subscription.plan.traffic_limit_strategy
+            == remna_subscription.traffic_limit_strategy
+            and bot_subscription.plan.tag == remna_subscription.tag
+            and sorted(bot_subscription.internal_squads)
+            == sorted(remna_subscription.internal_squads)
+        )
+
+    @staticmethod
+    def plan_match(plan_a: PlanSnapshotDto, plan_b: PlanDto) -> bool:
+        if not plan_a or not plan_b:
+            return False
+
+        return (
+            plan_a.id == plan_b.id
+            and plan_a.tag == plan_b.tag
+            and plan_a.type == plan_b.type
+            and plan_a.traffic_limit == plan_b.traffic_limit
+            and plan_a.device_limit == plan_b.device_limit
+            and plan_a.traffic_limit_strategy == plan_b.traffic_limit_strategy
+            and sorted(plan_a.internal_squads) == sorted(plan_b.internal_squads)
+            and plan_a.external_squad == plan_b.external_squad
+        )
+
+    @staticmethod
+    def find_matching_plan(
+        plan_snapshot: PlanSnapshotDto, plans: list[PlanDto]
+    ) -> Optional[PlanDto]:
+        return next(
+            (plan for plan in plans if SubscriptionService.plan_match(plan_snapshot, plan)), None
+        )
+
+    @staticmethod
+    def apply_sync(target: T, source: Union[SubscriptionDto, RemnaSubscriptionDto]) -> T:
+        target_fields = set(type(target).model_fields)
+        source_fields = set(type(source).model_fields)
+
+        common_fields = target_fields & source_fields
+
+        for field in common_fields:
+            old_value = getattr(target, field)
+            new_value = getattr(source, field)
+            if old_value != new_value:
+                setattr(target, field, new_value)
+
+        return target

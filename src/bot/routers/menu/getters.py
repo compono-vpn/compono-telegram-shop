@@ -6,7 +6,6 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 
 from src.core.config import AppConfig
-from src.core.enums import ReferralRewardType
 from src.core.utils.formatters import (
     format_username_to_url,
     i18n_format_device_limit,

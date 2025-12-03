@@ -23,6 +23,7 @@ from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.pricing import PricingService
 from src.services.settings import SettingsService
+from src.services.subscription import SubscriptionService
 
 PAYMENT_CACHE_KEY = "payment_cache"
 CURRENT_DURATION_KEY = "selected_duration"
@@ -152,7 +153,10 @@ async def on_purchase_type_select(
 
     if purchase_type == PurchaseType.RENEW:
         if user.current_subscription:
-            matched_plan = user.current_subscription.find_matching_plan(plans)
+            matched_plan = SubscriptionService.find_matching_plan(
+                plan_snapshot=user.current_subscription.plan,
+                plans=plans,
+            )
             logger.debug(f"Matched plan for renewal: '{matched_plan}'")
 
             if matched_plan:
@@ -223,7 +227,10 @@ async def on_subscription_plans(  # noqa: C901
 
     if purchase_type == PurchaseType.RENEW:
         if user.current_subscription:
-            matched_plan = user.current_subscription.find_matching_plan(plans)
+            matched_plan = SubscriptionService.find_matching_plan(
+                plan_snapshot=user.current_subscription.plan,
+                plans=plans,
+            )
             logger.debug(f"Matched plan for renewal: '{matched_plan}'")
 
             if matched_plan:

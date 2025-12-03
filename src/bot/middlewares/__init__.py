@@ -19,8 +19,8 @@ def setup_middlewares(router: Router) -> None:
     outer_middlewares: list[EventTypedMiddleware] = [
         ErrorMiddleware(),
         AccessMiddleware(),
-        RulesMiddleware(),
         UserMiddleware(),
+        RulesMiddleware(),
         ChannelMiddleware(),
         ThrottlingMiddleware(),
     ]

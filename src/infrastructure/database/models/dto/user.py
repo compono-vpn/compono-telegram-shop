@@ -34,6 +34,7 @@ class BaseUserDto(TrackableDto):
 
     is_blocked: bool = False
     is_bot_blocked: bool = False
+    is_rules_accepted: bool = False
 
     created_at: Optional[datetime] = Field(default=None, frozen=True)
     updated_at: Optional[datetime] = Field(default=None, frozen=True)

@@ -52,7 +52,7 @@ class ErrorMiddleware(EventTypedMiddleware):
             user_service: UserService = await container.get(UserService)
             user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
 
-            if user:
+            if user and not user.is_dev:
                 await redirect_to_main_menu_task.kiq(aiogram_user.id)
 
         else:

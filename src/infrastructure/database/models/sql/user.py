@@ -49,6 +49,7 @@ class User(BaseSql, TimestampMixin):
 
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_bot_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    is_rules_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     current_subscription_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("subscriptions.id", ondelete="SET NULL"),

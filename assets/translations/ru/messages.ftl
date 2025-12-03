@@ -361,6 +361,73 @@ msg-user-main =
     </blockquote>
     }
 
+msg-user-sync = 
+    <b>🌀 Синхронизировать пользователя</b>
+
+    <b>🛍 Remnashop:</b> { $bot_version }
+    <blockquote>
+    { $has_bot_subscription -> 
+    [0] Данные отсутствуют
+    *[HAS]{ $bot_subscription }
+    }
+    </blockquote>
+
+    <b>🌊 Remnawave:</b> { $remna_version }
+    <blockquote>
+    { $has_remna_subscription -> 
+    [0] Данные отсутствуют
+    *[HAS] { $remna_subscription }
+    }
+    </blockquote>
+
+    Выберите актуальные данные для синхронизации.
+
+msg-user-sync-version = { $version ->
+    [NEWER] (новее)
+    [OLDER] (старее)
+    *[UNKNOWN] { empty }
+    }
+
+msg-user-sync-subscription =
+    • Статус: { $status -> 
+    [ACTIVE] Активна
+    [DISABLED] Отключена
+    [LIMITED] Исчерпан трафик
+    [EXPIRED] Истекла
+    [DELETED] Удалена
+    *[OTHER] { $status }
+    }
+    • Ссылка: <a href="{ $url }">*********</a>
+
+    • Лимит трафика: { $traffic_limit }
+    • Лимит устройств: { $device_limit }
+    • Осталось: { $expire_time }
+
+    • Внутренние сквады: { $internal_squads ->
+    [0] { unknown }
+    *[HAS] { $internal_squads }
+    }
+    • Внешний сквад: { $external_squad ->
+    [0] { unknown }
+    *[HAS] { $external_squad }
+    }
+    • Сброс трафика: { $traffic_limit_strategy -> 
+    [NO_RESET] При оплате
+    [DAY] Каждый день
+    [WEEK] Каждую неделю
+    [MONTH] Каждый месяц
+    *[OTHER] { $traffic_limit_strategy }
+    }
+    • Тег: { $tag -> 
+    [0] { unknown }
+    *[HAS] { $tag }
+    }
+
+msg-user-sync-waiting =
+    <b>🌀 Синхронизация пользователя</b>
+
+    Пожалуйста, подождите... Идет процесс синхронизации данных пользователя. Вы автоматически вернетесь к редактору пользователя по завершении.
+
 msg-user-give-subscription =
     <b>🎁 Выдать подписку</b>
 

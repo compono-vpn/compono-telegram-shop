@@ -309,8 +309,10 @@ ntf-user-invalid-number = <i>❌ Некорректное число.</i>
 ntf-user-allowed-plans-empty = <i>❌ Нет доступных планов для предоставления доступа.</i>
 ntf-user-message-success = <i>✅ Сообщение успешно отправлено.</i>
 ntf-user-message-not-sent = <i>❌ Не удалось отправить сообщение.</i>
-ntf-user-sync-failed = <i>❌ Не удалось синхронизировать пользователя.</i>
-ntf-user-sync-success = <i>✅ Синхронизация пользователя выполнена.</i>
+ntf-user-sync-failed = <i>❌ Не удалось синхронизировать подписку.</i>
+ntf-user-sync-already = <i>✅ Данные подписки совпадают.</i>
+ntf-user-sync-missing-data = <i>⚠️ Синхронизация невозможна. Данные подписки отсутствуют и на панели, и в боте.</i>
+ntf-user-sync-success = <i>✅ Синхронизация подписки выполнена.</i>
 
 ntf-user-invalid-expire-time = <i>❌ Невозможно { $operation ->
     [ADD] продлить подписку на указанное количество дней

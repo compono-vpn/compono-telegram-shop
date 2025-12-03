@@ -1,19 +1,18 @@
 from decimal import Decimal
 from io import BytesIO
-from typing import List, Optional, cast
+from typing import Any, List, Optional, cast
 
-import qrcode
 from aiogram import Bot
 from aiogram.types import BufferedInputFile, Message, TelegramObject
 from fluentogram import TranslatorHub
 from loguru import logger
 from PIL import Image
+from qrcode import ERROR_CORRECT_H, QRCode  # type: ignore[attr-defined]
 from redis.asyncio import Redis
 
 from src.core.config import AppConfig
 from src.core.constants import ASSETS_DIR, REFERRAL_PREFIX, T_ME
 from src.core.enums import (
-    Command,
     MessageEffect,
     PurchaseType,
     ReferralAccrualStrategy,
@@ -149,40 +148,30 @@ class ReferralService(BaseService):
         await self.uow.repository.referrals.update_reward(reward_id, is_issued=True)
         logger.info(f"Marked reward '{reward_id}' as issued")
 
-    async def handle_referral(self, user: UserDto, code: str) -> None:
-        if code.startswith(REFERRAL_PREFIX):
-            code = code[len(REFERRAL_PREFIX) :]
-
-        referrer = await self.user_service.get_by_referral_code(code)
-        if not referrer or referrer.telegram_id == user.telegram_id:
-            logger.warning(
-                f"Referral skipped: invalid code or self-referral. "
-                f"User '{user.telegram_id}' with code '{code}'"
-            )
+    async def handle_referral(self, user: UserDto, code: Optional[str]) -> None:
+        if not code:
             return
 
-        existing_referral = await self.get_referral_by_referred(user.telegram_id)
-        if existing_referral:
-            logger.warning(
-                f"Referral skipped: user '{user.telegram_id}' is already "
-                f"referred by '{existing_referral.referrer.telegram_id}'"
-            )
+        code = code[len(REFERRAL_PREFIX) :] if code.startswith(REFERRAL_PREFIX) else code
+
+        referrer = await self._get_valid_referrer(code, user.telegram_id)
+
+        if not referrer:
             return
 
-        parent = await self.get_referral_by_referred(referrer.telegram_id)
-        parent_level = parent.level if parent else None
-        level = self._define_referral_level(parent_level)
+        existing, parent = await self._get_referral_chain(user.telegram_id)
 
+        if existing:
+            logger.warning(f"Referral skipped: user '{user.telegram_id}' already referred")
+            return
+
+        level = self._define_referral_level(parent.level if parent else None)
         logger.info(
-            f"Referral detected '{referrer.telegram_id}', referred '{user.telegram_id}', "
+            f"Referral detected '{referrer.telegram_id}' -> '{user.telegram_id}', "
             f"level '{level.name}'"
         )
 
-        await self.create_referral(
-            referrer=referrer,
-            referred=user,
-            level=level,
-        )
+        await self.create_referral(referrer, user, level)
 
         if await self.settings_service.is_referral_enable():
             await send_user_notification_task.kiq(
@@ -202,44 +191,40 @@ class ReferralService(BaseService):
 
         settings = await self.settings_service.get_referral_settings()
 
-        if settings.accrual_strategy == ReferralAccrualStrategy.ON_FIRST_PAYMENT:
-            if transaction.purchase_type != PurchaseType.NEW:
-                logger.info(
-                    f"Skipping referral reward for transaction '{transaction.id}' "
-                    f"because purchase type '{transaction.purchase_type}' is not NEW"
-                )
-                return
+        if (
+            settings.accrual_strategy == ReferralAccrualStrategy.ON_FIRST_PAYMENT
+            and transaction.purchase_type != PurchaseType.NEW
+        ):
+            logger.info(
+                f"Skip rewards: transaction '{transaction.id}' purchase type "
+                f"'{transaction.purchase_type}' is not NEW"
+            )
+            return
 
         user = transaction.user
 
         if not user:
-            raise ValueError(
-                f"Transaction '{transaction.id}' has no associated user, "
-                f"cannot assign referral rewards"
-            )
+            raise ValueError(f"Transaction '{transaction.id}' has no user; cannot assign rewards")
 
-        referral = await self.get_referral_by_referred(user.telegram_id)
+        referral, parent = await self._get_referral_chain(user.telegram_id)
 
         if not referral:
-            logger.info(
-                f"User '{user.telegram_id}' is not a referred user, skipping reward assignment"
-            )
+            logger.info(f"User '{user.telegram_id}' not referred; reward assignment skipped")
             return
 
-        current_referrer = referral.referrer
-        reward_chain = {ReferralLevel.FIRST: current_referrer}
-
-        parent_referral = await self.get_referral_by_referred(current_referrer.telegram_id)
-        if parent_referral:
-            reward_chain[ReferralLevel.SECOND] = parent_referral.referrer
-
         reward_type = settings.reward.type
+        reward_chain = {
+            ReferralLevel.FIRST: referral.referrer,
+        }
 
-        for current_level, referrer in reward_chain.items():
-            config_value = settings.reward.config.get(current_level)
+        if parent:
+            reward_chain[ReferralLevel.SECOND] = parent.referrer
+
+        for level, referrer in reward_chain.items():
+            config_value = settings.reward.config.get(level)
 
             if config_value is None:
-                logger.info(f"Reward configuration not found for level '{current_level.name}'")
+                logger.info(f"No reward config for level '{level.name}'")
                 continue
 
             reward_amount = self._calculate_reward_amount(
@@ -248,10 +233,10 @@ class ReferralService(BaseService):
                 config_value=config_value,
             )
 
-            if reward_amount is None or reward_amount <= 0:
+            if not reward_amount or reward_amount <= 0:
                 logger.warning(
-                    f"Calculated reward amount is 0 or less, or calculation failed "
-                    f"for referrer '{referrer.telegram_id}' at level '{current_level.name}'"
+                    f"Reward amount <= 0 for referrer '{referrer.telegram_id}', "
+                    f"level '{level.name}'"
                 )
                 continue
 
@@ -269,18 +254,17 @@ class ReferralService(BaseService):
             )
 
             logger.info(
-                f"Created '{reward_type}' reward of '{reward_amount}' for referrer "
-                f"'{referrer.telegram_id}' using level '{current_level.name}' "
-                f"and strategy '{settings.reward.strategy}'"
+                f"Issued '{reward_type}' reward '{reward_amount}' for referrer "
+                f"'{referrer.telegram_id}' (level '{level.name}')"
             )
 
     async def get_ref_link(self, referral_code: str) -> str:
         return f"{await self._get_bot_redirect_url()}?start={REFERRAL_PREFIX}{referral_code}"
 
     def get_ref_qr(self, url: str) -> BufferedInputFile:
-        qr = qrcode.QRCode(
+        qr: Any = QRCode(
             version=1,
-            error_correction=qrcode.ERROR_CORRECT_H,
+            error_correction=ERROR_CORRECT_H,
             box_size=10,
             border=4,
         )
@@ -322,63 +306,29 @@ class ReferralService(BaseService):
         if not isinstance(event, Message) or not event.text:
             return None
 
-        text = event.text
+        code = self._parse_referral_code(event.text)
 
-        if not text.startswith(f"/{Command.START.value.command}"):
+        if not code:
             return None
 
-        parts = text.split()
+        return await self._get_valid_referrer(code, user_telegram_id)
 
-        if len(parts) <= 1:
+    async def get_ref_code_by_event(self, event: TelegramObject) -> Optional[str]:
+        if not isinstance(event, Message) or not event.text:
             return None
 
-        code_with_prefix = parts[1]
-
-        if not code_with_prefix.startswith(REFERRAL_PREFIX):
-            return None
-
-        code = code_with_prefix[len(REFERRAL_PREFIX) :]
-        referrer = await self.user_service.get_by_referral_code(code)
-
-        if not referrer or referrer.telegram_id == user_telegram_id:
-            logger.warning(
-                f"Referrer retrieval failed for code '{code}': invalid code "
-                f"or self-referral by user '{user_telegram_id}'"
-            )
-            return None
-
-        logger.info(f"Referrer '{referrer.telegram_id}' found for user '{user_telegram_id}'")
-        return referrer
+        return self._parse_referral_code(event.text)
 
     async def is_referral_event(self, event: TelegramObject, user_telegram_id: int) -> bool:
         if not isinstance(event, Message) or not event.text:
             return False
 
-        text = event.text
+        code = self._parse_referral_code(event.text)
 
-        if not text.startswith(f"/{Command.START.value.command}"):
+        if not code:
             return False
 
-        parts = text.split()
-
-        if len(parts) <= 1:
-            return False
-
-        code_with_prefix = parts[1]
-        if not code_with_prefix.startswith(REFERRAL_PREFIX):
-            return False
-
-        code = code_with_prefix[len(REFERRAL_PREFIX) :]
-        referrer = await self.user_service.get_by_referral_code(code)
-
-        if not referrer or referrer.telegram_id == user_telegram_id:
-            logger.warning(
-                f"Referral check failed for code '{code}': invalid code "
-                f"or self-referral by user '{user_telegram_id}'"
-            )
-            return False
-
-        return True
+        return bool(await self._get_valid_referrer(code, user_telegram_id))
 
     def _define_referral_level(self, parent_level: Optional[ReferralLevel]) -> ReferralLevel:
         if parent_level is None:
@@ -395,7 +345,42 @@ class ReferralService(BaseService):
     async def _get_bot_redirect_url(self) -> str:
         if self._bot_username is None:
             self._bot_username = (await self.bot.get_me()).username
+
         return f"{T_ME}{self._bot_username}"
+
+    def _parse_referral_code(self, text: str) -> Optional[str]:
+        parts = text.split()
+
+        if len(parts) <= 1:
+            return None
+
+        code = parts[1]
+
+        if not code.startswith(REFERRAL_PREFIX):
+            return None
+
+        return code[len(REFERRAL_PREFIX) :]
+
+    async def _get_valid_referrer(self, code: str, user_id: int) -> Optional[UserDto]:
+        referrer = await self.user_service.get_by_referral_code(code)
+
+        if not referrer or referrer.telegram_id == user_id:
+            logger.warning(f"Invalid referral code '{code}' or self-referral by '{user_id}'")
+            return None
+
+        return referrer
+
+    async def _get_referral_chain(
+        self,
+        user_id: int,
+    ) -> tuple[Optional[ReferralDto], Optional[ReferralDto]]:
+        referral = await self.get_referral_by_referred(user_id)
+        parent = None
+
+        if referral:
+            parent = await self.get_referral_by_referred(referral.referrer.telegram_id)
+
+        return referral, parent
 
     def _calculate_reward_amount(
         self,

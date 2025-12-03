@@ -1,16 +1,21 @@
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 from remnawave import RemnawaveSDK
-from remnawave.models import GetAllInternalSquadsResponseDto
+from remnawave.exceptions import NotFoundError
+from remnawave.models import (
+    GetAllInternalSquadsResponseDto,
+    TelegramUserResponseDto,
+)
 
 from src.core.config import AppConfig
 from src.core.constants import DATETIME_FORMAT
 from src.core.enums import UserRole
 from src.core.i18n.keys import ByteUnitKey
+from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import (
     i18n_format_bytes_to_unit,
     i18n_format_days,
@@ -19,6 +24,7 @@ from src.core.utils.formatters import (
     i18n_format_traffic_limit,
 )
 from src.infrastructure.database.models.dto import UserDto
+from src.infrastructure.database.models.dto.subscription import RemnaSubscriptionDto
 from src.services.plan import PlanService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
@@ -33,6 +39,7 @@ async def user_getter(
     config: AppConfig,
     user: UserDto,
     user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
     settings_service: FromDishka[SettingsService],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -46,7 +53,7 @@ async def user_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    subscription = target_user.current_subscription
+    subscription = await subscription_service.get_current(target_telegram_id)
 
     data: dict[str, Any] = {
         "user_id": str(target_user.telegram_id),
@@ -84,6 +91,7 @@ async def user_getter(
 async def subscription_getter(
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
     remnawave_service: FromDishka[RemnawaveService],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -93,7 +101,7 @@ async def subscription_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    subscription = target_user.current_subscription
+    subscription = await subscription_service.get_current(target_telegram_id)
 
     if not subscription:
         raise ValueError(f"Current subscription for user '{target_telegram_id}' not found")
@@ -157,6 +165,7 @@ async def subscription_getter(
 async def devices_getter(
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
     remnawave_service: FromDishka[RemnawaveService],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -166,7 +175,7 @@ async def devices_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    subscription = target_user.current_subscription
+    subscription = await subscription_service.get_current(target_telegram_id)
 
     if not subscription:
         raise ValueError(f"Current subscription for user '{target_telegram_id}' not found")
@@ -355,6 +364,7 @@ async def expire_time_getter(
     dialog_manager: DialogManager,
     i18n: FromDishka[TranslatorRunner],
     user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
@@ -363,7 +373,7 @@ async def expire_time_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    subscription = target_user.current_subscription
+    subscription = await subscription_service.get_current(target_telegram_id)
 
     if not subscription:
         raise ValueError(f"Current subscription for user '{target_telegram_id}' not found")
@@ -533,3 +543,116 @@ async def role_getter(
 
     roles = [role for role in UserRole if role != target_user.role]
     return {"roles": roles}
+
+
+@inject
+async def sync_getter(
+    dialog_manager: DialogManager,
+    i18n: FromDishka[TranslatorRunner],
+    user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
+    remnawave: FromDishka[RemnawaveSDK],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
+    target_user = await user_service.get(telegram_id=target_telegram_id)
+
+    if not target_user:
+        raise ValueError(f"User '{target_telegram_id}' not found")
+
+    bot_subscription = await subscription_service.get_current(target_telegram_id)
+
+    remna_subscription: Optional[RemnaSubscriptionDto] = None
+
+    try:
+        result = await remnawave.users.get_users_by_telegram_id(telegram_id=str(target_telegram_id))
+
+        if not isinstance(result, TelegramUserResponseDto):
+            raise ValueError("Unexpected response TelegramUserResponseDto")
+    except NotFoundError:
+        result = None
+
+    if result:
+        raw_remna = result[0].model_dump()
+        remna_subscription = RemnaSubscriptionDto.from_remna_user(raw_remna)
+
+    bot_info = ""
+    remna_info = ""
+    bot_version = ""
+    remna_version = ""
+
+    internal_response = await remnawave.internal_squads.get_internal_squads()
+    if not isinstance(internal_response, GetAllInternalSquadsResponseDto):
+        raise ValueError("Wrong response from Remnawave internal squads")
+
+    internal_dict = {s.uuid: s.name for s in internal_response.internal_squads}
+
+    if bot_subscription:
+        internal_squads_names = ", ".join(
+            internal_dict.get(squad, str(squad)) for squad in bot_subscription.internal_squads
+        )
+        bot_kwargs = {
+            "status": bot_subscription.status,
+            "url": bot_subscription.url,
+            "traffic_limit": i18n_format_traffic_limit(bot_subscription.traffic_limit),
+            "device_limit": i18n_format_device_limit(bot_subscription.device_limit),
+            "expire_time": i18n_format_expire_time(bot_subscription.expire_at),
+            "internal_squads": internal_squads_names or False,
+            "external_squad": bot_subscription.external_squad or False,
+            "traffic_limit_strategy": bot_subscription.plan.traffic_limit_strategy,
+            "tag": bot_subscription.plan.tag or False,
+            "updated_at": bot_subscription.updated_at,
+        }
+        bot_info = i18n.get(
+            "msg-user-sync-subscription",
+            **get_translated_kwargs(i18n, bot_kwargs),
+        )
+
+    if remna_subscription:
+        internal_squads_names = ", ".join(
+            internal_dict.get(squad, str(squad)) for squad in remna_subscription.internal_squads
+        )
+        remna_kwargs = {
+            "status": remna_subscription.status,
+            "url": remna_subscription.url,
+            "traffic_limit": i18n_format_traffic_limit(remna_subscription.traffic_limit),
+            "device_limit": i18n_format_device_limit(remna_subscription.device_limit),
+            "expire_time": i18n_format_expire_time(remna_subscription.expire_at),
+            "internal_squads": internal_squads_names or False,
+            "external_squad": remna_subscription.external_squad or False,
+            "traffic_limit_strategy": remna_subscription.traffic_limit_strategy or False,
+            "tag": remna_subscription.tag or False,
+            "updated_at": raw_remna["updated_at"],
+        }
+        remna_info = i18n.get(
+            "msg-user-sync-subscription",
+            **get_translated_kwargs(i18n, remna_kwargs),
+        )
+
+    bot_time = bot_subscription.updated_at if bot_subscription else None
+    remna_time = raw_remna["updated_at"] if remna_subscription else None
+
+    if bot_subscription and remna_subscription:
+        bot_time = bot_subscription.updated_at
+        remna_time = raw_remna["updated_at"]
+
+        if bot_time > remna_time:
+            bot_version, remna_version = "NEWER", "OLDER"
+        elif bot_time < remna_time:
+            bot_version, remna_version = "OLDER", "NEWER"
+        else:
+            bot_version = remna_version = "UNKNOWN"
+    else:
+        bot_version = remna_version = "UNKNOWN"
+
+    bot_version = i18n.get("msg-user-sync-version", version=bot_version)
+    remna_version = i18n.get("msg-user-sync-version", version=remna_version)
+
+    return {
+        "has_bot_subscription": bool(bot_subscription),
+        "has_remna_subscription": bool(remna_subscription),
+        "bot_version": bot_version,
+        "remna_version": remna_version,
+        "bot_subscription": bot_info,
+        "remna_subscription": remna_info,
+    }

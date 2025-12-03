@@ -98,23 +98,46 @@ class RemnawaveService(BaseService):
     async def create_user(
         self,
         user: UserDto,
-        plan: PlanSnapshotDto,
+        plan: Optional[PlanSnapshotDto] = None,
+        subscription: Optional[SubscriptionDto] = None,
     ) -> UserResponseDto:
-        logger.info(f"Creating RemnaUser '{user.telegram_id}' for plan '{plan.name}'")
-        created_user = await self.remnawave.users.create_user(
-            CreateUserRequestDto(
-                expire_at=format_days_to_datetime(plan.duration),
-                username=user.remna_name,
-                traffic_limit_bytes=format_gb_to_bytes(plan.traffic_limit),
-                traffic_limit_strategy=plan.traffic_limit_strategy,
-                description=user.remna_description,
-                tag=plan.tag,
-                telegram_id=user.telegram_id,
-                hwid_device_limit=format_device_count(plan.device_limit),
-                active_internal_squads=plan.internal_squads,
-                external_squad_uuid=plan.external_squad,
+        if subscription:
+            logger.info(
+                f"Creating RemnaUser '{user.telegram_id}' "
+                f"from subscription '{subscription.plan.name}'"
             )
-        )
+            created_user = await self.remnawave.users.create_user(
+                CreateUserRequestDto(
+                    expire_at=subscription.expire_at,
+                    username=user.remna_name,
+                    traffic_limit_bytes=format_gb_to_bytes(subscription.traffic_limit),
+                    traffic_limit_strategy=subscription.plan.traffic_limit_strategy,
+                    description=user.remna_description,
+                    tag=subscription.plan.tag,
+                    telegram_id=user.telegram_id,
+                    hwid_device_limit=format_device_count(subscription.device_limit),
+                    active_internal_squads=subscription.internal_squads,
+                    external_squad_uuid=subscription.external_squad,
+                )
+            )
+        elif plan:
+            logger.info(f"Creating RemnaUser '{user.telegram_id}' from plan '{plan.name}'")
+            created_user = await self.remnawave.users.create_user(
+                CreateUserRequestDto(
+                    expire_at=format_days_to_datetime(plan.duration),
+                    username=user.remna_name,
+                    traffic_limit_bytes=format_gb_to_bytes(plan.traffic_limit),
+                    traffic_limit_strategy=plan.traffic_limit_strategy,
+                    description=user.remna_description,
+                    tag=plan.tag,
+                    telegram_id=user.telegram_id,
+                    hwid_device_limit=format_device_count(plan.device_limit),
+                    active_internal_squads=plan.internal_squads,
+                    external_squad_uuid=plan.external_squad,
+                )
+            )
+        else:
+            raise ValueError("Either 'plan' or 'subscription' must be provided")
 
         if not isinstance(created_user, UserResponseDto):
             raise ValueError("Failed to create RemnaUser: unexpected response")
@@ -325,7 +348,10 @@ class RemnawaveService(BaseService):
 
         else:
             logger.info(f"Synchronizing subscription for '{user.telegram_id}'")
-            subscription = subscription.apply_sync(remna_subscription)
+            subscription = SubscriptionService.apply_sync(
+                target=subscription,
+                source=remna_subscription,
+            )
             await self.subscription_service.update(subscription)
             logger.info(f"Subscription updated for '{user.telegram_id}'")
 
