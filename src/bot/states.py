@@ -8,6 +8,7 @@ class MainMenu(StatesGroup):
     DEVICES = State()
     INVITE = State()
     INVITE_ABOUT = State()
+    INFO = State()
 
 
 class Notification(StatesGroup):

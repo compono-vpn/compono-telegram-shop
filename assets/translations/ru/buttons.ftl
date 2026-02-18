@@ -48,6 +48,9 @@ btn-menu-invite-send = 📩 Пригласить
 btn-menu-invite-qr = 🧾 QR-код
 btn-menu-invite-withdraw-points = 💎 Обменять баллы
 btn-menu-support = 🆘 Поддержка
+btn-menu-info = ℹ️ Информация
+btn-menu-info-privacy = 🔒 Политика конфиденциальности
+btn-menu-info-terms = 📄 Условия использования
 btn-menu-dashboard = 🛠 Панель управления
 
 

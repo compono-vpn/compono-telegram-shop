@@ -20,7 +20,7 @@ from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import MIDDLEWARE_DATA_KEY, PURCHASE_PREFIX, USER_KEY
 from src.core.enums import BannerName
 
-from .getters import devices_getter, invite_about_getter, invite_getter, menu_getter
+from .getters import devices_getter, info_getter, invite_about_getter, invite_getter, menu_getter
 from .handlers import (
     on_device_delete,
     on_get_trial,
@@ -84,6 +84,13 @@ menu = Window(
             text=I18nFormat("btn-menu-support"),
             id="support",
             url=Format("{support}"),
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-menu-info"),
+            id="info",
+            state=MainMenu.INFO,
         ),
     ),
     Row(
@@ -212,9 +219,39 @@ invite_about = Window(
     getter=invite_about_getter,
 )
 
+info = Window(
+    Banner(BannerName.MENU),
+    I18nFormat("msg-menu-info"),
+    Row(
+        Url(
+            text=I18nFormat("btn-menu-info-privacy"),
+            id="privacy",
+            url=Format("{privacy_url}"),
+        ),
+    ),
+    Row(
+        Url(
+            text=I18nFormat("btn-menu-info-terms"),
+            id="terms",
+            url=Format("{terms_url}"),
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=MainMenu.MAIN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=MainMenu.INFO,
+    getter=info_getter,
+)
+
 router = Dialog(
     menu,
     devices,
     invite,
     invite_about,
+    info,
 )

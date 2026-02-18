@@ -153,6 +153,13 @@ async def invite_getter(
     }
 
 
+async def info_getter(**kwargs: Any) -> dict[str, Any]:
+    return {
+        "privacy_url": "https://componovpn.com/ru/privacy/",
+        "terms_url": "https://componovpn.com/ru/terms/",
+    }
+
+
 @inject
 async def invite_about_getter(
     dialog_manager: DialogManager,
