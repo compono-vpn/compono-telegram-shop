@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+import hmac
 import orjson
 from aiogram import Bot
 from fastapi import Request
@@ -48,7 +49,7 @@ class PlategaGateway(BasePaymentGateway):
         payload = await self._create_payment_payload(amount, payment_id, details)
 
         try:
-            response = await self._client.post("/api/Transaction/Create", json=payload)
+            response = await self._client.post("/transaction/process", json=payload)
             response.raise_for_status()
             data = orjson.loads(response.content)
             return self._get_payment_data(data, payment_id)
@@ -68,6 +69,10 @@ class PlategaGateway(BasePaymentGateway):
 
     async def handle_webhook(self, request: Request) -> tuple[UUID, TransactionStatus]:
         logger.debug(f"Received {self.__class__.__name__} webhook request")
+
+        if not self._verify_webhook(request):
+            raise PermissionError("Webhook verification failed")
+
         webhook_data = await self._get_webhook_data(request)
 
         payment_id_str = webhook_data.get("payload")
@@ -83,6 +88,8 @@ class PlategaGateway(BasePaymentGateway):
                 transaction_status = TransactionStatus.COMPLETED
             case "CANCELED":
                 transaction_status = TransactionStatus.CANCELED
+            case "CHARGEBACK":
+                transaction_status = TransactionStatus.REFUNDED
             case _:
                 raise ValueError(f"Unsupported status: {status}")
 
@@ -104,6 +111,21 @@ class PlategaGateway(BasePaymentGateway):
             "callbackUrl": self.config.get_webhook(self.data.type),
             "payload": order_id,
         }
+
+    def _verify_webhook(self, request: Request) -> bool:
+        settings: PlategaGatewaySettingsDto = self.data.settings  # type: ignore[assignment]
+
+        merchant_id = request.headers.get("X-MerchantId", "")
+        secret = request.headers.get("X-Secret", "")
+
+        merchant_ok = hmac.compare_digest(merchant_id, settings.merchant_id or "")
+        secret_ok = hmac.compare_digest(secret, settings.api_key.get_secret_value() if settings.api_key else "")  # type: ignore[arg-type]
+
+        if not (merchant_ok and secret_ok):
+            logger.warning("Platega webhook verification failed: credentials mismatch")
+            return False
+
+        return True
 
     def _get_payment_data(self, data: dict[str, Any], order_id: str) -> PaymentResult:
         redirect_url = data.get("redirect")
