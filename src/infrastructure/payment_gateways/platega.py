@@ -1,4 +1,3 @@
-import uuid
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -45,14 +44,13 @@ class PlategaGateway(BasePaymentGateway):
         )
 
     async def handle_create_payment(self, amount: Decimal, details: str) -> PaymentResult:
-        payment_id = str(uuid.uuid4())
-        payload = await self._create_payment_payload(amount, payment_id, details)
+        payload = await self._create_payment_payload(amount, details)
 
         try:
             response = await self._client.post("/transaction/process", json=payload)
             response.raise_for_status()
             data = orjson.loads(response.content)
-            return self._get_payment_data(data, payment_id)
+            return self._get_payment_data(data)
 
         except HTTPStatusError as exception:
             logger.error(
@@ -75,10 +73,10 @@ class PlategaGateway(BasePaymentGateway):
 
         webhook_data = await self._get_webhook_data(request)
 
-        payment_id_str = webhook_data.get("payload")
+        payment_id_str = webhook_data.get("id")
 
         if not payment_id_str:
-            raise ValueError("Required field 'payload' is missing")
+            raise ValueError("Required field 'id' is missing")
 
         status = webhook_data.get("status")
         payment_id = UUID(payment_id_str)
@@ -95,9 +93,7 @@ class PlategaGateway(BasePaymentGateway):
 
         return payment_id, transaction_status
 
-    async def _create_payment_payload(
-        self, amount: Decimal, order_id: str, details: str
-    ) -> dict[str, Any]:
+    async def _create_payment_payload(self, amount: Decimal, details: str) -> dict[str, Any]:
         settings: PlategaGatewaySettingsDto = self.data.settings  # type: ignore[assignment]
         return {
             "paymentMethod": settings.payment_method,
@@ -108,8 +104,6 @@ class PlategaGateway(BasePaymentGateway):
             "description": details,
             "return": await self._get_bot_redirect_url(),
             "failedUrl": await self._get_bot_redirect_url(),
-            "callbackUrl": self.config.get_webhook(self.data.type),
-            "payload": order_id,
         }
 
     def _verify_webhook(self, request: Request) -> bool:
@@ -127,10 +121,15 @@ class PlategaGateway(BasePaymentGateway):
 
         return True
 
-    def _get_payment_data(self, data: dict[str, Any], order_id: str) -> PaymentResult:
+    def _get_payment_data(self, data: dict[str, Any]) -> PaymentResult:
+        transaction_id = data.get("transactionId")
+
+        if not transaction_id:
+            raise KeyError("Invalid response from API: missing 'transactionId'")
+
         redirect_url = data.get("redirect")
 
         if not redirect_url:
             raise KeyError("Invalid response from API: missing 'redirect'")
 
-        return PaymentResult(id=UUID(order_id), url=str(redirect_url))
+        return PaymentResult(id=UUID(transaction_id), url=str(redirect_url))
