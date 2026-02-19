@@ -272,6 +272,7 @@ gateway-type = { $gateway_type ->
     [CRYPTOMUS] Cryptomus
     [HELEKET] Heleket
     [URLPAY] UrlPay
+    [PLATEGA] Platega
     *[OTHER] { $gateway_type }
 }
 

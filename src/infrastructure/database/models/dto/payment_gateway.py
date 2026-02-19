@@ -90,6 +90,13 @@ class RobokassaGatewaySettingsDto(GatewaySettingsDto):
     secret_key: Optional[SecretStr] = None
 
 
+class PlategaGatewaySettingsDto(GatewaySettingsDto):
+    type: Literal[PaymentGatewayType.PLATEGA] = PaymentGatewayType.PLATEGA
+    merchant_id: Optional[str] = None
+    api_key: Optional[SecretStr] = None
+    payment_method: Optional[int] = 2  # SBP by default
+
+
 AnyGatewaySettingsDto = Annotated[
     Union[
         YookassaGatewaySettingsDto,
@@ -98,6 +105,7 @@ AnyGatewaySettingsDto = Annotated[
         HeleketGatewaySettingsDto,
         CryptopayGatewaySettingsDto,
         RobokassaGatewaySettingsDto,
+        PlategaGatewaySettingsDto,
     ],
     Field(discriminator="type"),
 ]
