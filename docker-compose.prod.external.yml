@@ -1,8 +1,8 @@
 services:
-  remnashop-db:
+  compono-shop-db:
     image: postgres:17
-    container_name: "remnashop-db"
-    hostname: remnashop-db
+    container_name: "compono-shop-db"
+    hostname: compono-shop-db
     restart: unless-stopped
 
     env_file:
@@ -14,7 +14,7 @@ services:
       - TZ=UTC
     
     volumes:
-      - remnashop-db-data:/var/lib/postgresql/data
+      - compono-shop-db-data:/var/lib/postgresql/data
 
     networks:
       - remnawave-network
@@ -26,16 +26,16 @@ services:
       retries: 3
     
 
-  remnashop-redis:
+  compono-shop-redis:
     image: valkey/valkey:9-alpine
-    container_name: "remnashop-redis"
-    hostname: remnashop-redis
+    container_name: "compono-shop-redis"
+    hostname: compono-shop-redis
     restart: unless-stopped
 
     command: [ "--requirepass", "${REDIS_PASSWORD}" ]
 
     volumes:
-      - remnashop-redis-data:/data
+      - compono-shop-redis-data:/data
 
     networks:
       - remnawave-network
@@ -47,11 +47,11 @@ services:
       retries: 3
     
 
-  remnashop:
-    &remnashop
-    image: ghcr.io/snoups/remnashop:latest
-    container_name: "remnashop"
-    hostname: remnashop
+  compono-shop:
+    &compono-shop
+    image: ghcr.io/bdtfs/compono-telegram-shop:latest
+    container_name: "compono-shop"
+    hostname: compono-shop
     restart: unless-stopped
 
     env_file:
@@ -60,44 +60,44 @@ services:
       RESET_ASSETS: "${RESET_ASSETS:-false}"
 
     depends_on:
-        remnashop-db:
+        compono-shop-db:
           condition: service_healthy
-        remnashop-redis:
+        compono-shop-redis:
           condition: service_healthy
 
     volumes:
-      - ./logs:/opt/remnashop/logs
-      - ./assets:/opt/remnashop/assets
+      - ./logs:/opt/compono-shop/logs
+      - ./assets:/opt/compono-shop/assets
 
     networks:
       - remnawave-network
     
 
-  remnashop-taskiq-worker:
-    <<: *remnashop
-    container_name: "remnashop-taskiq-worker"
-    hostname: remnashop-taskiq-worker
+  compono-shop-taskiq-worker:
+    <<: *compono-shop
+    container_name: "compono-shop-taskiq-worker"
+    hostname: compono-shop-taskiq-worker
     command: taskiq worker src.infrastructure.taskiq.worker:worker 
       --tasks-pattern src/infrastructure/taskiq/tasks -fsd
 
     depends_on:
-        remnashop-redis:
+        compono-shop-redis:
           condition: service_healthy
-        remnashop-db:
+        compono-shop-db:
           condition: service_healthy
 
 
-  remnashop-taskiq-scheduler:
-    <<: *remnashop
-    container_name: "remnashop-taskiq-scheduler"
-    hostname: remnashop-taskiq-scheduler
+  compono-shop-taskiq-scheduler:
+    <<: *compono-shop
+    container_name: "compono-shop-taskiq-scheduler"
+    hostname: compono-shop-taskiq-scheduler
     command: taskiq scheduler src.infrastructure.taskiq.scheduler:scheduler
       --tasks-pattern src/infrastructure/taskiq/tasks -fsd
 
     depends_on:
-        remnashop-redis:
+        compono-shop-redis:
           condition: service_healthy
-        remnashop-db:
+        compono-shop-db:
           condition: service_healthy
 
 
@@ -108,12 +108,12 @@ networks:
     external: false
 
 volumes:
-  remnashop-db-data:
-    name: remnashop-db-data
+  compono-shop-db-data:
+    name: compono-shop-db-data
     driver: local
     external: false
     
-  remnashop-redis-data:
-    name: remnashop-redis-data
+  compono-shop-redis-data:
+    name: compono-shop-redis-data
     driver: local
     external: false

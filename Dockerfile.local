@@ -1,6 +1,6 @@
 FROM python:3.12-slim-bookworm
 
-WORKDIR /opt/remnashop
+WORKDIR /opt/compono-shop
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -13,7 +13,7 @@ COPY docker-entrypoint.sh .
 RUN pip install --no-cache-dir uv && uv sync --frozen
 
 ENV UVICORN_RELOAD_ENABLED=true
-ENV PATH="/opt/remnashop/.venv/bin:$PATH"
+ENV PATH="/opt/compono-shop/.venv/bin:$PATH"
 
 RUN chmod +x ./docker-entrypoint.sh
 

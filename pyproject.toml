@@ -1,5 +1,5 @@
 [project]
-name = "remnashop"
+name = "compono-telegram-shop"
 version = "0.0.0"
 description = "This is a Telegram bot for selling VPN subscriptions. It works with Remnawave"
 authors = [{ name = "snoups" }]
@@ -31,7 +31,7 @@ dependencies = [
 
 [project.urls]
 homepage = "https://t.me/@remna_shop"
-repository = "https://github.com/snoups/remnashop"
+repository = "https://github.com/bdtfs/compono-telegram-shop"
 
 [dependency-groups]
 dev = [

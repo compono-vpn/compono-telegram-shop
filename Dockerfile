@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:python3.12-alpine AS builder
 
-WORKDIR /opt/remnashop
+WORKDIR /opt/compono-shop
 
 COPY pyproject.toml uv.lock ./
 
@@ -12,7 +12,7 @@ RUN uv sync --locked --no-dev --no-cache --compile-bytecode \
 
 FROM python:3.12-alpine AS final
 
-WORKDIR /opt/remnashop
+WORKDIR /opt/compono-shop
 
 ARG BUILD_TIME
 ARG BUILD_BRANCH
@@ -24,14 +24,14 @@ ENV BUILD_BRANCH=${BUILD_BRANCH}
 ENV BUILD_COMMIT=${BUILD_COMMIT}
 ENV BUILD_TAG=${BUILD_TAG}
 
-COPY --from=builder /opt/remnashop/.venv /opt/remnashop/.venv
+COPY --from=builder /opt/compono-shop/.venv /opt/compono-shop/.venv
 
-ENV PATH="/opt/remnashop/.venv/bin:$PATH"
+ENV PATH="/opt/compono-shop/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/opt/remnashop
+ENV PYTHONPATH=/opt/compono-shop
 
 COPY ./src ./src
-COPY ./assets /opt/remnashop/assets.default
+COPY ./assets /opt/compono-shop/assets.default
 COPY ./docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
