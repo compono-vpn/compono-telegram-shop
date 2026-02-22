@@ -469,6 +469,7 @@ ntf-promocode-type-not-supported = <i>❌ Тип награды пока не п
 ntf-promocode-no-subscription = <i>❌ У вас нет активной подписки для применения промокода.</i>
 ntf-promocode-invalid-max-activations = <i>❌ Некорректное значение лимита активаций (-1 = без ограничения, или >= 1).</i>
 ntf-promocode-invalid-allowed = <i>❌ Некорректные ID пользователей. Введите Telegram ID через запятую.</i>
+ntf-promocode-already-has-subscription = <i>❌ У вас уже есть активная подписка.</i>
 
 ntf-event-promocode-activated =
     #EventPromocodeActivated

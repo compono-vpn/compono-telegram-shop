@@ -1,6 +1,6 @@
 from aiogram_dialog import Dialog, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
-from aiogram_dialog.widgets.kbd import Button, Column, Row, ScrollingGroup, Select, Start, SwitchTo
+from aiogram_dialog.widgets.kbd import Button, Column, Group, Row, ScrollingGroup, Select, Start, SwitchTo
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
@@ -9,7 +9,7 @@ from src.bot.states import Dashboard, DashboardPromocodes
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.enums import BannerName, PromocodeAvailability, PromocodeRewardType
 
-from .getters import configurator_getter, list_getter
+from .getters import configurator_getter, list_getter, plan_duration_getter, plan_select_getter
 from .handlers import (
     on_active_toggle,
     on_allowed_input,
@@ -21,6 +21,8 @@ from .handlers import (
     on_list,
     on_list_select,
     on_max_activations_input,
+    on_plan_duration_select,
+    on_plan_select,
     on_reward_input,
     on_search_input,
     on_type_select,
@@ -93,6 +95,13 @@ configurator = Window(
             text=I18nFormat("btn-promocode-reward"),
             id="reward",
             state=DashboardPromocodes.REWARD,
+            when=F["promocode_type"] != PromocodeRewardType.SUBSCRIPTION,
+        ),
+        SwitchTo(
+            text=I18nFormat("btn-promocode-plan"),
+            id="plan",
+            state=DashboardPromocodes.PLAN_SELECT,
+            when=F["promocode_type"] == PromocodeRewardType.SUBSCRIPTION,
         ),
         SwitchTo(
             text=I18nFormat("btn-promocode-lifetime"),
@@ -307,6 +316,60 @@ allowed_input = Window(
     state=DashboardPromocodes.ALLOWED,
 )
 
+plan_select = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-promocode-plan-select"),
+    Column(
+        Select(
+            text=Format("{item[plan_name]}"),
+            id="plan_select",
+            item_id_getter=lambda item: item["plan_id"],
+            items="plans",
+            type_factory=int,
+            on_click=on_plan_select,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardPromocodes.CONFIGURATOR,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardPromocodes.PLAN_SELECT,
+    getter=plan_select_getter,
+)
+
+plan_duration_select = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-promocode-plan-duration"),
+    Group(
+        Select(
+            text=I18nFormat(
+                "btn-plan-duration",
+                value=F["item"]["days"],
+            ),
+            id="plan_duration_select",
+            item_id_getter=lambda item: item["days"],
+            items="durations",
+            type_factory=int,
+            on_click=on_plan_duration_select,
+        ),
+        width=2,
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardPromocodes.PLAN_SELECT,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardPromocodes.PLAN_DURATION,
+    getter=plan_duration_getter,
+)
+
 router = Dialog(
     promocodes,
     configurator,
@@ -319,4 +382,6 @@ router = Dialog(
     promocode_list,
     search_input,
     allowed_input,
+    plan_select,
+    plan_duration_select,
 )

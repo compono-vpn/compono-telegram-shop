@@ -437,4 +437,5 @@ btn-promocode-reward = 🎁 Награда
 btn-promocode-lifetime = ⌛ Время жизни
 btn-promocode-allowed = 👥 Разрешенные пользователи
 btn-promocode-max-activations = 🔢 Лимит активаций
+btn-promocode-plan = 📦 План
 btn-promocode-confirm = ✅ Подтвердить

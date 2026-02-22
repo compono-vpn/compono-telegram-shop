@@ -11,7 +11,7 @@ from src.core.config import AppConfig
 from src.core.enums import PromocodeAvailability, PromocodeRewardType
 from src.core.utils.time import datetime_now
 from src.infrastructure.database import UnitOfWork
-from src.infrastructure.database.models.dto import PromocodeDto, UserDto
+from src.infrastructure.database.models.dto import PromocodeDto, SubscriptionDto, UserDto
 from src.infrastructure.database.models.sql import Promocode, PromocodeActivation
 from src.infrastructure.redis import RedisRepository
 from src.services.remnawave import RemnawaveService
@@ -234,6 +234,31 @@ class PromocodeService(BaseService):
                     subscription=subscription,
                 )
                 await self.subscription_service.update(subscription)
+                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+
+            case PromocodeRewardType.SUBSCRIPTION:
+                if not promocode.plan:
+                    return ActivationResult(False, "ntf-promocode-type-not-supported")
+
+                subscription = await self.subscription_service.get_current(user.telegram_id)
+                if subscription:
+                    return ActivationResult(False, "ntf-promocode-already-has-subscription")
+
+                remna_user = await self.remnawave_service.create_user(user=user, plan=promocode.plan)
+                new_subscription = SubscriptionDto(
+                    user_remna_id=remna_user.uuid,
+                    status=remna_user.status,
+                    traffic_limit=promocode.plan.traffic_limit,
+                    device_limit=promocode.plan.device_limit,
+                    traffic_limit_strategy=promocode.plan.traffic_limit_strategy,
+                    tag=promocode.plan.tag,
+                    internal_squads=promocode.plan.internal_squads,
+                    external_squad=promocode.plan.external_squad,
+                    expire_at=remna_user.expire_at,
+                    url=remna_user.subscription_url,
+                    plan=promocode.plan,
+                )
+                await self.subscription_service.create(user, new_subscription)
                 return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
 
             case _:

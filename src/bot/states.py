@@ -57,6 +57,8 @@ class DashboardPromocodes(StatesGroup):
     MAX_ACTIVATIONS = State()
     SEARCH = State()
     ALLOWED = State()
+    PLAN_SELECT = State()
+    PLAN_DURATION = State()
 
 
 class DashboardAccess(StatesGroup):

@@ -15,8 +15,9 @@ from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click, parse_int
-from src.infrastructure.database.models.dto import PromocodeDto, UserDto
+from src.infrastructure.database.models.dto import PlanSnapshotDto, PromocodeDto, UserDto
 from src.services.notification import NotificationService
+from src.services.plan import PlanService
 from src.services.promocode import PromocodeService
 
 
@@ -383,4 +384,44 @@ async def on_allowed_input(
     promocode.allowed_telegram_ids = ids
     adapter.save(promocode)
     logger.info(f"{log(user)} Set promocode allowed_telegram_ids to '{ids}'")
+    await dialog_manager.switch_to(state=DashboardPromocodes.CONFIGURATOR)
+
+
+async def on_plan_select(
+    callback: CallbackQuery,
+    widget: Select[int],
+    dialog_manager: DialogManager,
+    selected_plan_id: int,
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    logger.info(f"{log(user)} Selected plan '{selected_plan_id}' for promocode")
+    dialog_manager.dialog_data["selected_plan_id"] = selected_plan_id
+    await dialog_manager.switch_to(state=DashboardPromocodes.PLAN_DURATION)
+
+
+@inject
+async def on_plan_duration_select(
+    callback: CallbackQuery,
+    widget: Select[int],
+    dialog_manager: DialogManager,
+    selected_duration: int,
+    plan_service: FromDishka[PlanService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
+    plan = await plan_service.get(selected_plan_id)
+
+    if not plan:
+        raise ValueError(f"Plan '{selected_plan_id}' not found")
+
+    adapter = DialogDataAdapter(dialog_manager)
+    promocode = adapter.load(PromocodeDto)
+
+    if not promocode:
+        raise ValueError("PromocodeDto not found in dialog data")
+
+    plan_snapshot = PlanSnapshotDto.from_plan(plan, selected_duration)
+    promocode.plan = plan_snapshot
+    adapter.save(promocode)
+    logger.info(f"{log(user)} Set promocode plan to '{plan.name}' with duration '{selected_duration}'")
     await dialog_manager.switch_to(state=DashboardPromocodes.CONFIGURATOR)
