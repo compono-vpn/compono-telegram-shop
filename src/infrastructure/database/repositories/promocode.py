@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
 from src.core.enums import PromocodeRewardType
-from src.infrastructure.database.models.sql import Promocode
+from src.infrastructure.database.models.sql import Promocode, PromocodeActivation
 
 from .base import BaseRepository
 
@@ -9,6 +9,9 @@ from .base import BaseRepository
 class PromocodeRepository(BaseRepository):
     async def create(self, promocode: Promocode) -> Promocode:
         return await self.create_instance(promocode)
+
+    async def create_activation(self, activation: PromocodeActivation) -> PromocodeActivation:
+        return await self.create_instance(activation)
 
     async def get(self, promocode_id: int) -> Optional[Promocode]:
         return await self._get_one(Promocode, Promocode.id == promocode_id)

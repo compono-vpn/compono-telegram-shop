@@ -1,9 +1,10 @@
 import traceback
 from typing import Optional, TypedDict, cast
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.utils.formatting import Text
-from aiogram_dialog import DialogManager
+from aiogram_dialog import DialogManager, ShowMode
+from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Select
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
@@ -12,7 +13,7 @@ from loguru import logger
 from src.bot.keyboards import get_user_keyboard
 from src.bot.states import Subscription
 from src.core.constants import PURCHASE_PREFIX, USER_KEY
-from src.core.enums import PaymentGatewayType, PurchaseType
+from src.core.enums import PaymentGatewayType, PurchaseType, SystemNotificationType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
@@ -21,6 +22,7 @@ from src.services.notification import NotificationService
 from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.pricing import PricingService
+from src.services.promocode import PromocodeService
 from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
 
@@ -443,3 +445,52 @@ async def on_get_subscription(
     payment_id = dialog_manager.dialog_data["payment_id"]
     logger.info(f"{log(user)} Getted free subscription '{payment_id}'")
     await payment_gateway_service.handle_payment_succeeded(payment_id)
+
+
+@inject
+async def on_promocode_input(
+    message: Message,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+    promocode_service: FromDishka[PromocodeService],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    dialog_manager.show_mode = ShowMode.EDIT
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+
+    if not message.text:
+        return
+
+    code = message.text.strip()
+    result = await promocode_service.activate(user, code)
+
+    await notification_service.notify_user(
+        user=user,
+        payload=MessagePayload(
+            i18n_key=result.notification_key,
+            i18n_kwargs=result.notification_kwargs,
+        ),
+    )
+
+    if result.success:
+        # Send system notification to admins
+        promocode = await promocode_service.get_by_code(code.upper())
+        if promocode:
+            await notification_service.system_notify(
+                payload=MessagePayload.not_deleted(
+                    i18n_key="ntf-event-promocode-activated",
+                    i18n_kwargs={
+                        "user": True,
+                        "user_id": str(user.telegram_id),
+                        "user_name": user.name,
+                        "username": user.username or False,
+                        "code": promocode.code,
+                        "reward_type": str(promocode.reward_type),
+                        "reward": str(promocode.reward),
+                    },
+                    reply_markup=get_user_keyboard(user.telegram_id),
+                ),
+                ntf_type=SystemNotificationType.PROMOCODE_ACTIVATED,
+            )
+
+        await dialog_manager.switch_to(state=Subscription.MAIN)

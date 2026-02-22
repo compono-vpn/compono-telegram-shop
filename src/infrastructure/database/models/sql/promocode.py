@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.core.enums import PromocodeRewardType
+from src.core.enums import PromocodeAvailability, PromocodeRewardType
 from src.infrastructure.database.models.dto import PlanSnapshotDto
 
 from .base import BaseSql
@@ -24,6 +24,17 @@ class Promocode(BaseSql, TimestampMixin):
 
     code: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    availability: Mapped[PromocodeAvailability] = mapped_column(
+        Enum(
+            PromocodeAvailability,
+            name="promocode_availability",
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+        server_default="ALL",
+    )
 
     reward_type: Mapped[PromocodeRewardType] = mapped_column(
         Enum(

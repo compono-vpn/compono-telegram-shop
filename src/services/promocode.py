@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Optional
 
 from aiogram import Bot
@@ -6,12 +7,24 @@ from loguru import logger
 from redis.asyncio import Redis
 
 from src.core.config import AppConfig
-from src.core.enums import PromocodeRewardType
+from src.core.enums import PromocodeAvailability, PromocodeRewardType
 from src.infrastructure.database import UnitOfWork
-from src.infrastructure.database.models.dto import PromocodeDto
+from src.infrastructure.database.models.dto import PromocodeDto, UserDto
+from src.infrastructure.database.models.sql import Promocode, PromocodeActivation
 from src.infrastructure.redis import RedisRepository
 
 from .base import BaseService
+
+
+@dataclass
+class ActivationResult:
+    success: bool
+    notification_key: str
+    notification_kwargs: dict = None
+
+    def __post_init__(self) -> None:
+        if self.notification_kwargs is None:
+            self.notification_kwargs = {}
 
 
 class PromocodeService(BaseService):
@@ -30,9 +43,20 @@ class PromocodeService(BaseService):
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.uow = uow
 
-    async def create(self, promocode: PromocodeDto) -> PromocodeDto:  # type: ignore
-        # logger.info(f"Created promocode '{promocode.code}'")
-        pass
+    async def create(self, promocode: PromocodeDto) -> Optional[PromocodeDto]:
+        init_data = promocode.prepare_init_data()
+        init_data.pop("id", None)
+        init_data.pop("created_at", None)
+        init_data.pop("updated_at", None)
+        init_data.pop("activations", None)
+
+        db_promocode = Promocode(**init_data)
+
+        async with self.uow:
+            created = await self.uow.repository.promocodes.create(db_promocode)
+
+        logger.info(f"Created promocode '{promocode.code}'")
+        return PromocodeDto.from_model(created)
 
     async def get(self, promocode_id: int) -> Optional[PromocodeDto]:
         async with self.uow:
@@ -109,3 +133,88 @@ class PromocodeService(BaseService):
 
         logger.debug(f"Filtered active promocodes: '{is_active}', found '{len(db_promocodes)}'")
         return PromocodeDto.from_model_list(db_promocodes)
+
+    async def activate(self, user: UserDto, code: str) -> ActivationResult:
+        promocode = await self.get_by_code(code.strip().upper())
+
+        if not promocode:
+            return ActivationResult(False, "ntf-promocode-not-found")
+
+        if not promocode.is_active:
+            return ActivationResult(False, "ntf-promocode-inactive")
+
+        if promocode.is_expired:
+            return ActivationResult(False, "ntf-promocode-expired")
+
+        if promocode.is_depleted:
+            return ActivationResult(False, "ntf-promocode-depleted")
+
+        # Check if already activated by this user
+        for activation in promocode.activations:
+            if activation.user_telegram_id == user.telegram_id:
+                return ActivationResult(False, "ntf-promocode-already-activated")
+
+        # Check availability rules
+        if not self._check_availability(user, promocode):
+            return ActivationResult(False, "ntf-promocode-not-available")
+
+        # Apply reward
+        apply_result = await self._apply_reward(user, promocode)
+        if not apply_result.success:
+            return apply_result
+
+        # Create activation record
+        async with self.uow:
+            activation = PromocodeActivation(
+                promocode_id=promocode.id,
+                user_telegram_id=user.telegram_id,
+            )
+            await self.uow.repository.promocodes.create_activation(activation)
+
+        logger.info(
+            f"User '{user.telegram_id}' activated promocode '{promocode.code}' "
+            f"(type={promocode.reward_type}, reward={promocode.reward})"
+        )
+
+        return ActivationResult(
+            True,
+            "ntf-promocode-activated",
+            {"code": promocode.code},
+        )
+
+    def _check_availability(self, user: UserDto, promocode: PromocodeDto) -> bool:
+        match promocode.availability:
+            case PromocodeAvailability.ALL:
+                return True
+            case PromocodeAvailability.NEW:
+                return not user.has_any_subscription
+            case PromocodeAvailability.EXISTING:
+                return user.has_any_subscription
+            case PromocodeAvailability.INVITED:
+                return user.is_invited_user
+            case PromocodeAvailability.ALLOWED:
+                return False  # Not yet implemented (requires allowed_user_ids list)
+            case _:
+                return False
+
+    async def _apply_reward(self, user: UserDto, promocode: PromocodeDto) -> ActivationResult:
+        match promocode.reward_type:
+            case PromocodeRewardType.PERSONAL_DISCOUNT:
+                user.personal_discount = promocode.reward or 0
+                await self._update_user(user)
+                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+
+            case PromocodeRewardType.PURCHASE_DISCOUNT:
+                user.purchase_discount = promocode.reward or 0
+                await self._update_user(user)
+                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+
+            case _:
+                return ActivationResult(False, "ntf-promocode-type-not-supported")
+
+    async def _update_user(self, user: UserDto) -> None:
+        async with self.uow:
+            await self.uow.repository.users.update(
+                telegram_id=user.telegram_id,
+                **user.prepare_changed_data(),
+            )

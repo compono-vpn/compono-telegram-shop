@@ -8,6 +8,7 @@ from src.core.enums import PromocodeRewardType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import i18n_format_days, i18n_format_limit, i18n_format_traffic_limit
 from src.infrastructure.database.models.dto import PromocodeDto
+from src.services.promocode import PromocodeService
 
 
 async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -48,3 +49,22 @@ async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> d
     data.update(helpers)
 
     return data
+
+
+@inject
+async def list_getter(
+    dialog_manager: DialogManager,
+    promocode_service: FromDishka[PromocodeService],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    promocodes = await promocode_service.get_all()
+
+    formatted = [
+        {
+            "id": p.id,
+            "name": f"{'🟢' if p.is_active else '🔴'} {p.code} ({p.reward_type})",
+        }
+        for p in promocodes
+    ]
+
+    return {"promocodes": formatted}
