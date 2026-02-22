@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import Optional, cast
+from urllib.parse import urlparse, urlunparse
 from uuid import UUID
 
 import httpx
@@ -89,6 +90,13 @@ class RemnawaveService(BaseService):
         self.subscription_service = subscription_service
         self.notification_service = notification_service
 
+    def _rewrite_sub_url(self, url: str) -> str:
+        domain = self.config.remnawave.sub_public_domain
+        if not domain:
+            return url
+        parsed = urlparse(url)
+        return urlunparse(parsed._replace(netloc=domain))
+
     async def _trigger_relay_sync(self) -> None:
         url = self.config.relay_sync_url
         if not url:
@@ -173,6 +181,7 @@ class RemnawaveService(BaseService):
 
         logger.info(f"RemnaUser '{created.username}' created successfully")
         await self._trigger_relay_sync()
+        created.subscription_url = self._rewrite_sub_url(created.subscription_url)
         return created
 
     async def updated_user(
@@ -235,6 +244,7 @@ class RemnawaveService(BaseService):
 
         logger.info(f"RemnaUser '{user.telegram_id}' updated successfully")
         await self._trigger_relay_sync()
+        updated_user.subscription_url = self._rewrite_sub_url(updated_user.subscription_url)
         return updated_user
 
     async def delete_user(self, user: UserDto) -> bool:
@@ -314,7 +324,7 @@ class RemnawaveService(BaseService):
             logger.warning(f"RemnaUser '{uuid}' has not subscription url")
             return None
 
-        return remna_user.subscription_url
+        return self._rewrite_sub_url(remna_user.subscription_url)
 
     async def sync_user(self, remna_user: RemnaUserDto, creating: bool = True) -> None:
         if not remna_user.telegram_id:
@@ -333,6 +343,8 @@ class RemnawaveService(BaseService):
 
         if not remna_subscription.url:
             remna_subscription.url = await self.get_subscription_url(remna_user.uuid)  # type: ignore[assignment]
+        else:
+            remna_subscription.url = self._rewrite_sub_url(remna_subscription.url)
 
         if not subscription:
             logger.info(f"No subscription found for '{user.telegram_id}', creating")

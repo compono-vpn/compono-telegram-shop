@@ -17,6 +17,7 @@ class RemnawaveConfig(BaseConfig, env_prefix="REMNAWAVE_"):
     caddy_token: SecretStr = SecretStr("")
     webhook_secret: SecretStr
     cookie: SecretStr = SecretStr("")
+    sub_public_domain: str = ""
 
     @property
     def is_raw_url(self) -> bool:
