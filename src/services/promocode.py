@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Optional
 
 from aiogram import Bot
@@ -8,10 +9,13 @@ from redis.asyncio import Redis
 
 from src.core.config import AppConfig
 from src.core.enums import PromocodeAvailability, PromocodeRewardType
+from src.core.utils.time import datetime_now
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import PromocodeDto, UserDto
 from src.infrastructure.database.models.sql import Promocode, PromocodeActivation
 from src.infrastructure.redis import RedisRepository
+from src.services.remnawave import RemnawaveService
+from src.services.subscription import SubscriptionService
 
 from .base import BaseService
 
@@ -39,9 +43,13 @@ class PromocodeService(BaseService):
         translator_hub: TranslatorHub,
         #
         uow: UnitOfWork,
+        subscription_service: SubscriptionService,
+        remnawave_service: RemnawaveService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.uow = uow
+        self.subscription_service = subscription_service
+        self.remnawave_service = remnawave_service
 
     async def create(self, promocode: PromocodeDto) -> Optional[PromocodeDto]:
         init_data = promocode.prepare_init_data()
@@ -193,7 +201,9 @@ class PromocodeService(BaseService):
             case PromocodeAvailability.INVITED:
                 return user.is_invited_user
             case PromocodeAvailability.ALLOWED:
-                return False  # Not yet implemented (requires allowed_user_ids list)
+                if not promocode.allowed_telegram_ids:
+                    return False
+                return user.telegram_id in promocode.allowed_telegram_ids
             case _:
                 return False
 
@@ -207,6 +217,23 @@ class PromocodeService(BaseService):
             case PromocodeRewardType.PURCHASE_DISCOUNT:
                 user.purchase_discount = promocode.reward or 0
                 await self._update_user(user)
+                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+
+            case PromocodeRewardType.DURATION:
+                subscription = await self.subscription_service.get_current(user.telegram_id)
+                if not subscription:
+                    return ActivationResult(False, "ntf-promocode-no-subscription")
+
+                base_date = max(subscription.expire_at, datetime_now())
+                new_expire = base_date + timedelta(days=promocode.reward)
+                subscription.expire_at = new_expire
+
+                await self.remnawave_service.updated_user(
+                    user=user,
+                    uuid=subscription.user_remna_id,
+                    subscription=subscription,
+                )
+                await self.subscription_service.update(subscription)
                 return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
 
             case _:

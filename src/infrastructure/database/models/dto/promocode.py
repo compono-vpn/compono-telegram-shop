@@ -31,6 +31,7 @@ class PromocodeDto(TrackableDto):
 
     lifetime: int = -1
     max_activations: int = -1
+    allowed_telegram_ids: Optional[list[int]] = None
 
     activations: list["PromocodeActivationDto"] = []
 
@@ -39,11 +40,11 @@ class PromocodeDto(TrackableDto):
 
     @property
     def is_unlimited(self) -> bool:
-        return self.max_activations is None
+        return self.max_activations is None or self.max_activations < 0
 
     @property
     def is_depleted(self) -> bool:
-        if self.max_activations is None:
+        if self.max_activations is None or self.max_activations < 0:
             return False
 
         return len(self.activations) >= self.max_activations
@@ -54,7 +55,7 @@ class PromocodeDto(TrackableDto):
 
     @property
     def expires_at(self) -> Optional[datetime]:
-        if self.lifetime is not None and self.created_at is not None:
+        if self.lifetime is not None and self.lifetime > 0 and self.created_at is not None:
             return self.created_at + timedelta(days=self.lifetime)
         return None
 

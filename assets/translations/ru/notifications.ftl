@@ -466,6 +466,9 @@ ntf-promocode-depleted = <i>❌ Промокод исчерпан.</i>
 ntf-promocode-already-activated = <i>❌ Вы уже активировали этот промокод.</i>
 ntf-promocode-not-available = <i>❌ Промокод недоступен для вас.</i>
 ntf-promocode-type-not-supported = <i>❌ Тип награды пока не поддерживается.</i>
+ntf-promocode-no-subscription = <i>❌ У вас нет активной подписки для применения промокода.</i>
+ntf-promocode-invalid-max-activations = <i>❌ Некорректное значение лимита активаций (-1 = без ограничения, или >= 1).</i>
+ntf-promocode-invalid-allowed = <i>❌ Некорректные ID пользователей. Введите Telegram ID через запятую.</i>
 
 ntf-event-promocode-activated =
     #EventPromocodeActivated

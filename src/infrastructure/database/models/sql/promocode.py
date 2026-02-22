@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import ARRAY, JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.enums import PromocodeAvailability, PromocodeRewardType
@@ -50,6 +50,9 @@ class Promocode(BaseSql, TimestampMixin):
 
     lifetime: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_activations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    allowed_telegram_ids: Mapped[Optional[list[int]]] = mapped_column(
+        ARRAY(BigInteger), nullable=True
+    )
 
     activations: Mapped[list["PromocodeActivation"]] = relationship(
         "PromocodeActivation",

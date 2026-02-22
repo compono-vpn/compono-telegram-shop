@@ -12,6 +12,7 @@ from src.core.enums import BannerName, PromocodeAvailability, PromocodeRewardTyp
 from .getters import configurator_getter, list_getter
 from .handlers import (
     on_active_toggle,
+    on_allowed_input,
     on_availability_select,
     on_code_input,
     on_confirm,
@@ -19,6 +20,7 @@ from .handlers import (
     on_lifetime_input,
     on_list,
     on_list_select,
+    on_max_activations_input,
     on_reward_input,
     on_search_input,
     on_type_select,
@@ -43,7 +45,7 @@ promocodes = Window(
         SwitchTo(
             text=I18nFormat("btn-promocodes-search"),
             id="search",
-            state=DashboardPromocodes.ALLOWED,
+            state=DashboardPromocodes.SEARCH,
         ),
     ),
     Row(
@@ -96,6 +98,13 @@ configurator = Window(
             text=I18nFormat("btn-promocode-lifetime"),
             id="lifetime",
             state=DashboardPromocodes.LIFETIME,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-promocode-max-activations"),
+            id="max_activations",
+            state=DashboardPromocodes.MAX_ACTIVATIONS,
         ),
     ),
     Row(
@@ -225,6 +234,21 @@ lifetime_input = Window(
     state=DashboardPromocodes.LIFETIME,
 )
 
+max_activations_input = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-promocode-max-activations-input"),
+    MessageInput(func=on_max_activations_input),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardPromocodes.CONFIGURATOR,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardPromocodes.MAX_ACTIVATIONS,
+)
+
 promocode_list = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-promocodes-list"),
@@ -265,6 +289,21 @@ search_input = Window(
         ),
     ),
     IgnoreUpdate(),
+    state=DashboardPromocodes.SEARCH,
+)
+
+allowed_input = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-promocode-allowed-input"),
+    MessageInput(func=on_allowed_input),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardPromocodes.CONFIGURATOR,
+        ),
+    ),
+    IgnoreUpdate(),
     state=DashboardPromocodes.ALLOWED,
 )
 
@@ -276,6 +315,8 @@ router = Dialog(
     availability_select,
     reward_input,
     lifetime_input,
+    max_activations_input,
     promocode_list,
     search_input,
+    allowed_input,
 )

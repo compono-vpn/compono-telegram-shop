@@ -114,20 +114,29 @@ async def on_reward_input(
     dialog_manager.show_mode = ShowMode.EDIT
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
 
-    number = parse_int(message.text)
-
-    if number is None or not (1 <= number <= 100):
-        await notification_service.notify_user(
-            user=user,
-            payload=MessagePayload(i18n_key="ntf-promocode-invalid-reward"),
-        )
-        return
-
     adapter = DialogDataAdapter(dialog_manager)
     promocode = adapter.load(PromocodeDto)
 
     if not promocode:
         raise ValueError("PromocodeDto not found in dialog data")
+
+    number = parse_int(message.text)
+
+    reward_ranges = {
+        PromocodeRewardType.PERSONAL_DISCOUNT: (1, 100),
+        PromocodeRewardType.PURCHASE_DISCOUNT: (1, 100),
+        PromocodeRewardType.DURATION: (1, 3650),
+        PromocodeRewardType.TRAFFIC: (1, 99999),
+        PromocodeRewardType.DEVICES: (1, 100),
+    }
+    min_val, max_val = reward_ranges.get(promocode.reward_type, (1, 100))
+
+    if number is None or not (min_val <= number <= max_val):
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-promocode-invalid-reward"),
+        )
+        return
 
     promocode.reward = number
     adapter.save(promocode)
@@ -308,3 +317,70 @@ async def on_delete(
         user=user,
         payload=MessagePayload(i18n_key="ntf-double-click-confirm"),
     )
+
+
+@inject
+async def on_max_activations_input(
+    message: Message,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    dialog_manager.show_mode = ShowMode.EDIT
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+
+    number = parse_int(message.text)
+
+    if number is None or (number < -1 or number == 0):
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-promocode-invalid-max-activations"),
+        )
+        return
+
+    adapter = DialogDataAdapter(dialog_manager)
+    promocode = adapter.load(PromocodeDto)
+
+    if not promocode:
+        raise ValueError("PromocodeDto not found in dialog data")
+
+    promocode.max_activations = number
+    adapter.save(promocode)
+    logger.info(f"{log(user)} Set promocode max_activations to '{number}'")
+    await dialog_manager.switch_to(state=DashboardPromocodes.CONFIGURATOR)
+
+
+@inject
+async def on_allowed_input(
+    message: Message,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    dialog_manager.show_mode = ShowMode.EDIT
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+
+    if not message.text:
+        return
+
+    try:
+        ids = [int(x.strip()) for x in message.text.split(",") if x.strip()]
+        if not ids:
+            raise ValueError
+    except ValueError:
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-promocode-invalid-allowed"),
+        )
+        return
+
+    adapter = DialogDataAdapter(dialog_manager)
+    promocode = adapter.load(PromocodeDto)
+
+    if not promocode:
+        raise ValueError("PromocodeDto not found in dialog data")
+
+    promocode.allowed_telegram_ids = ids
+    adapter.save(promocode)
+    logger.info(f"{log(user)} Set promocode allowed_telegram_ids to '{ids}'")
+    await dialog_manager.switch_to(state=DashboardPromocodes.CONFIGURATOR)
