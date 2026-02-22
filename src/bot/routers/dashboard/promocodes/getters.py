@@ -46,6 +46,14 @@ async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> d
             "plan_duration": promocode.plan.duration,
         }
         data.update(plan)
+    elif promocode.reward_type == PromocodeRewardType.SUBSCRIPTION:
+        data.update({
+            "plan_name": "—",
+            "plan_type": "—",
+            "plan_traffic_limit": "—",
+            "plan_device_limit": "—",
+            "plan_duration": "—",
+        })
 
     data.update(helpers)
 
