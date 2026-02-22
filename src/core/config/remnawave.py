@@ -4,7 +4,7 @@ from httpx import Cookies
 from pydantic import SecretStr, field_validator
 from pydantic_core.core_schema import FieldValidationInfo
 
-from src.core.constants import DOMAIN_REGEX
+from src.core.constants import DOMAIN_REGEX, URL_PATTERN
 
 from .base import BaseConfig
 from .validators import validate_not_change_me
@@ -19,17 +19,23 @@ class RemnawaveConfig(BaseConfig, env_prefix="REMNAWAVE_"):
     cookie: SecretStr = SecretStr("")
 
     @property
+    def is_raw_url(self) -> bool:
+        return bool(re.match(URL_PATTERN, self.host.get_secret_value()))
+
+    @property
     def is_external(self) -> bool:
-        return self.host.get_secret_value() != "remnawave"
+        host = self.host.get_secret_value()
+        return host != "remnawave" and not self.is_raw_url
 
     @property
     def url(self) -> SecretStr:
-        if self.is_external:
-            url = f"https://{self.host.get_secret_value()}"
-            return SecretStr(url)
+        host = self.host.get_secret_value()
+        if self.is_raw_url:
+            return SecretStr(host.rstrip("/"))
+        elif self.is_external:
+            return SecretStr(f"https://{host}")
         else:
-            url = f"http://{self.host.get_secret_value()}:{self.port}"
-            return SecretStr(url)
+            return SecretStr(f"http://{host}:{self.port}")
 
     @property
     def cookies(self) -> Cookies:
@@ -49,12 +55,12 @@ class RemnawaveConfig(BaseConfig, env_prefix="REMNAWAVE_"):
     def validate_host(cls, field: SecretStr, info: FieldValidationInfo) -> SecretStr:
         host = field.get_secret_value()
 
-        if host == "remnawave" or re.match(DOMAIN_REGEX, host):
+        if host == "remnawave" or re.match(DOMAIN_REGEX, host) or re.match(URL_PATTERN, host):
             validate_not_change_me(field, info)
             return field
 
         raise ValueError(
-            "REMNAWAVE_HOST must be 'remnawave' (docker) or a valid domain (e.g., example.com)"
+            "REMNAWAVE_HOST must be 'remnawave' (docker), a valid domain, or a full URL (e.g., http://service:3000)"
         )
 
     @field_validator("token")
