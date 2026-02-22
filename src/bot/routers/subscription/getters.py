@@ -219,7 +219,7 @@ async def getter_connect(
 
     return {
         "is_app": False,
-        "url": SubscriptionService.build_connect_url(user.current_subscription.url),
+        "url": SubscriptionService.build_connect_url(user.current_subscription.url, config.remnawave.sub_public_domain),
         "connectable": True,
     }
 
@@ -246,6 +246,6 @@ async def success_payment_getter(
         "expire_time": i18n_format_expire_time(subscription.expire_at),
         "added_duration": i18n_format_days(subscription.plan.duration),
         "is_app": False,
-        "url": SubscriptionService.build_connect_url(subscription.url),
+        "url": SubscriptionService.build_connect_url(subscription.url, config.remnawave.sub_public_domain),
         "connectable": True,
     }

@@ -62,10 +62,11 @@ class SubscriptionService(BaseService):
         return subscription
 
     @staticmethod
-    def build_connect_url(subscription_url: str) -> str:
+    def build_connect_url(subscription_url: str, public_domain: str = "") -> str:
         parsed = urlparse(subscription_url)
         token = parsed.path.rstrip("/").split("/")[-1]
-        return f"{parsed.scheme}://{parsed.netloc}/connect/{token}"
+        netloc = public_domain or parsed.netloc
+        return f"{parsed.scheme}://{netloc}/connect/{token}"
 
     async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
         data = subscription.model_dump(exclude={"user"})

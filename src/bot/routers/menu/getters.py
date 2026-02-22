@@ -80,7 +80,7 @@ async def menu_getter(
                 else False,
                 "connectable": subscription.is_active,
                 "is_app": False,
-                "url": SubscriptionService.build_connect_url(subscription.url),
+                "url": SubscriptionService.build_connect_url(subscription.url, config.remnawave.sub_public_domain),
             }
         )
 
