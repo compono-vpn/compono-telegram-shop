@@ -19,6 +19,7 @@ from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.pricing import PricingService
 from src.services.settings import SettingsService
+from src.services.subscription import SubscriptionService
 
 
 @inject
@@ -218,7 +219,7 @@ async def getter_connect(
 
     return {
         "is_app": config.bot.is_mini_app,
-        "url": config.bot.mini_app_url or user.current_subscription.url,
+        "url": config.bot.mini_app_url or SubscriptionService.build_connect_url(user.current_subscription.url),
         "connectable": True,
     }
 
@@ -245,6 +246,6 @@ async def success_payment_getter(
         "expire_time": i18n_format_expire_time(subscription.expire_at),
         "added_duration": i18n_format_days(subscription.plan.duration),
         "is_app": config.bot.is_mini_app,
-        "url": config.bot.mini_app_url or subscription.url,
+        "url": config.bot.mini_app_url or SubscriptionService.build_connect_url(subscription.url),
         "connectable": True,
     }

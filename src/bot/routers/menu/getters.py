@@ -79,7 +79,7 @@ async def menu_getter(
                 if subscription.is_active
                 else False,
                 "connectable": subscription.is_active,
-                "url": config.bot.mini_app_url or subscription.url,
+                "url": config.bot.mini_app_url or SubscriptionService.build_connect_url(subscription.url),
             }
         )
 
