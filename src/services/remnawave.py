@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Optional, cast
 from uuid import UUID
 
+import httpx
 from aiogram import Bot
 from fluentogram import TranslatorHub
 from loguru import logger
@@ -88,6 +89,18 @@ class RemnawaveService(BaseService):
         self.subscription_service = subscription_service
         self.notification_service = notification_service
 
+    async def _trigger_relay_sync(self) -> None:
+        url = self.config.relay_sync_url
+        if not url:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(f"{url.rstrip('/')}/trigger")
+                resp.raise_for_status()
+                logger.debug(f"relay-sync trigger: {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"Failed to trigger relay-sync: {e}")
+
     async def try_connection(self) -> None:
         response = await self.remnawave.system.get_stats()
 
@@ -159,6 +172,7 @@ class RemnawaveService(BaseService):
             created = await _do_create()
 
         logger.info(f"RemnaUser '{created.username}' created successfully")
+        await self._trigger_relay_sync()
         return created
 
     async def updated_user(
@@ -220,6 +234,7 @@ class RemnawaveService(BaseService):
             logger.info(f"Traffic reset for RemnaUser '{user.telegram_id}'")
 
         logger.info(f"RemnaUser '{user.telegram_id}' updated successfully")
+        await self._trigger_relay_sync()
         return updated_user
 
     async def delete_user(self, user: UserDto) -> bool:

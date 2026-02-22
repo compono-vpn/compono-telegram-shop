@@ -22,6 +22,7 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     domain: SecretStr
     host: str = "0.0.0.0"
     port: int = 5000
+    relay_sync_url: str = ""
 
     locales: LocaleList = LocaleList([Locale.EN])
     default_locale: Locale = Locale.EN
