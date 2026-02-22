@@ -26,6 +26,7 @@ from src.services.webhook import WebhookService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    app.state.ready = False
     dispatcher: Dispatcher = app.state.dispatcher
     telegram_webhook_endpoint: TelegramWebhookEndpoint = app.state.telegram_webhook_endpoint
     container: AsyncContainer = app.state.dishka_container
@@ -118,6 +119,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 },
             ),
         )
+
+    app.state.ready = True
 
     yield
 

@@ -75,16 +75,25 @@ services:
 
     networks:
       - remnawave-network
-    
+
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${APP_PORT:-5000}/health')\""]
+      interval: 3s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
 
   compono-shop-taskiq-worker:
     <<: *compono-shop
     container_name: "compono-shop-taskiq-worker"
     hostname: compono-shop-taskiq-worker
-    command: taskiq worker src.infrastructure.taskiq.worker:worker 
+    command: taskiq worker src.infrastructure.taskiq.worker:worker
       --tasks-pattern src/infrastructure/taskiq/tasks -fsd
 
     depends_on:
+        compono-shop:
+          condition: service_healthy
         compono-shop-redis:
           condition: service_healthy
         compono-shop-db:
@@ -98,6 +107,8 @@ services:
       --tasks-pattern src/infrastructure/taskiq/tasks -fsd
 
     depends_on:
+        compono-shop:
+          condition: service_healthy
         compono-shop-redis:
           condition: service_healthy
         compono-shop-db:
