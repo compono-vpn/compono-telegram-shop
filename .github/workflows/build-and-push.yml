@@ -117,6 +117,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  dispatch-update:
+    name: Dispatch Tag to ArgoCD
+    needs: [generate-tag, build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch tag update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GH_PAT }}
+          repository: bdtfs/argocd
+          event-type: image-update
+          client-payload: |
+            {
+              "tag": "${{ needs.generate-tag.outputs.tag }}",
+              "path": "compono-shop"
+            }
+
   summary:
     name: Summary
     needs: [generate-tag, build-and-push, release]
