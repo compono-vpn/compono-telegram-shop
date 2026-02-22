@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, TypeVar, Union
+from urllib.parse import urlparse, urlunparse
 
 from aiogram import Bot
 from fluentogram import TranslatorHub
@@ -50,6 +51,16 @@ class SubscriptionService(BaseService):
         self.uow = uow
         self.user_service = user_service
 
+    def _rewrite_sub_url(self, subscription: Optional[SubscriptionDto]) -> Optional[SubscriptionDto]:
+        if not subscription:
+            return subscription
+        domain = self.config.remnawave.sub_public_domain
+        if not domain:
+            return subscription
+        parsed = urlparse(subscription.url)
+        subscription.url = urlunparse(parsed._replace(netloc=domain))
+        return subscription
+
     async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
         data = subscription.model_dump(exclude={"user"})
         data["plan"] = subscription.plan.model_dump(mode="json")
@@ -80,7 +91,7 @@ class SubscriptionService(BaseService):
         else:
             logger.warning(f"Subscription '{subscription_id}' not found")
 
-        return SubscriptionDto.from_model(db_subscription)
+        return self._rewrite_sub_url(SubscriptionDto.from_model(db_subscription))
 
     @redis_cache(prefix="get_current_subscription", ttl=TIME_1M)
     async def get_current(self, telegram_id: int) -> Optional[SubscriptionDto]:
@@ -107,7 +118,7 @@ class SubscriptionService(BaseService):
                 f"but subscription object was not found"
             )
 
-        return SubscriptionDto.from_model(db_active_subscription)
+        return self._rewrite_sub_url(SubscriptionDto.from_model(db_active_subscription))
 
     async def get_all_by_user(self, telegram_id: int) -> list[SubscriptionDto]:
         async with self.uow:
