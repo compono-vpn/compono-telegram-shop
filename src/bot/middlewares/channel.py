@@ -1,5 +1,5 @@
 import traceback
-from typing import Any, Awaitable, Callable, Union
+from typing import Any, Awaitable, Callable, Optional, Union
 
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
@@ -9,6 +9,7 @@ from dishka import AsyncContainer
 from loguru import logger
 
 from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, get_channel_keyboard, get_user_keyboard
+from src.core.config import AppConfig
 from src.core.constants import CONTAINER_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType
 from src.core.utils.message_payload import MessagePayload
@@ -36,10 +37,27 @@ class ChannelMiddleware(EventTypedMiddleware):
     ) -> Any:
         container: AsyncContainer = data[CONTAINER_KEY]
         user: UserDto = data[USER_KEY]
-        settings_service: SettingsService = await container.get(SettingsService)
+        config: AppConfig = await container.get(AppConfig)
 
-        if not await settings_service.is_channel_required():
-            return await handler(event, data)
+        chat_id: Union[str, int, None] = None
+        channel_url: Optional[str] = None
+
+        if config.bot.channel_address:
+            chat_id = config.bot.channel_chat_id
+            channel_url = config.bot.channel_url
+        else:
+            settings_service: SettingsService = await container.get(SettingsService)
+
+            if not await settings_service.is_channel_required():
+                return await handler(event, data)
+
+            settings = await settings_service.get()
+            channel_link = settings.channel_link.get_secret_value()
+            if settings.channel_has_username:
+                chat_id = channel_link
+            elif settings.channel_id:
+                chat_id = settings.channel_id
+            channel_url = settings.get_url_channel_link
 
         if user.is_privileged:
             logger.debug(f"User '{user.telegram_id}' skipped channel check (privileged)")
@@ -47,15 +65,6 @@ class ChannelMiddleware(EventTypedMiddleware):
 
         bot: Bot = await container.get(Bot)
         notification_service: NotificationService = await container.get(NotificationService)
-
-        settings = await settings_service.get()
-
-        chat_id: Union[str, int, None] = None
-        channel_link = settings.channel_link.get_secret_value()
-        if settings.channel_has_username:
-            chat_id = channel_link
-        elif settings.channel_id:
-            chat_id = settings.channel_id
 
         if chat_id is None:
             logger.warning(
@@ -83,7 +92,7 @@ class ChannelMiddleware(EventTypedMiddleware):
                         "user_id": str(user.telegram_id),
                         "user_name": user.name,
                         "username": user.username or False,
-                        "error": f"{error_type_name}: Skipped channel required '{channel_link}' "
+                        "error": f"{error_type_name}: Skipped channel required '{chat_id}' "
                         + f"check due to error: {error_message.as_html()}",
                     },
                     reply_markup=get_user_keyboard(user.telegram_id),
@@ -105,7 +114,7 @@ class ChannelMiddleware(EventTypedMiddleware):
                 user=user,
                 payload=MessagePayload(
                     i18n_key="ntf-channel-join-error",
-                    reply_markup=get_channel_keyboard(settings.get_url_channel_link),
+                    reply_markup=get_channel_keyboard(channel_url),
                     auto_delete_after=None,
                     add_close_button=False,
                 ),
@@ -123,7 +132,7 @@ class ChannelMiddleware(EventTypedMiddleware):
             user=user,
             payload=MessagePayload(
                 i18n_key=i18n_key,
-                reply_markup=get_channel_keyboard(settings.get_url_channel_link),
+                reply_markup=get_channel_keyboard(channel_url),
                 auto_delete_after=None,
                 add_close_button=False,
             ),

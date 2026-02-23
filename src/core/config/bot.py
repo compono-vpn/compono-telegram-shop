@@ -1,9 +1,9 @@
-from typing import Union
+from typing import Optional, Union
 
 from pydantic import SecretStr, field_validator
 from pydantic_core.core_schema import FieldValidationInfo
 
-from src.core.constants import API_V1, BOT_WEBHOOK_PATH, URL_PATTERN
+from src.core.constants import API_V1, BOT_WEBHOOK_PATH, T_ME, URL_PATTERN
 
 from .base import BaseConfig
 from .validators import validate_not_change_me, validate_username
@@ -15,11 +15,24 @@ class BotConfig(BaseConfig, env_prefix="BOT_"):
     dev_id: int
     support_username: SecretStr
     mini_app: Union[bool, SecretStr] = False
+    channel_address: Optional[str] = None
 
     reset_webhook: bool = False
     drop_pending_updates: bool = False
     setup_commands: bool = True
     use_banners: bool = True
+
+    @property
+    def channel_chat_id(self) -> Optional[str]:
+        if self.channel_address and self.channel_address.startswith("@"):
+            return self.channel_address
+        return None
+
+    @property
+    def channel_url(self) -> Optional[str]:
+        if self.channel_address and self.channel_address.startswith("@"):
+            return f"{T_ME}{self.channel_address[1:]}"
+        return None
 
     @property
     def webhook_path(self) -> str:
