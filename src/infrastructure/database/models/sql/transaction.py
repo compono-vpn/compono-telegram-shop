@@ -26,7 +26,7 @@ class Transaction(BaseSql, TimestampMixin):
 
     user_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("users.telegram_id"),
+        ForeignKey("users.telegram_id", ondelete="CASCADE"),
         nullable=False,
     )
 

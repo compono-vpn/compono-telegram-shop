@@ -20,12 +20,12 @@ class Referral(BaseSql, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     referrer_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("users.telegram_id"),
+        ForeignKey("users.telegram_id", ondelete="CASCADE"),
         nullable=False,
     )
     referred_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("users.telegram_id"),
+        ForeignKey("users.telegram_id", ondelete="CASCADE"),
         nullable=False,
     )
 
@@ -65,7 +65,7 @@ class ReferralReward(BaseSql, TimestampMixin):
     referral_id: Mapped[int] = mapped_column(Integer, ForeignKey("referrals.id"), nullable=False)
     user_telegram_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("users.telegram_id"),
+        ForeignKey("users.telegram_id", ondelete="CASCADE"),
         nullable=False,
     )
 
