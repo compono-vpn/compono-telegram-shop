@@ -1,5 +1,3 @@
-import asyncio
-
 from aiogram import Bot
 from aiogram.types import CallbackQuery, TelegramObject
 from aiogram.types import User as AiogramUser
@@ -50,10 +48,8 @@ class AccessService(BaseService):
         self.notification_service = notification_service
 
     async def is_access_allowed(self, aiogram_user: AiogramUser, event: TelegramObject) -> bool:  # noqa: C901
-        user, settings = await asyncio.gather(
-            self.user_service.get(aiogram_user.id),
-            self.settings_service.get(),
-        )
+        user = await self.user_service.get(aiogram_user.id)
+        settings = await self.settings_service.get()
         mode = settings.access_mode
 
         is_purchase_blocked = not settings.purchases_allowed

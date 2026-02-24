@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any
 
 from aiogram_dialog import DialogManager
@@ -35,10 +34,8 @@ async def menu_getter(
     **kwargs: Any,
 ) -> dict[str, Any]:
     try:
-        plan, has_used_trial = await asyncio.gather(
-            plan_service.get_trial_plan(),
-            subscription_service.has_used_trial(user.telegram_id),
-        )
+        plan = await plan_service.get_trial_plan()
+        has_used_trial = await subscription_service.has_used_trial(user.telegram_id)
         support_username = config.bot.support_username.get_secret_value()
         ref_link = await referral_service.get_ref_link(user.referral_code)
         support_link = format_username_to_url(support_username, i18n.get("contact-support-help"))

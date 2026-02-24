@@ -11,9 +11,10 @@ from aiogram_dialog.api.exceptions import (
     UnknownState,
 )
 from dishka import AsyncContainer
+from loguru import logger
 
 from src.bot.keyboards import get_user_keyboard
-from src.core.constants import CONTAINER_KEY
+from src.core.constants import CONTAINER_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType
 from src.core.exceptions import MenuRenderingError
 from src.core.metrics import ERRORS_TOTAL
@@ -60,8 +61,17 @@ class ErrorMiddleware(EventTypedMiddleware):
 
         if aiogram_user:
             reply_markup = get_user_keyboard(aiogram_user.id)
-            user_service: UserService = await container.get(UserService)
-            user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
+            user: Optional[UserDto] = data.get(USER_KEY)
+
+            if not user:
+                try:
+                    user_service: UserService = await container.get(UserService)
+                    user = await user_service.get(telegram_id=aiogram_user.id)
+                except Exception:
+                    logger.warning(
+                        f"Failed to fetch user '{aiogram_user.id}' in error handler, "
+                        "DB connection may be in a dirty state"
+                    )
 
             if user and not user.is_dev and not isinstance(error, MenuRenderingError):
                 await redirect_to_main_menu_task.kiq(aiogram_user.id)
