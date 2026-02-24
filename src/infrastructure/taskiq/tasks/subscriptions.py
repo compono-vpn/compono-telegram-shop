@@ -36,6 +36,7 @@ from src.services.subscription import SubscriptionService
 from src.services.transaction import TransactionService
 from src.services.user import UserService
 
+from .notifications import send_not_connected_reminder_task
 from .redirects import (
     redirect_to_failed_subscription_task,
     redirect_to_successed_payment_task,
@@ -107,6 +108,8 @@ async def trial_subscription_task(
                 reply_markup=get_user_keyboard(user.telegram_id),
             ),
         )
+        connect_url = SubscriptionService.build_connect_url(created_user.subscription_url)
+        await send_not_connected_reminder_task.kiq(user.telegram_id, connect_url)
         await redirect_to_successed_trial_task.kiq(user)
         logger.info(f"Trial subscription task completed successfully for user '{user.telegram_id}'")
 
@@ -236,6 +239,12 @@ async def purchase_subscription_task(
             raise Exception(
                 f"Unknown purchase type '{purchase_type}' for user '{user.telegram_id}'"
             )
+
+        if purchase_type == PurchaseType.NEW:
+            sub = await subscription_service.get_current(user.telegram_id)
+            if sub:
+                connect_url = SubscriptionService.build_connect_url(sub.url)
+                await send_not_connected_reminder_task.kiq(user.telegram_id, connect_url)
 
         await redirect_to_successed_payment_task.kiq(user, purchase_type)
         logger.info(f"Purchase subscription task completed for user '{user.telegram_id}'")

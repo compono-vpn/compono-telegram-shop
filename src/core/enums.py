@@ -151,6 +151,8 @@ class UserNotificationType(UpperStrEnum):  # == UserNotificationDto
     #
     REFERRAL_ATTACHED = auto()
     REFERRAL_REWARD = auto()
+    #
+    NOT_CONNECTED = auto()
 
 
 class UserRoleHierarchy(Enum):

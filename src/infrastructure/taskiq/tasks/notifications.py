@@ -2,8 +2,9 @@ import asyncio
 from typing import Any, Union, cast
 
 from dishka.integrations.taskiq import FromDishka, inject
+from loguru import logger
 
-from src.bot.keyboards import get_buy_keyboard, get_renew_keyboard
+from src.bot.keyboards import get_buy_keyboard, get_connect_keyboard, get_renew_keyboard
 from src.core.constants import BATCH_DELAY, BATCH_SIZE
 from src.core.enums import UserNotificationType
 from src.core.utils.iterables import chunked
@@ -11,7 +12,10 @@ from src.core.utils.message_payload import MessagePayload
 from src.core.utils.types import RemnaUserDto
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
+from src.services.remnawave import RemnawaveService
 from src.services.user import UserService
+
+NOT_CONNECTED_REMINDER_DELAY = 2 * 60 * 60  # 2 hours
 
 
 @broker.task
@@ -137,4 +141,42 @@ async def send_subscription_limited_notification_task(
             add_close_button=True,
         ),
         ntf_type=UserNotificationType.LIMITED,
+    )
+
+
+@broker.task
+@inject
+async def send_not_connected_reminder_task(
+    user_telegram_id: int,
+    connect_url: str,
+    user_service: FromDishka[UserService],
+    remnawave_service: FromDishka[RemnawaveService],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    await asyncio.sleep(NOT_CONNECTED_REMINDER_DELAY)
+
+    user = await user_service.get(user_telegram_id)
+    if not user or not user.current_subscription:
+        logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': no user/subscription")
+        return
+
+    if not user.current_subscription.is_active:
+        logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': subscription inactive")
+        return
+
+    devices = await remnawave_service.get_devices_user(user)
+    if devices:
+        logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already connected")
+        return
+
+    logger.info(f"Sending not-connected reminder to '{user_telegram_id}'")
+    await notification_service.notify_user(
+        user=user,
+        payload=MessagePayload(
+            i18n_key="ntf-event-user-not-connected",
+            reply_markup=get_connect_keyboard(connect_url),
+            auto_delete_after=None,
+            add_close_button=True,
+        ),
+        ntf_type=UserNotificationType.NOT_CONNECTED,
     )

@@ -184,6 +184,17 @@ def get_remnashop_update_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_connect_keyboard(connect_url: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="btn-notification-connect",
+            url=connect_url,
+        ),
+    )
+    return builder.as_markup()
+
+
 def get_user_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 

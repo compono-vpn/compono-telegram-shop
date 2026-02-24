@@ -19,6 +19,7 @@ btn-rules-accept = ✅ Принять правила
 btn-channel-join = ❤️ Перейти в канал
 btn-channel-confirm = ✅ Подтвердить
 btn-notification-close = ❌ Закрыть
+btn-notification-connect = 🚀 Подключиться к VPN
 btn-contact-support = 📩 Перейти в поддержку
 
 btn-squad-choice = { $selected -> 
@@ -304,6 +305,7 @@ btn-notifications-user-choice = { $enabled ->
     [EXPIRED_1_DAY_AGO] Подписка истекла (1 день)
     [REFERRAL_ATTACHED] Реферал закреплен
     [REFERRAL_REWARD] Получено вознаграждение
+    [NOT_CONNECTED] Напоминание о подключении
     *[OTHER] { $type }
     }
 
