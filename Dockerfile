@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.12-alpine AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 WORKDIR /opt/compono-shop
 
@@ -10,7 +10,7 @@ RUN uv sync --locked --no-dev --no-cache --compile-bytecode \
     && rm -rf .venv/lib/python3.12/site-packages/setuptools* \
     && rm -rf .venv/lib/python3.12/site-packages/wheel*
 
-FROM python:3.12-alpine AS final
+FROM python:3.12-slim AS final
 
 WORKDIR /opt/compono-shop
 
