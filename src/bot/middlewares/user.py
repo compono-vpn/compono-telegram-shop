@@ -13,6 +13,7 @@ from src.core.enums import MiddlewareEventType, SystemNotificationType
 from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import UserDto
+from src.infrastructure.taskiq.tasks.subscriptions import auto_assign_trial_task
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.user import UserService
@@ -83,6 +84,8 @@ class UserMiddleware(EventTypedMiddleware):
                 referral_code = await referral_service.get_ref_code_by_event(event)
                 logger.info(f"Registered with referral code: '{referral_code}'")
                 await referral_service.handle_referral(user, referral_code)
+
+            await auto_assign_trial_task.kiq(user)
 
         elif not isinstance(aiogram_user, FakeUser):
             await user_service.compare_and_update(user, aiogram_user)

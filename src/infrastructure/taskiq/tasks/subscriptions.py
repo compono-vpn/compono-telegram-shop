@@ -30,6 +30,7 @@ from src.infrastructure.database.models.dto import (
 )
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
+from src.services.plan import PlanService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 from src.services.transaction import TransactionService
@@ -40,6 +41,23 @@ from .redirects import (
     redirect_to_successed_payment_task,
     redirect_to_successed_trial_task,
 )
+
+
+@broker.task(retry_on_error=True)
+@inject
+async def auto_assign_trial_task(
+    user: UserDto,
+    plan_service: FromDishka[PlanService],
+) -> None:
+    trial_plan = await plan_service.get_trial_plan()
+
+    if not trial_plan or not trial_plan.durations:
+        logger.info(f"No active trial plan, skipping auto-trial for user '{user.telegram_id}'")
+        return
+
+    plan = PlanSnapshotDto.from_plan(trial_plan, trial_plan.durations[0].days)
+    await trial_subscription_task.kiq(user, plan)
+    logger.info(f"Auto-assigned trial for new user '{user.telegram_id}'")
 
 
 @broker.task(retry_on_error=True)
