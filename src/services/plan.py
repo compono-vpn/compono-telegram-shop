@@ -6,11 +6,14 @@ from loguru import logger
 from redis.asyncio import Redis
 
 from src.core.config import AppConfig
+from src.core.constants import TIME_10M
 from src.core.enums import PlanAvailability
+from src.core.storage.key_builder import build_key
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import PlanDto, UserDto
 from src.infrastructure.database.models.sql import Plan, PlanDuration, PlanPrice
 from src.infrastructure.redis import RedisRepository
+from src.infrastructure.redis.cache import redis_cache
 
 from .base import BaseService
 
@@ -39,6 +42,7 @@ class PlanService(BaseService):
             db_plan = self._dto_to_model(plan)
             db_created_plan = await self.uow.repository.plans.create(db_plan)
 
+        await self._clear_plan_cache()
         logger.info(f"Created plan '{plan.name}' with ID '{db_created_plan.id}'")
         return PlanDto.from_model(db_created_plan)  # type: ignore[return-value]
 
@@ -77,6 +81,8 @@ class PlanService(BaseService):
         async with self.uow:
             db_updated_plan = await self.uow.repository.plans.update(db_plan)
 
+        await self._clear_plan_cache()
+
         if db_updated_plan:
             logger.info(f"Updated plan '{plan.name}' (ID: '{plan.id}') successfully")
         else:
@@ -90,6 +96,8 @@ class PlanService(BaseService):
     async def delete(self, plan_id: int) -> bool:
         async with self.uow:
             result = await self.uow.repository.plans.delete(plan_id)
+
+        await self._clear_plan_cache()
 
         if result:
             logger.info(f"Plan '{plan_id}' deleted successfully")
@@ -106,6 +114,7 @@ class PlanService(BaseService):
 
     #
 
+    @redis_cache(prefix="get_trial_plan", ttl=TIME_10M)
     async def get_trial_plan(self) -> Optional[PlanDto]:
         async with self.uow:
             db_plans: list[Plan] = await self.uow.repository.plans.filter_by_availability(
@@ -214,6 +223,11 @@ class PlanService(BaseService):
         return True
 
     #
+
+    async def _clear_plan_cache(self) -> None:
+        trial_plan_key = build_key("cache", "get_trial_plan")
+        await self.redis_client.delete(trial_plan_key)
+        logger.debug("Trial plan cache invalidated")
 
     def _dto_to_model(self, plan_dto: PlanDto) -> Plan:
         db_plan = Plan(**plan_dto.model_dump(exclude={"durations"}))

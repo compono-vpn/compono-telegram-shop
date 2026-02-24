@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from aiogram import Bot
 from fluentogram import TranslatorHub
@@ -34,6 +34,7 @@ class SettingsService(BaseService):
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.uow = uow
+        self._settings_memo: Optional[SettingsDto] = None
 
     async def create(self) -> SettingsDto:
         settings = SettingsDto()
@@ -47,7 +48,7 @@ class SettingsService(BaseService):
         return SettingsDto.from_model(db_settings)  # type: ignore[return-value]
 
     @redis_cache(prefix="get_settings", ttl=TIME_10M)
-    async def get(self) -> SettingsDto:
+    async def _fetch_settings(self) -> SettingsDto:
         async with self.uow:
             db_settings = await self.uow.repository.settings.get()
 
@@ -57,6 +58,12 @@ class SettingsService(BaseService):
             logger.debug("Retrieved settings from DB")
 
         return SettingsDto.from_model(db_settings)  # type: ignore[return-value]
+
+    async def get(self) -> SettingsDto:
+        if self._settings_memo is not None:
+            return self._settings_memo
+        self._settings_memo = await self._fetch_settings()
+        return self._settings_memo
 
     async def update(self, settings: SettingsDto) -> SettingsDto:
         if settings.user_notifications.changed_data:
@@ -185,6 +192,7 @@ class SettingsService(BaseService):
     #
 
     async def _clear_cache(self) -> None:
+        self._settings_memo = None
         settings_cache_key: str = build_key("cache", "get_settings")
         logger.debug(f"Cache '{settings_cache_key}' cleared")
         await self.redis_client.delete(settings_cache_key)

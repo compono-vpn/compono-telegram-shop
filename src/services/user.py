@@ -5,6 +5,7 @@ from aiogram.types import Message
 from aiogram.types import User as AiogramUser
 from fluentogram import TranslatorHub
 from loguru import logger
+from pydantic import TypeAdapter
 from redis.asyncio import Redis
 
 from src.core.config import AppConfig
@@ -18,6 +19,7 @@ from src.core.constants import (
 from src.core.enums import Locale, UserRole
 from src.core.storage.key_builder import StorageKey, build_key
 from src.core.storage.keys import RecentActivityUsersKey
+from src.core.utils import json_utils
 from src.core.utils.formatters import format_user_name
 from src.core.utils.generators import generate_referral_code
 from src.core.utils.types import RemnaUserDto
@@ -26,8 +28,11 @@ from src.infrastructure.database.models.dto import UserDto
 from src.infrastructure.database.models.dto.user import BaseUserDto
 from src.infrastructure.database.models.sql import User
 from src.infrastructure.redis import RedisRepository, redis_cache
+from src.infrastructure.redis.cache import prepare_for_cache
 
 from .base import BaseService
+
+_USER_DTO_ADAPTER: TypeAdapter[Optional[UserDto]] = TypeAdapter(Optional[UserDto])
 
 
 class UserService(BaseService):
@@ -111,8 +116,10 @@ class UserService(BaseService):
             )
 
         if db_updated_user:
-            await self.clear_user_cache(db_updated_user.telegram_id)
+            updated_dto = UserDto.from_model(db_updated_user)
+            await self._repopulate_user_cache(db_updated_user.telegram_id, updated_dto)
             logger.info(f"Updated user '{user.telegram_id}' successfully")
+            return updated_dto
         else:
             logger.warning(
                 f"Attempted to update user '{user.telegram_id}', "
@@ -254,6 +261,10 @@ class UserService(BaseService):
     #
 
     async def update_recent_activity(self, telegram_id: int) -> None:
+        throttle_key = build_key("throttle", "recent_activity", telegram_id)
+        if await self.redis_client.exists(throttle_key):
+            return
+        await self.redis_client.setex(throttle_key, TIME_5M, 1)
         await self._add_to_recent_activity(RecentActivityUsersKey(), telegram_id)
 
     async def get_recent_registered_users(self) -> list[UserDto]:
@@ -377,6 +388,13 @@ class UserService(BaseService):
         await self.redis_client.delete(user_cache_key)
         await self._clear_list_caches()
         logger.debug(f"User cache for '{telegram_id}' invalidated")
+
+    async def _repopulate_user_cache(self, telegram_id: int, user_dto: UserDto) -> None:
+        user_cache_key: str = build_key("cache", "get_user", telegram_id)
+        safe_result = prepare_for_cache(_USER_DTO_ADAPTER.dump_python(user_dto))
+        await self.redis_client.setex(user_cache_key, TIME_5M, json_utils.encode(safe_result))
+        await self._clear_list_caches()
+        logger.debug(f"User cache for '{telegram_id}' repopulated")
 
     async def _clear_list_caches(self) -> None:
         list_cache_keys_to_invalidate = [

@@ -7,11 +7,13 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 from aiogram.utils.formatting import Text
 from dishka import AsyncContainer
 from loguru import logger
+from redis.asyncio import Redis
 
 from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, get_channel_keyboard, get_user_keyboard
 from src.core.config import AppConfig
-from src.core.constants import CONTAINER_KEY, USER_KEY
+from src.core.constants import CONTAINER_KEY, TIME_5M, USER_KEY
 from src.core.enums import MiddlewareEventType
+from src.core.storage.key_builder import build_key
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import UserDto
 from src.services.notification import NotificationService
@@ -73,9 +75,8 @@ class ChannelMiddleware(EventTypedMiddleware):
             return await handler(event, data)
 
         try:
-            member = await bot.get_chat_member(
-                chat_id=chat_id,
-                user_id=user.telegram_id,
+            member = await self._get_chat_member_cached(
+                container, bot, chat_id, user.telegram_id,
             )
         except Exception as exception:
             traceback_str = traceback.format_exc()
@@ -148,3 +149,23 @@ class ChannelMiddleware(EventTypedMiddleware):
 
         if event.message is not None and isinstance(event.message, Message):
             await event.message.delete()
+
+    @staticmethod
+    async def _get_chat_member_cached(
+        container: AsyncContainer,
+        bot: Bot,
+        chat_id: Union[str, int],
+        user_id: int,
+    ) -> Any:
+        redis: Redis = await container.get(Redis)
+        cache_key = build_key("cache", "channel_member", chat_id, user_id)
+
+        cached_status: Optional[bytes] = await redis.get(cache_key)
+        if cached_status is not None:
+            status = cached_status.decode()
+            logger.debug(f"Channel member cache hit for user '{user_id}': {status}")
+            return type("CachedMember", (), {"status": ChatMemberStatus(status)})()
+
+        member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        await redis.setex(cache_key, TIME_5M, member.status.value)
+        return member
