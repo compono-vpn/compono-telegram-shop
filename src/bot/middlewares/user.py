@@ -10,6 +10,7 @@ from src.bot.keyboards import get_user_keyboard
 from src.core.config import AppConfig
 from src.core.constants import CONTAINER_KEY, IS_SUPER_DEV_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType, SystemNotificationType
+from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import UserDto
 from src.services.notification import NotificationService
@@ -49,6 +50,7 @@ class UserMiddleware(EventTypedMiddleware):
         user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
 
         if user is None:
+            NEW_USERS_TOTAL.inc()
             user = await user_service.create(aiogram_user)
             referrer = await referral_service.get_referrer_by_event(event, user.telegram_id)
 

@@ -24,6 +24,7 @@ dependencies = [
     "taskiq[orjson]~=0.12.1",
     "taskiq-redis~=1.2.0",
     "uvicorn>=0.38.0",
+    "prometheus-client>=0.22.0",
     "cryptography>=46.0.3",
     "sqlalchemy[mypy]>=2.0.0",
     "qrcode[pil]>=8.2",

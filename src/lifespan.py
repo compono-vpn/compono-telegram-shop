@@ -1,4 +1,3 @@
-import asyncio
 import traceback
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -14,6 +13,7 @@ from src.__version__ import __version__
 from src.api.endpoints import TelegramWebhookEndpoint
 from src.core.config.app import AppConfig
 from src.core.enums import SystemNotificationType
+from src.core.metrics import BOT_INFO
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.taskiq.tasks.updates import check_bot_update
 from src.services.command import CommandService
@@ -120,6 +120,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             ),
         )
 
+    BOT_INFO.labels(version=__version__).set(1)
     app.state.ready = True
 
     yield

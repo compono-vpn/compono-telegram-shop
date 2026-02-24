@@ -1,3 +1,4 @@
+import time
 import traceback
 
 from aiogram.utils.formatting import Text
@@ -8,6 +9,7 @@ from loguru import logger
 
 from src.core.constants import API_V1, PAYMENTS_WEBHOOK_PATH
 from src.core.enums import PaymentGatewayType
+from src.core.metrics import PAYMENT_WEBHOOK_ERRORS_TOTAL, PAYMENT_WEBHOOK_PROCESSING_TIME
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.taskiq.tasks.payments import handle_payment_transaction_task
 from src.services.notification import NotificationService
@@ -30,6 +32,7 @@ async def payments_webhook(
         logger.exception(f"Invalid gateway type received: '{gateway_type}'")
         return Response(status_code=status.HTTP_404_NOT_FOUND)
 
+    start = time.monotonic()
     try:
         gateway = await payment_gateway_service._get_gateway_instance(gateway_enum)
 
@@ -42,6 +45,7 @@ async def payments_webhook(
         return Response(status_code=status.HTTP_200_OK)
 
     except Exception as exception:
+        PAYMENT_WEBHOOK_ERRORS_TOTAL.labels(gateway_type=gateway_type).inc()
         logger.exception(f"Error processing webhook for '{gateway_type}': {exception}")
         traceback_str = traceback.format_exc()
         error_type_name = type(exception).__name__
@@ -58,4 +62,6 @@ async def payments_webhook(
             ),
         )
     finally:
+        duration = time.monotonic() - start
+        PAYMENT_WEBHOOK_PROCESSING_TIME.labels(gateway_type=gateway_type).observe(duration)
         return Response(status_code=status.HTTP_200_OK)

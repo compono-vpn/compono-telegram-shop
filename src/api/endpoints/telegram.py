@@ -1,5 +1,6 @@
 import asyncio
 import secrets
+import time
 from typing import Annotated, Any
 
 from aiogram import Bot, Dispatcher
@@ -8,6 +9,8 @@ from aiogram.types import Update
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import Body, FastAPI, Header, HTTPException, Response, status
 from loguru import logger
+
+from src.core.metrics import UPDATE_PROCESSING_TIME, UPDATES_TOTAL
 
 
 class TelegramWebhookEndpoint:
@@ -39,7 +42,12 @@ class TelegramWebhookEndpoint:
         return secrets.compare_digest(telegram_secret_token, self.secret_token)
 
     async def _feed_update(self, bot: Bot, update: Update) -> None:
+        update_type = update.event_type
+        UPDATES_TOTAL.labels(update_type=update_type).inc()
+        start = time.monotonic()
         result = await self.dispatcher.feed_update(bot=bot, update=update)
+        duration = time.monotonic() - start
+        UPDATE_PROCESSING_TIME.labels(update_type=update_type).observe(duration)
         if isinstance(result, TelegramMethod):
             await self.dispatcher.silent_call_request(bot=bot, result=result)
 

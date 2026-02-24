@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, Callable, ClassVar, Final, Optional
 
@@ -7,6 +8,7 @@ from aiogram.types import User as AiogramUser
 from loguru import logger
 
 from src.core.enums import MiddlewareEventType
+from src.core.metrics import MIDDLEWARE_PROCESSING_TIME
 
 DEFAULT_UPDATE_TYPES: Final[list[MiddlewareEventType]] = [
     MiddlewareEventType.MESSAGE,
@@ -23,7 +25,10 @@ class EventTypedMiddleware(BaseMiddleware, ABC):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        start = time.monotonic()
         result = await self.middleware_logic(handler, event, data)
+        duration = time.monotonic() - start
+        MIDDLEWARE_PROCESSING_TIME.labels(middleware=self.__class__.__name__).observe(duration)
         return result
 
     def setup_inner(self, router: Router) -> None:

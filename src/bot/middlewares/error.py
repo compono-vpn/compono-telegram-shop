@@ -16,6 +16,7 @@ from src.bot.keyboards import get_user_keyboard
 from src.core.constants import CONTAINER_KEY
 from src.core.enums import MiddlewareEventType
 from src.core.exceptions import MenuRenderingError
+from src.core.metrics import ERRORS_TOTAL
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import UserDto
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
@@ -49,8 +50,9 @@ class ErrorMiddleware(EventTypedMiddleware):
             return await handler(event, data)
 
         error = error_event.exception
-        traceback_str = traceback.format_exc()
         error_type_name = type(error).__name__
+        ERRORS_TOTAL.labels(error_type=error_type_name, source="bot").inc()
+        traceback_str = traceback.format_exc()
         error_message = Text(str(error)[:512])
 
         container: AsyncContainer = data[CONTAINER_KEY]
