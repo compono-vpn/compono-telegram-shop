@@ -66,7 +66,7 @@ class SubscriptionService(BaseService):
         parsed = urlparse(subscription_url)
         token = parsed.path.rstrip("/").split("/")[-1]
         netloc = public_domain or parsed.netloc
-        return f"{parsed.scheme}://{netloc}/ru/connect/{token}"
+        return f"{parsed.scheme}://{netloc}/connect/{token}"
 
     async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
         data = subscription.model_dump(exclude={"user"})
