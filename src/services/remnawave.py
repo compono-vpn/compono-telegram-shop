@@ -55,10 +55,6 @@ from src.infrastructure.database.models.dto import (
     UserDto,
 )
 from src.infrastructure.redis import RedisRepository
-from src.infrastructure.taskiq.tasks.notifications import (
-    send_subscription_expire_notification_task,
-    send_subscription_limited_notification_task,
-)
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
 from src.services.user import UserService
@@ -399,6 +395,10 @@ class RemnawaveService(BaseService):
     #
 
     async def handle_user_event(self, event: str, remna_user: RemnaUserDto) -> None:  # noqa: C901
+        from src.infrastructure.taskiq.tasks.notifications import (  # noqa: PLC0415
+            send_subscription_expire_notification_task,
+            send_subscription_limited_notification_task,
+        )
         from src.infrastructure.taskiq.tasks.subscriptions import (  # noqa: PLC0415
             delete_current_subscription_task,
             update_status_current_subscription_task,
