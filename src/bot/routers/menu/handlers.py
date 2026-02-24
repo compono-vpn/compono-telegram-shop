@@ -34,7 +34,7 @@ async def on_start_dialog(
     await dialog_manager.start(
         state=MainMenu.MAIN,
         mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.EDIT,
+        show_mode=ShowMode.DELETE_AND_SEND,
     )
 
 

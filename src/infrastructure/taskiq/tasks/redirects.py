@@ -23,7 +23,7 @@ async def redirect_to_main_menu_task(
     await bg_manager.start(
         state=MainMenu.MAIN,
         mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.EDIT,
+        show_mode=ShowMode.DELETE_AND_SEND,
     )
 
 
@@ -42,7 +42,7 @@ async def redirect_to_successed_trial_task(
     await bg_manager.start(
         state=Subscription.TRIAL,
         mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.EDIT,
+        show_mode=ShowMode.DELETE_AND_SEND,
     )
 
 
@@ -63,7 +63,7 @@ async def redirect_to_successed_payment_task(
         state=Subscription.SUCCESS,
         data={"purchase_type": purchase_type},
         mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.EDIT,
+        show_mode=ShowMode.DELETE_AND_SEND,
     )
 
 
@@ -82,5 +82,5 @@ async def redirect_to_failed_subscription_task(
     await bg_manager.start(
         state=Subscription.FAILED,
         mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.EDIT,
+        show_mode=ShowMode.DELETE_AND_SEND,
     )

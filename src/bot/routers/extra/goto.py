@@ -25,7 +25,7 @@ async def on_goto(callback: CallbackQuery, dialog_manager: DialogManager, user: 
         ).start(
             state=Subscription.MAIN,
             mode=StartMode.RESET_STACK,
-            show_mode=ShowMode.EDIT,
+            show_mode=ShowMode.DELETE_AND_SEND,
         )
         await callback.answer()
         return
@@ -52,7 +52,7 @@ async def on_goto(callback: CallbackQuery, dialog_manager: DialogManager, user: 
             state=DashboardUser.MAIN,
             data={"target_telegram_id": target_telegram_id},
             mode=StartMode.RESET_STACK,
-            show_mode=ShowMode.EDIT,
+            show_mode=ShowMode.DELETE_AND_SEND,
         )
         logger.debug(f"{log(user)} Redirected to user '{target_telegram_id}'")
         await callback.answer()
@@ -65,6 +65,6 @@ async def on_goto(callback: CallbackQuery, dialog_manager: DialogManager, user: 
     ).start(
         state=state,
         mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.EDIT,
+        show_mode=ShowMode.DELETE_AND_SEND,
     )
     await callback.answer()
