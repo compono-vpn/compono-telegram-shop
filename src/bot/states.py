@@ -18,6 +18,7 @@ class Notification(StatesGroup):
 class Subscription(StatesGroup):
     MAIN = State()
     PROMOCODE = State()
+    PROMOCODE_SUCCESS = State()
     PLANS = State()
     DURATION = State()
     PAYMENT_METHOD = State()

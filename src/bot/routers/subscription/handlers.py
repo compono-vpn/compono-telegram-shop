@@ -493,4 +493,6 @@ async def on_promocode_input(
                 ntf_type=SystemNotificationType.PROMOCODE_ACTIVATED,
             )
 
-        await dialog_manager.switch_to(state=Subscription.MAIN)
+        dialog_manager.dialog_data["promocode_reward_type"] = result.reward_type.value if result.reward_type else None
+        dialog_manager.dialog_data["promocode_code"] = code.upper()
+        await dialog_manager.switch_to(state=Subscription.PROMOCODE_SUCCESS)

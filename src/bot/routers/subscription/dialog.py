@@ -16,6 +16,7 @@ from .getters import (
     getter_connect,
     payment_method_getter,
     plans_getter,
+    promocode_success_getter,
     subscription_getter,
     success_payment_getter,
 )
@@ -241,9 +242,23 @@ promocode = Window(
     state=Subscription.PROMOCODE,
 )
 
+promocode_success = Window(
+    Banner(BannerName.SUBSCRIPTION),
+    I18nFormat("msg-subscription-promocode-success"),
+    Row(
+        *connect_buttons,
+        when=F["has_subscription"],
+    ),
+    *back_main_menu_button,
+    IgnoreUpdate(),
+    state=Subscription.PROMOCODE_SUCCESS,
+    getter=promocode_success_getter,
+)
+
 router = Dialog(
     subscription,
     promocode,
+    promocode_success,
     plans,
     duration,
     payment_method,

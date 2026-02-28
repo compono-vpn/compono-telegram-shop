@@ -25,10 +25,15 @@ class ActivationResult:
     success: bool
     notification_key: str
     notification_kwargs: dict = None
+    reward_type: Optional[PromocodeRewardType] = None
 
     def __post_init__(self) -> None:
         if self.notification_kwargs is None:
             self.notification_kwargs = {}
+
+    @property
+    def has_subscription(self) -> bool:
+        return self.reward_type in (PromocodeRewardType.SUBSCRIPTION, PromocodeRewardType.DURATION)
 
 
 class PromocodeService(BaseService):
@@ -219,12 +224,18 @@ class PromocodeService(BaseService):
             case PromocodeRewardType.PERSONAL_DISCOUNT:
                 user.personal_discount = promocode.reward or 0
                 await self._update_user(user)
-                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+                return ActivationResult(
+                    True, "ntf-promocode-activated", {"code": promocode.code},
+                    reward_type=PromocodeRewardType.PERSONAL_DISCOUNT,
+                )
 
             case PromocodeRewardType.PURCHASE_DISCOUNT:
                 user.purchase_discount = promocode.reward or 0
                 await self._update_user(user)
-                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+                return ActivationResult(
+                    True, "ntf-promocode-activated", {"code": promocode.code},
+                    reward_type=PromocodeRewardType.PURCHASE_DISCOUNT,
+                )
 
             case PromocodeRewardType.DURATION:
                 subscription = await self.subscription_service.get_current(user.telegram_id)
@@ -241,7 +252,10 @@ class PromocodeService(BaseService):
                     subscription=subscription,
                 )
                 await self.subscription_service.update(subscription)
-                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+                return ActivationResult(
+                    True, "ntf-promocode-activated", {"code": promocode.code},
+                    reward_type=PromocodeRewardType.DURATION,
+                )
 
             case PromocodeRewardType.SUBSCRIPTION:
                 if not promocode.plan:
@@ -266,7 +280,10 @@ class PromocodeService(BaseService):
                     plan=promocode.plan,
                 )
                 await self.subscription_service.create(user, new_subscription)
-                return ActivationResult(True, "ntf-promocode-activated", {"code": promocode.code})
+                return ActivationResult(
+                    True, "ntf-promocode-activated", {"code": promocode.code},
+                    reward_type=PromocodeRewardType.SUBSCRIPTION,
+                )
 
             case _:
                 return ActivationResult(False, "ntf-promocode-type-not-supported")

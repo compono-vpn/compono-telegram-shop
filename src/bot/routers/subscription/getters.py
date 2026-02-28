@@ -19,6 +19,7 @@ from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.pricing import PricingService
 from src.services.settings import SettingsService
+from src.core.enums import PromocodeRewardType
 from src.services.subscription import SubscriptionService
 
 
@@ -204,6 +205,36 @@ async def confirm_getter(
         "only_single_gateway": len(gateways) == 1,
         "only_single_duration": only_single_duration,
         "is_free": is_free,
+    }
+
+
+@inject
+async def promocode_success_getter(
+    dialog_manager: DialogManager,
+    config: AppConfig,
+    user: UserDto,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    reward_type_value = dialog_manager.dialog_data.get("promocode_reward_type")
+    reward_type = PromocodeRewardType(reward_type_value) if reward_type_value else None
+    has_subscription = reward_type in (PromocodeRewardType.SUBSCRIPTION, PromocodeRewardType.DURATION)
+    code = dialog_manager.dialog_data.get("promocode_code", "")
+
+    url = ""
+    connectable = False
+
+    if has_subscription and user.current_subscription and user.current_subscription.url:
+        url = SubscriptionService.build_connect_url(
+            user.current_subscription.url, config.remnawave.sub_public_domain
+        )
+        connectable = True
+
+    return {
+        "code": code,
+        "has_subscription": int(has_subscription),
+        "is_app": False,
+        "url": url,
+        "connectable": connectable,
     }
 
 
