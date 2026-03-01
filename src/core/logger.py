@@ -22,8 +22,16 @@ LOG_FORMAT: Final[str] = (
 )
 
 
+NOISY_PATHS: Final[tuple[str, ...]] = ("/health", "/metrics")
+
+
 class InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
+        if record.name == "uvicorn.access":
+            msg = record.getMessage()
+            if any(path in msg for path in NOISY_PATHS):
+                return
+
         # Get corresponding Loguru level if it exists.
         try:
             level: str | int = logger.level(record.levelname).name
