@@ -87,7 +87,7 @@ async def on_get_trial(
         raise ValueError("Trial plan not exist")
 
     trial = PlanSnapshotDto.from_plan(plan, plan.durations[0].days)
-    await trial_subscription_task.kiq(user, trial)
+    await trial_subscription_task.kiq(user, trial, False)
 
 
 @inject

@@ -67,7 +67,7 @@ async def auto_assign_trial_task(
 async def trial_subscription_task(
     user: UserDto,
     plan: PlanSnapshotDto,
-    skip_redirect: bool = False,
+    skip_redirect: bool,
     config: FromDishka[AppConfig],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
