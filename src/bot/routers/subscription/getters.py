@@ -90,6 +90,7 @@ async def duration_getter(
                 "discount_percent": price.discount_percent,
                 "original_amount": price.original_amount,
                 "currency": currency.symbol,
+                "has_discount": int(price.discount_percent > 0),
             }
         )
 
@@ -143,6 +144,7 @@ async def payment_method_getter(
                 "gateway_type": gateway.type,
                 "price": price.final_amount,
                 "currency": gateway.currency.symbol,
+                "has_discount": int(price.discount_percent > 0),
             }
         )
 
