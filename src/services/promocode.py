@@ -104,14 +104,19 @@ class PromocodeService(BaseService):
         return PromocodeDto.from_model_list(db_promocodes)
 
     async def update(self, promocode: PromocodeDto) -> Optional[PromocodeDto]:
-        changed = promocode.changed_data.copy()
-        if "plan" in changed and promocode.plan:
-            changed["plan"] = promocode.plan.model_dump(mode="json")
+        data = promocode.prepare_init_data()
+        data.pop("id", None)
+        data.pop("created_at", None)
+        data.pop("updated_at", None)
+        data.pop("activations", None)
+
+        if promocode.plan:
+            data["plan"] = promocode.plan.model_dump(mode="json")
 
         async with self.uow:
             db_updated_promocode = await self.uow.repository.promocodes.update(
                 promocode_id=promocode.id,  # type: ignore[arg-type]
-                **changed,
+                **data,
             )
 
         if db_updated_promocode:

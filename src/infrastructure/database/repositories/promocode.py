@@ -26,7 +26,11 @@ class PromocodeRepository(BaseRepository):
         return await self._update(Promocode, Promocode.id == promocode_id, **data)
 
     async def delete(self, promocode_id: int) -> bool:
-        return bool(await self._delete(Promocode, Promocode.id == promocode_id))
+        promocode = await self._get_one(Promocode, Promocode.id == promocode_id)
+        if not promocode:
+            return False
+        await self.delete_instance(promocode)
+        return True
 
     async def filter_by_type(self, promocode_type: PromocodeRewardType) -> list[Promocode]:
         return await self._get_many(Promocode, Promocode.reward_type == promocode_type)
