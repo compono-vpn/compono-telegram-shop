@@ -110,7 +110,9 @@ async def duration_getter(
 @inject
 async def payment_method_getter(
     dialog_manager: DialogManager,
+    user: UserDto,
     payment_gateway_service: FromDishka[PaymentGatewayService],
+    pricing_service: FromDishka[PricingService],
     i18n: FromDishka[TranslatorRunner],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -130,10 +132,16 @@ async def payment_method_getter(
 
     payment_methods = []
     for gateway in gateways:
+        price = pricing_service.calculate(
+            user,
+            duration.get_price(gateway.currency),
+            gateway.currency,
+            duration_days=duration.days,
+        )
         payment_methods.append(
             {
                 "gateway_type": gateway.type,
-                "price": duration.get_price(gateway.currency),
+                "price": price.final_amount,
                 "currency": gateway.currency.symbol,
             }
         )
