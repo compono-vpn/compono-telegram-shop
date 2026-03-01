@@ -231,10 +231,31 @@ async def purchase_subscription_task(
             subscription.status = SubscriptionStatus.DISABLED
             await subscription_service.update(subscription)
 
+            # Stack remaining days on top of the new plan duration
+            remaining = subscription.expire_at - datetime_now()
+            remaining_days = max(remaining.total_seconds() / 86400, 0)
+            total_days = plan.duration + remaining_days
+            new_expire = datetime_now() + timedelta(days=total_days)
+
+            # Build a temporary subscription to pass the stacked expiry to remnawave
+            temp_subscription = SubscriptionDto(
+                user_remna_id=subscription.user_remna_id,
+                status=SubscriptionStatus.ACTIVE,
+                traffic_limit=plan.traffic_limit,
+                device_limit=plan.device_limit,
+                traffic_limit_strategy=plan.traffic_limit_strategy,
+                tag=plan.tag,
+                internal_squads=plan.internal_squads,
+                external_squad=plan.external_squad,
+                expire_at=new_expire,
+                url=subscription.url,
+                plan=plan,
+            )
+
             updated_user = await remnawave_service.updated_user(
                 user=user,
                 uuid=subscription.user_remna_id,
-                plan=plan,
+                subscription=temp_subscription,
                 reset_traffic=True,
             )
             new_subscription = SubscriptionDto(
