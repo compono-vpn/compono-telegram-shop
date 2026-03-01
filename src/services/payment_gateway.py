@@ -49,6 +49,7 @@ from src.services.subscription import SubscriptionService
 
 from .base import BaseService
 from .transaction import TransactionService
+from .user import UserService
 
 
 class PaymentGatewayService(BaseService):
@@ -57,6 +58,7 @@ class PaymentGatewayService(BaseService):
     subscription_service: SubscriptionService
     payment_gateway_factory: PaymentGatewayFactory
     referral_service: ReferralService
+    user_service: UserService
 
     def __init__(
         self,
@@ -72,6 +74,7 @@ class PaymentGatewayService(BaseService):
         payment_gateway_factory: PaymentGatewayFactory,
         referral_service: ReferralService,
         notification_service: NotificationService,
+        user_service: UserService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.uow = uow
@@ -80,6 +83,7 @@ class PaymentGatewayService(BaseService):
         self.payment_gateway_factory = payment_gateway_factory
         self.referral_service = referral_service
         self.notification_service = notification_service
+        self.user_service = user_service
 
     async def create_default(self) -> None:
         for gateway_type in PaymentGatewayType:
@@ -334,6 +338,17 @@ class PaymentGatewayService(BaseService):
                 ),
             )
             return
+
+        # Clear one-time purchase discount after successful payment
+        if transaction.user.purchase_discount and transaction.user.purchase_discount > 0:
+            user = await self.user_service.get(transaction.user.telegram_id)
+            if user:
+                user.purchase_discount = 0
+                await self.user_service.update(user)
+                logger.info(
+                    f"Cleared purchase_discount for user '{transaction.user.telegram_id}' "
+                    f"after successful payment"
+                )
 
         i18n_keys = {
             PurchaseType.NEW: "ntf-event-subscription-new",
