@@ -45,6 +45,7 @@ class User(BaseSql, TimestampMixin):
 
     personal_discount: Mapped[int] = mapped_column(Integer, nullable=False)
     purchase_discount: Mapped[int] = mapped_column(Integer, nullable=False)
+    purchase_discount_max_days: Mapped[int] = mapped_column(Integer, nullable=False)
     points: Mapped[int] = mapped_column(Integer, nullable=False)
 
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)

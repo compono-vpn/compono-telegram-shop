@@ -35,6 +35,7 @@ async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> d
         "availability_type": promocode.availability,
         "max_activations": i18n_format_limit(promocode.max_activations),
         "lifetime": i18n_format_days(promocode.lifetime),
+        "purchase_discount_max_days": i18n_format_limit(promocode.purchase_discount_max_days or -1),
     }
 
     if promocode.plan:

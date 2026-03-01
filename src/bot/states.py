@@ -60,6 +60,7 @@ class DashboardPromocodes(StatesGroup):
     ALLOWED = State()
     PLAN_SELECT = State()
     PLAN_DURATION = State()
+    PURCHASE_DISCOUNT_MAX_DAYS = State()
 
 
 class DashboardAccess(StatesGroup):

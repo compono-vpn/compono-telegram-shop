@@ -1,4 +1,5 @@
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from typing import Optional
 
 from loguru import logger
 
@@ -9,7 +10,13 @@ from .base import BaseService
 
 
 class PricingService(BaseService):
-    def calculate(self, user: UserDto, price: Decimal, currency: Currency) -> PriceDetailsDto:
+    def calculate(
+        self,
+        user: UserDto,
+        price: Decimal,
+        currency: Currency,
+        duration_days: Optional[int] = None,
+    ) -> PriceDetailsDto:
         logger.debug(
             f"Calculating price for amount '{price}' and currency "
             f"'{currency}' for user '{user.telegram_id}'"
@@ -22,7 +29,20 @@ class PricingService(BaseService):
                 final_amount=Decimal(0),
             )
 
-        discount_percent = min(user.purchase_discount or user.personal_discount or 0, 100)
+        purchase_discount = user.purchase_discount or 0
+        if (
+            purchase_discount > 0
+            and user.purchase_discount_max_days > 0
+            and duration_days is not None
+            and duration_days > user.purchase_discount_max_days
+        ):
+            logger.debug(
+                f"Duration {duration_days} exceeds purchase_discount_max_days "
+                f"{user.purchase_discount_max_days}, skipping purchase discount"
+            )
+            purchase_discount = 0
+
+        discount_percent = min(purchase_discount or user.personal_discount or 0, 100)
 
         if discount_percent >= 100:
             logger.info(f"100% discount applied, price is free for user '{user.telegram_id}'")

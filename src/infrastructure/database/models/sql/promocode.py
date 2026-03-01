@@ -48,6 +48,8 @@ class Promocode(BaseSql, TimestampMixin):
     reward: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     plan: Mapped[PlanSnapshotDto] = mapped_column(JSON, nullable=True)
 
+    purchase_discount_max_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     lifetime: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_activations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     allowed_telegram_ids: Mapped[Optional[list[int]]] = mapped_column(

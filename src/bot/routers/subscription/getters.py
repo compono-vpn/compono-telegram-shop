@@ -81,7 +81,7 @@ async def duration_getter(
 
     for duration in plan.durations:
         key, kw = i18n_format_days(duration.days)
-        price = pricing_service.calculate(user, duration.get_price(currency), currency)
+        price = pricing_service.calculate(user, duration.get_price(currency), currency, duration_days=duration.days)
         durations.append(
             {
                 "days": duration.days,

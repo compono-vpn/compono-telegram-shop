@@ -73,7 +73,7 @@ async def _create_payment_and_get_data(
 
     transaction_plan = PlanSnapshotDto.from_plan(plan, duration.days)
     price = duration.get_price(payment_gateway.currency)
-    pricing = pricing_service.calculate(user, price, payment_gateway.currency)
+    pricing = pricing_service.calculate(user, price, payment_gateway.currency, duration_days=duration_days)
 
     try:
         result = await payment_gateway_service.create_payment(
@@ -347,6 +347,7 @@ async def on_duration_select(
         user=user,
         price=plan.get_duration(selected_duration).get_price(currency),  # type: ignore[union-attr]
         currency=currency,
+        duration_days=selected_duration,
     )
     dialog_manager.dialog_data["is_free"] = price.is_free
 

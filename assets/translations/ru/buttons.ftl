@@ -440,4 +440,5 @@ btn-promocode-lifetime = ⌛ Время жизни
 btn-promocode-allowed = 👥 Разрешенные пользователи
 btn-promocode-max-activations = 🔢 Лимит активаций
 btn-promocode-plan = 📦 План
+btn-promocode-max-days = 📅 Макс. дней
 btn-promocode-confirm = ✅ Подтвердить

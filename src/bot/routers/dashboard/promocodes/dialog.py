@@ -23,6 +23,7 @@ from .handlers import (
     on_max_activations_input,
     on_plan_duration_select,
     on_plan_select,
+    on_purchase_discount_max_days_input,
     on_reward_input,
     on_search_input,
     on_type_select,
@@ -114,6 +115,12 @@ configurator = Window(
             text=I18nFormat("btn-promocode-max-activations"),
             id="max_activations",
             state=DashboardPromocodes.MAX_ACTIVATIONS,
+        ),
+        SwitchTo(
+            text=I18nFormat("btn-promocode-max-days"),
+            id="max_days",
+            state=DashboardPromocodes.PURCHASE_DISCOUNT_MAX_DAYS,
+            when=F["promocode_type"] == PromocodeRewardType.PURCHASE_DISCOUNT,
         ),
     ),
     Row(
@@ -316,6 +323,21 @@ allowed_input = Window(
     state=DashboardPromocodes.ALLOWED,
 )
 
+purchase_discount_max_days_input = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-promocode-max-days-input"),
+    MessageInput(func=on_purchase_discount_max_days_input),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=DashboardPromocodes.CONFIGURATOR,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=DashboardPromocodes.PURCHASE_DISCOUNT_MAX_DAYS,
+)
+
 plan_select = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-promocode-plan-select"),
@@ -379,6 +401,7 @@ router = Dialog(
     reward_input,
     lifetime_input,
     max_activations_input,
+    purchase_discount_max_days_input,
     promocode_list,
     search_input,
     allowed_input,

@@ -344,6 +344,7 @@ class PaymentGatewayService(BaseService):
             user = await self.user_service.get(transaction.user.telegram_id)
             if user:
                 user.purchase_discount = 0
+                user.purchase_discount_max_days = 0
                 await self.user_service.update(user)
                 logger.info(
                     f"Cleared purchase_discount for user '{transaction.user.telegram_id}' "

@@ -29,6 +29,8 @@ class PromocodeDto(TrackableDto):
     reward: Optional[int] = 1
     plan: Optional["PlanSnapshotDto"] = None
 
+    purchase_discount_max_days: Optional[int] = None
+
     lifetime: int = -1
     max_activations: int = -1
     allowed_telegram_ids: Optional[list[int]] = None

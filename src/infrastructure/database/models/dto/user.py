@@ -30,6 +30,7 @@ class BaseUserDto(TrackableDto):
 
     personal_discount: int = 0
     purchase_discount: int = 0
+    purchase_discount_max_days: int = 0
     points: int = 0
 
     is_blocked: bool = False

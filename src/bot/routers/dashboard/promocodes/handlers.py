@@ -352,6 +352,37 @@ async def on_max_activations_input(
 
 
 @inject
+async def on_purchase_discount_max_days_input(
+    message: Message,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    dialog_manager.show_mode = ShowMode.EDIT
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+
+    number = parse_int(message.text)
+
+    if number is None or (number < -1 or number == 0):
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-promocode-invalid-max-days"),
+        )
+        return
+
+    adapter = DialogDataAdapter(dialog_manager)
+    promocode = adapter.load(PromocodeDto)
+
+    if not promocode:
+        raise ValueError("PromocodeDto not found in dialog data")
+
+    promocode.purchase_discount_max_days = number if number > 0 else None
+    adapter.save(promocode)
+    logger.info(f"{log(user)} Set promocode purchase_discount_max_days to '{number}'")
+    await dialog_manager.switch_to(state=DashboardPromocodes.CONFIGURATOR)
+
+
+@inject
 async def on_allowed_input(
     message: Message,
     widget: MessageInput,

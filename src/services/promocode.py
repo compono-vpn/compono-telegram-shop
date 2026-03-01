@@ -231,6 +231,7 @@ class PromocodeService(BaseService):
 
             case PromocodeRewardType.PURCHASE_DISCOUNT:
                 user.purchase_discount = promocode.reward or 0
+                user.purchase_discount_max_days = promocode.purchase_discount_max_days or 0
                 await self._update_user(user)
                 return ActivationResult(
                     True, "ntf-promocode-activated", {"code": promocode.code},
