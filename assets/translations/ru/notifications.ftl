@@ -444,6 +444,11 @@ ntf-broadcast-deleted-success =
     • <b>Не удалось удалить</b>: { $failed_count }
     </blockquote>
 
+ntf-trial-auto-assigned =
+    <b>✅ Пробная подписка успешно получена!</b>
+
+    Чтобы начать пользоваться нашим сервисом, нажмите кнопку ниже и следуйте инструкциям!
+
 ntf-trial-unavailable = <i>❌ Пробная подписка временно недоступна.</i>
 
 ntf-importer-not-file = <i>⚠️ Отправьте базу данных в виде файла.</i>

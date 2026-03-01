@@ -7,7 +7,7 @@ from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
 from remnapy.exceptions import ConflictError
 
-from src.bot.keyboards import get_user_keyboard
+from src.bot.keyboards import get_connect_keyboard, get_user_keyboard
 from src.core.enums import (
     PurchaseType,
     SubscriptionStatus,
@@ -57,7 +57,7 @@ async def auto_assign_trial_task(
         return
 
     plan = PlanSnapshotDto.from_plan(trial_plan, trial_plan.durations[0].days)
-    await trial_subscription_task.kiq(user, plan)
+    await trial_subscription_task.kiq(user, plan, True)
     logger.info(f"Auto-assigned trial for new user '{user.telegram_id}'")
 
 
@@ -66,6 +66,7 @@ async def auto_assign_trial_task(
 async def trial_subscription_task(
     user: UserDto,
     plan: PlanSnapshotDto,
+    skip_redirect: bool = False,
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
@@ -110,7 +111,18 @@ async def trial_subscription_task(
         )
         connect_url = SubscriptionService.build_connect_url(created_user.subscription_url)
         await send_not_connected_reminder_task.kiq(user.telegram_id, connect_url)
-        await redirect_to_successed_trial_task.kiq(user)
+
+        if skip_redirect:
+            await notification_service.notify_user(
+                user=user,
+                payload=MessagePayload.not_deleted(
+                    i18n_key="ntf-trial-auto-assigned",
+                    reply_markup=get_connect_keyboard(connect_url),
+                ),
+            )
+        else:
+            await redirect_to_successed_trial_task.kiq(user)
+
         logger.info(f"Trial subscription task completed successfully for user '{user.telegram_id}'")
 
     except ConflictError:
@@ -144,7 +156,8 @@ async def trial_subscription_task(
             ),
         )
 
-        await redirect_to_failed_subscription_task.kiq(user)
+        if not skip_redirect:
+            await redirect_to_failed_subscription_task.kiq(user)
 
 
 @broker.task(retry_on_error=True)
