@@ -80,18 +80,18 @@ async def on_delete_command(
 
     args = message.text.split(maxsplit=1) if message.text else []
     if len(args) < 2 or not args[1].strip().lstrip("-").isdigit():
-        await message.reply("Usage: /delete <telegram_id>")
+        await message.answer("Usage: /delete <telegram_id>")
         return
 
     target_telegram_id = int(args[1].strip())
 
     if target_telegram_id == user.telegram_id:
-        await message.reply("Cannot delete yourself")
+        await message.answer("Cannot delete yourself")
         return
 
     target_user = await user_service.get(telegram_id=target_telegram_id)
     if not target_user:
-        await message.reply(f"User {target_telegram_id} not found")
+        await message.answer(f"User {target_telegram_id} not found")
         return
 
     # Delete from Remnawave (VPN panel)
@@ -108,5 +108,5 @@ async def on_delete_command(
     # Delete from bot DB (subscriptions cascade-delete via FK)
     await user_service.delete(target_user)
 
-    await message.reply(f"Deleted user {target_telegram_id} ({target_user.name})")
+    await message.answer(f"Deleted user {target_telegram_id} ({target_user.name})")
     logger.info(f"{log(user)} Deleted user '{target_telegram_id}' via /delete command")
