@@ -8,6 +8,7 @@ from loguru import logger
 from remnapy.exceptions import ConflictError
 
 from src.bot.keyboards import get_connect_keyboard, get_user_keyboard
+from src.core.config import AppConfig
 from src.core.enums import (
     PurchaseType,
     SubscriptionStatus,
@@ -67,6 +68,7 @@ async def trial_subscription_task(
     user: UserDto,
     plan: PlanSnapshotDto,
     skip_redirect: bool = False,
+    config: FromDishka[AppConfig],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
@@ -109,7 +111,9 @@ async def trial_subscription_task(
                 reply_markup=get_user_keyboard(user.telegram_id),
             ),
         )
-        connect_url = SubscriptionService.build_connect_url(created_user.subscription_url)
+        connect_url = SubscriptionService.build_connect_url(
+            created_user.subscription_url, config.remnawave.sub_public_domain
+        )
         await send_not_connected_reminder_task.kiq(user.telegram_id, connect_url)
 
         if skip_redirect:
@@ -165,6 +169,7 @@ async def trial_subscription_task(
 async def purchase_subscription_task(
     transaction: TransactionDto,
     subscription: Optional[SubscriptionDto],
+    config: FromDishka[AppConfig],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     transaction_service: FromDishka[TransactionService],
@@ -256,7 +261,7 @@ async def purchase_subscription_task(
         if purchase_type == PurchaseType.NEW:
             sub = await subscription_service.get_current(user.telegram_id)
             if sub:
-                connect_url = SubscriptionService.build_connect_url(sub.url)
+                connect_url = SubscriptionService.build_connect_url(sub.url, config.remnawave.sub_public_domain)
                 await send_not_connected_reminder_task.kiq(user.telegram_id, connect_url)
 
         await redirect_to_successed_payment_task.kiq(user, purchase_type)
