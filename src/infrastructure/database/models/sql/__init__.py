@@ -8,6 +8,7 @@ from .settings import Settings
 from .subscription import Subscription
 from .transaction import Transaction
 from .user import User
+from .webhook_log import WebhookLog
 
 __all__ = [
     "BaseSql",
@@ -25,4 +26,5 @@ __all__ = [
     "Subscription",
     "Transaction",
     "User",
+    "WebhookLog",
 ]
