@@ -279,7 +279,7 @@ async def purchase_subscription_task(
                 f"Unknown purchase type '{purchase_type}' for user '{user.telegram_id}'"
             )
 
-        if purchase_type == PurchaseType.NEW:
+        if purchase_type == PurchaseType.NEW and not has_trial:
             sub = await subscription_service.get_current(user.telegram_id)
             if sub:
                 connect_url = SubscriptionService.build_connect_url(sub.url, config.remnawave.sub_public_domain)

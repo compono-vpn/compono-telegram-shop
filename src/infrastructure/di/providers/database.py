@@ -27,6 +27,7 @@ class DatabaseProvider(Provider):
             max_overflow=config.database.max_overflow,
             pool_timeout=config.database.pool_timeout,
             pool_recycle=config.database.pool_recycle,
+            pool_pre_ping=True,
         )
         yield engine
         logger.debug("Disposing AsyncEngine")
