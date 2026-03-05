@@ -8,7 +8,7 @@ from loguru import logger
 from redis.asyncio import Redis
 
 from src.core.config import AppConfig
-from src.core.enums import PromocodeAvailability, PromocodeRewardType
+from src.core.enums import PromocodeAvailability, PromocodeRewardType, SubscriptionStatus
 from src.core.utils.time import datetime_now
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import PromocodeDto, SubscriptionDto, UserDto
@@ -268,24 +268,71 @@ class PromocodeService(BaseService):
                     return ActivationResult(False, "ntf-promocode-type-not-supported")
 
                 subscription = await self.subscription_service.get_current(user.telegram_id)
-                if subscription:
+                if subscription and not subscription.is_trial:
                     return ActivationResult(False, "ntf-promocode-already-has-subscription")
 
-                remna_user = await self.remnawave_service.create_user(user=user, plan=promocode.plan)
-                new_subscription = SubscriptionDto(
-                    user_remna_id=remna_user.uuid,
-                    status=remna_user.status,
-                    traffic_limit=promocode.plan.traffic_limit,
-                    device_limit=promocode.plan.device_limit,
-                    traffic_limit_strategy=promocode.plan.traffic_limit_strategy,
-                    tag=promocode.plan.tag,
-                    internal_squads=promocode.plan.internal_squads,
-                    external_squad=promocode.plan.external_squad,
-                    expire_at=remna_user.expire_at,
-                    url=remna_user.subscription_url,
-                    plan=promocode.plan,
-                )
-                await self.subscription_service.create(user, new_subscription)
+                if subscription and subscription.is_trial:
+                    # Replace trial: disable old subscription and update remnawave
+                    subscription.status = SubscriptionStatus.DISABLED
+                    await self.subscription_service.update(subscription)
+
+                    remaining = subscription.expire_at - datetime_now()
+                    remaining_days = max(remaining.total_seconds() / 86400, 0)
+                    total_days = promocode.plan.duration + remaining_days
+                    new_expire = datetime_now() + timedelta(days=total_days)
+
+                    temp_subscription = SubscriptionDto(
+                        user_remna_id=subscription.user_remna_id,
+                        status=SubscriptionStatus.ACTIVE,
+                        traffic_limit=promocode.plan.traffic_limit,
+                        device_limit=promocode.plan.device_limit,
+                        traffic_limit_strategy=promocode.plan.traffic_limit_strategy,
+                        tag=promocode.plan.tag,
+                        internal_squads=promocode.plan.internal_squads,
+                        external_squad=promocode.plan.external_squad,
+                        expire_at=new_expire,
+                        url=subscription.url,
+                        plan=promocode.plan,
+                    )
+
+                    updated_user = await self.remnawave_service.updated_user(
+                        user=user,
+                        uuid=subscription.user_remna_id,
+                        subscription=temp_subscription,
+                        reset_traffic=True,
+                    )
+                    new_subscription = SubscriptionDto(
+                        user_remna_id=updated_user.uuid,
+                        status=updated_user.status,
+                        traffic_limit=promocode.plan.traffic_limit,
+                        device_limit=promocode.plan.device_limit,
+                        traffic_limit_strategy=promocode.plan.traffic_limit_strategy,
+                        tag=promocode.plan.tag,
+                        internal_squads=promocode.plan.internal_squads,
+                        external_squad=promocode.plan.external_squad,
+                        expire_at=updated_user.expire_at,
+                        url=updated_user.subscription_url,
+                        plan=promocode.plan,
+                    )
+                    await self.subscription_service.create(user, new_subscription)
+                else:
+                    # No existing subscription — create new user in remnawave
+                    remna_user = await self.remnawave_service.create_user(user=user, plan=promocode.plan)
+                    new_subscription = SubscriptionDto(
+                        user_remna_id=remna_user.uuid,
+                        status=remna_user.status,
+                        traffic_limit=promocode.plan.traffic_limit,
+                        device_limit=promocode.plan.device_limit,
+                        traffic_limit_strategy=promocode.plan.traffic_limit_strategy,
+                        tag=promocode.plan.tag,
+                        internal_squads=promocode.plan.internal_squads,
+                        external_squad=promocode.plan.external_squad,
+                        expire_at=remna_user.expire_at,
+                        url=remna_user.subscription_url,
+                        plan=promocode.plan,
+                    )
+                    await self.subscription_service.create(user, new_subscription)
+
                 return ActivationResult(
                     True, "ntf-promocode-activated", {"code": promocode.code},
                     reward_type=PromocodeRewardType.SUBSCRIPTION,
