@@ -93,20 +93,27 @@ async def _handle_web_trial_link(
         logger.error(f"{log(user)} Remnawave user '{username}' not found")
         return
 
-    # Update Remnawave user with telegram_id
+    # Update Remnawave user with telegram_id and extend by 1 bonus day
+    from datetime import timedelta  # noqa: PLC0415
     from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
+    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
+    from src.core.enums import PlanType  # noqa: PLC0415
+    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
+    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
+
+    bonus_days = 1
+    new_expire = remna_user.expire_at + timedelta(days=bonus_days)
+
     await remnawave_service.remnawave.users.update_user(
         UpdateUserRequestDto(
             uuid=remna_user.uuid,
             telegram_id=user.telegram_id,
+            expire_at=new_expire,
         )
     )
 
     # Create local subscription linked to this bot user
-    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
-    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
-    from src.core.enums import PlanType  # noqa: PLC0415
-    from src.core.utils.formatters import format_bytes_to_gb, format_device_count  # noqa: PLC0415
+    total_days = order.plan_duration_days + bonus_days
 
     plan = PlanSnapshotDto(
         id=-1,
@@ -115,7 +122,7 @@ async def _handle_web_trial_link(
         type=PlanType.UNLIMITED,
         traffic_limit=-1,
         device_limit=format_device_count(remna_user.hwid_device_limit),
-        duration=order.plan_duration_days,
+        duration=total_days,
         traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
         internal_squads=[s.uuid for s in remna_user.active_internal_squads],
         external_squad=remna_user.external_squad_uuid,
@@ -133,13 +140,13 @@ async def _handle_web_trial_link(
         tag=remna_user.tag,
         internal_squads=[s.uuid for s in remna_user.active_internal_squads],
         external_squad=remna_user.external_squad_uuid,
-        expire_at=remna_user.expire_at,
+        expire_at=new_expire,
         url=sub_url,
         plan=plan,
     )
 
     await subscription_service.create(user, subscription)
-    logger.info(f"{log(user)} Linked web trial subscription '{username}'")
+    logger.info(f"{log(user)} Linked web trial subscription '{username}' with +{bonus_days}d bonus")
 
 
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)
