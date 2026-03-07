@@ -15,6 +15,7 @@ from src.core.enums import MediaType
 from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
+from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import PlanSnapshotDto, UserDto
 from src.infrastructure.taskiq.tasks.subscriptions import trial_subscription_task
 from src.services.notification import NotificationService
@@ -22,6 +23,7 @@ from src.services.plan import PlanService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
+from src.services.subscription import SubscriptionService
 
 router = Router(name=__name__)
 
@@ -44,8 +46,100 @@ async def on_start_command(
     message: Message,
     user: UserDto,
     dialog_manager: DialogManager,
+    uow: FromDishka[UnitOfWork],
+    remnawave_service: FromDishka[RemnawaveService],
+    subscription_service: FromDishka[SubscriptionService],
+    notification_service: FromDishka[NotificationService],
 ) -> None:
+    # Handle web trial deep link: /start web_<short_id>
+    if message.text and len(message.text.split()) > 1:
+        param = message.text.split()[1]
+        if param.startswith("web_"):
+            await _handle_web_trial_link(
+                message, user, param, uow, remnawave_service,
+                subscription_service, notification_service,
+            )
+
     await on_start_dialog(user, dialog_manager)
+
+
+async def _handle_web_trial_link(
+    message: Message,
+    user: UserDto,
+    param: str,
+    uow: UnitOfWork,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+    notification_service: NotificationService,
+) -> None:
+    short_id = param[len("web_"):]
+    username = f"web_{short_id}"
+
+    async with uow:
+        order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
+
+    if not order or order.status != "completed" or not order.subscription_url:
+        logger.warning(f"{log(user)} Web trial link '{param}' — order not found or not completed")
+        return
+
+    if user.has_subscription:
+        logger.info(f"{log(user)} Already has subscription, skipping web trial link")
+        return
+
+    # Find the Remnawave user created for this web order
+    try:
+        remna_user = await remnawave_service.remnawave.users.get_user_by_username(username)
+    except Exception:
+        logger.error(f"{log(user)} Remnawave user '{username}' not found")
+        return
+
+    # Update Remnawave user with telegram_id
+    from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
+    await remnawave_service.remnawave.users.update_user(
+        UpdateUserRequestDto(
+            uuid=remna_user.uuid,
+            telegram_id=user.telegram_id,
+        )
+    )
+
+    # Create local subscription linked to this bot user
+    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
+    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
+    from src.core.enums import PlanType  # noqa: PLC0415
+    from src.core.utils.formatters import format_bytes_to_gb, format_device_count  # noqa: PLC0415
+
+    plan = PlanSnapshotDto(
+        id=-1,
+        name="Web Trial",
+        tag=remna_user.tag,
+        type=PlanType.UNLIMITED,
+        traffic_limit=-1,
+        device_limit=format_device_count(remna_user.hwid_device_limit),
+        duration=order.plan_duration_days,
+        traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+        internal_squads=[s.uuid for s in remna_user.active_internal_squads],
+        external_squad=remna_user.external_squad_uuid,
+    )
+
+    sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
+
+    subscription = SubscriptionDto(
+        user_remna_id=remna_user.uuid,
+        status=remna_user.status,
+        is_trial=True,
+        traffic_limit=-1,
+        device_limit=format_device_count(remna_user.hwid_device_limit),
+        traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+        tag=remna_user.tag,
+        internal_squads=[s.uuid for s in remna_user.active_internal_squads],
+        external_squad=remna_user.external_squad_uuid,
+        expire_at=remna_user.expire_at,
+        url=sub_url,
+        plan=plan,
+    )
+
+    await subscription_service.create(user, subscription)
+    logger.info(f"{log(user)} Linked web trial subscription '{username}'")
 
 
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)

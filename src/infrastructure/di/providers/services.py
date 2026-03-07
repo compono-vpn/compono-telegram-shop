@@ -1,6 +1,7 @@
 from dishka import Provider, Scope, provide
 
 from src.services.access import AccessService
+from src.services.email import EmailService
 from src.services.broadcast import BroadcastService
 from src.services.command import CommandService
 from src.services.importer import ImporterService
@@ -37,3 +38,4 @@ class ServicesProvider(Provider):
     pricing_service = provide(source=PricingService)
     importer_service = provide(source=ImporterService)
     referral_service = provide(source=ReferralService, scope=Scope.REQUEST)
+    email_service = provide(source=EmailService, scope=Scope.REQUEST)

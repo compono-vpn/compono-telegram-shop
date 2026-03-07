@@ -9,6 +9,7 @@ from src.core.enums import TransactionStatus
 from src.core.utils.formatters import format_days_to_datetime
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.taskiq.broker import broker
+from src.services.email import EmailService
 from src.services.payment_gateway import PaymentGatewayService
 from src.services.remnawave import RemnawaveService
 from src.services.transaction import TransactionService
@@ -63,6 +64,7 @@ async def handle_web_order_task(
     payment_status: TransactionStatus,
     uow: FromDishka[UnitOfWork],
     remnawave_service: FromDishka[RemnawaveService],
+    email_service: FromDishka[EmailService],
 ) -> None:
     async with uow:
         order = await uow.repository.web_orders.get_by_payment_id(payment_id)
@@ -97,6 +99,9 @@ async def handle_web_order_task(
                 status="completed",
                 subscription_url=subscription_url,
             )
+
+        bot_link = f"https://t.me/componovps_bot?start=web_{short_id}"
+        await email_service.send_trial_bot_link(order.email, bot_link)
 
         logger.info(f"Web trial activated for '{order.email}', sub_url='{subscription_url}'")
 
