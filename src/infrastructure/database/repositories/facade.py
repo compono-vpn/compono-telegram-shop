@@ -9,6 +9,7 @@ from .settings import SettingsRepository
 from .subscription import SubscriptionRepository
 from .transaction import TransactionRepository
 from .user import UserRepository
+from .web_order import WebOrderRepository
 from .webhook_log import WebhookLogRepository
 
 
@@ -24,6 +25,7 @@ class RepositoriesFacade:
     settings: SettingsRepository
     broadcasts: BroadcastRepository
     referrals: ReferralRepository
+    web_orders: WebOrderRepository
     webhook_logs: WebhookLogRepository
 
     def __init__(self, session: AsyncSession) -> None:
@@ -38,4 +40,5 @@ class RepositoriesFacade:
         self.settings = SettingsRepository(session)
         self.broadcasts = BroadcastRepository(session)
         self.referrals = ReferralRepository(session)
+        self.web_orders = WebOrderRepository(session)
         self.webhook_logs = WebhookLogRepository(session)

@@ -43,8 +43,14 @@ class PlategaGateway(BasePaymentGateway):
             },
         )
 
-    async def handle_create_payment(self, amount: Decimal, details: str) -> PaymentResult:
-        payload = await self._create_payment_payload(amount, details)
+    async def handle_create_payment(
+        self,
+        amount: Decimal,
+        details: str,
+        return_url: str | None = None,
+        failed_url: str | None = None,
+    ) -> PaymentResult:
+        payload = await self._create_payment_payload(amount, details, return_url, failed_url)
 
         try:
             response = await self._client.post("/transaction/process", json=payload)
@@ -93,8 +99,15 @@ class PlategaGateway(BasePaymentGateway):
 
         return payment_id, transaction_status
 
-    async def _create_payment_payload(self, amount: Decimal, details: str) -> dict[str, Any]:
+    async def _create_payment_payload(
+        self,
+        amount: Decimal,
+        details: str,
+        return_url: str | None = None,
+        failed_url: str | None = None,
+    ) -> dict[str, Any]:
         settings: PlategaGatewaySettingsDto = self.data.settings  # type: ignore[assignment]
+        default_url = await self._get_bot_redirect_url()
         return {
             "paymentMethod": settings.payment_method,
             "paymentDetails": {
@@ -102,8 +115,8 @@ class PlategaGateway(BasePaymentGateway):
                 "currency": self.CURRENCY.value,
             },
             "description": details,
-            "return": await self._get_bot_redirect_url(),
-            "failedUrl": await self._get_bot_redirect_url(),
+            "return": return_url or default_url,
+            "failedUrl": failed_url or default_url,
         }
 
     def _verify_webhook(self, request: Request) -> bool:
