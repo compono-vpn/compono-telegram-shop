@@ -100,7 +100,7 @@ async def handle_web_order_task(
                 subscription_url=subscription_url,
             )
 
-        bot_link = f"https://t.me/componovps_bot?start=web_{short_id}"
+        bot_link = f"https://t.me/compono_bot?start=web_{short_id}"
         await email_service.send_trial_bot_link(order.email, bot_link)
 
         logger.info(f"Web trial activated for '{order.email}', sub_url='{subscription_url}'")
