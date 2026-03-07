@@ -21,6 +21,13 @@ class WebOrderRepository(BaseRepository):
             cast(WebOrder.payment_id, String).like(f"{prefix}%"),
         )
 
+    async def exists_by_email(self, email: str) -> bool:
+        """Check if a non-canceled order already exists for this email."""
+        order = await self._get_one(
+            WebOrder, WebOrder.email == email, WebOrder.status != "canceled"
+        )
+        return order is not None
+
     async def update_by_payment_id(self, payment_id: UUID, **data: Any) -> Optional[WebOrder]:
         return await self._update(WebOrder, WebOrder.payment_id == payment_id, **data)
 

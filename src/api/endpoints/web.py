@@ -45,6 +45,12 @@ async def create_trial(
     payment_gateway_service: FromDishka[PaymentGatewayService],
     uow: FromDishka[UnitOfWork],
 ) -> TrialResponse:
+    # One trial per unique email
+    async with uow:
+        already_used = await uow.repository.web_orders.exists_by_email(body.email)
+    if already_used:
+        raise HTTPException(status_code=409, detail="Trial already used for this email")
+
     timing: dict[str, float] = {}
     t0 = time.monotonic()
 
