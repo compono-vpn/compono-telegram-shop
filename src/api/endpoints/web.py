@@ -4,6 +4,7 @@ from uuid import UUID
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel, EmailStr
 
@@ -77,14 +78,14 @@ async def create_trial(
 async def get_trial_status(
     payment_id: UUID,
     uow: FromDishka[UnitOfWork],
-) -> TrialStatusResponse:
+) -> JSONResponse:
     async with uow:
         order = await uow.repository.web_orders.get_by_payment_id(payment_id)
 
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    return TrialStatusResponse(
-        status=order.status,
-        subscription_url=order.subscription_url,
+    return JSONResponse(
+        content={"status": order.status, "subscription_url": order.subscription_url},
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
     )
