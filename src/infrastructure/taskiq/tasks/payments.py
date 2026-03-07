@@ -73,8 +73,8 @@ async def handle_web_order_task(
         logger.warning(f"Web order not found for payment_id='{payment_id}'")
         return
 
-    if order.status == "completed":
-        logger.warning(f"Web order '{payment_id}' already completed")
+    if order.status != "pending":
+        logger.warning(f"Web order '{payment_id}' already in status '{order.status}', skipping")
         return
 
     if payment_status == TransactionStatus.COMPLETED:
@@ -93,12 +93,19 @@ async def handle_web_order_task(
         )
         subscription_url = remnawave_service._rewrite_sub_url(created.subscription_url)
 
+        # Atomic transition: only update if still "pending" — prevents duplicate
+        # subscription creation when webhook is delivered more than once
         async with uow:
-            await uow.repository.web_orders.update_by_payment_id(
+            updated = await uow.repository.web_orders.transition_status(
                 payment_id,
-                status="completed",
+                from_status="pending",
+                to_status="completed",
                 subscription_url=subscription_url,
             )
+
+        if not updated:
+            logger.warning(f"Web order '{payment_id}' was already processed by another worker")
+            return
 
         bot_link = f"https://t.me/compono_bot?start=web_{short_id}"
         await email_service.send_trial_bot_link(order.email, bot_link)
@@ -107,7 +114,7 @@ async def handle_web_order_task(
 
     elif payment_status == TransactionStatus.CANCELED:
         async with uow:
-            await uow.repository.web_orders.update_by_payment_id(
-                payment_id, status="canceled"
+            await uow.repository.web_orders.transition_status(
+                payment_id, from_status="pending", to_status="canceled"
             )
         logger.info(f"Web order '{payment_id}' canceled")

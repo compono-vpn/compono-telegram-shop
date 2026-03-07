@@ -312,21 +312,22 @@ class PaymentGatewayService(BaseService):
         return test_payment
 
     async def handle_payment_succeeded(self, payment_id: UUID) -> None:
+        # Atomically transition PENDING -> COMPLETED.
+        # If another worker already transitioned this, result is None => we stop.
+        updated = await self.transaction_service.transition_status(
+            payment_id, TransactionStatus.PENDING, TransactionStatus.COMPLETED
+        )
+
+        if not updated:
+            logger.warning(f"Transaction '{payment_id}' already processed or not found, skipping")
+            return
+
+        # Re-fetch with user relation
         transaction = await self.transaction_service.get(payment_id)
 
         if not transaction or not transaction.user:
-            logger.critical(f"Transaction or user not found for '{payment_id}'")
+            logger.critical(f"Transaction or user not found for '{payment_id}' after status update")
             return
-
-        if transaction.is_completed:
-            logger.warning(
-                f"Transaction '{payment_id}' for user "
-                f"'{transaction.user.telegram_id}' already completed"
-            )
-            return
-
-        transaction.status = TransactionStatus.COMPLETED
-        await self.transaction_service.update(transaction)
 
         logger.info(f"Payment succeeded '{payment_id}' for user '{transaction.user.telegram_id}'")
 
@@ -413,15 +414,15 @@ class PaymentGatewayService(BaseService):
         logger.debug(f"Called tasks payment for user '{transaction.user.telegram_id}'")
 
     async def handle_payment_canceled(self, payment_id: UUID) -> None:
-        transaction = await self.transaction_service.get(payment_id)
+        updated = await self.transaction_service.transition_status(
+            payment_id, TransactionStatus.PENDING, TransactionStatus.CANCELED
+        )
 
-        if not transaction or not transaction.user:
-            logger.critical(f"Transaction or user not found for '{payment_id}'")
+        if not updated:
+            logger.warning(f"Transaction '{payment_id}' already processed or not found, skipping cancel")
             return
 
-        transaction.status = TransactionStatus.CANCELED
-        await self.transaction_service.update(transaction)
-        logger.info(f"Payment canceled '{payment_id}' for user '{transaction.user.telegram_id}'")
+        logger.info(f"Payment canceled '{payment_id}'")
 
     #
 

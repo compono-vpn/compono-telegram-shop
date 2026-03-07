@@ -94,6 +94,31 @@ class TransactionService(BaseService):
 
         return TransactionDto.from_model(db_updated_transaction)
 
+    async def transition_status(
+        self,
+        payment_id: UUID,
+        from_status: TransactionStatus,
+        to_status: TransactionStatus,
+    ) -> Optional[TransactionDto]:
+        """Atomically transition status. Returns None if the row was not in from_status
+        (already processed by another worker)."""
+        async with self.uow:
+            db_tx = await self.uow.repository.transactions.transition_status(
+                payment_id, from_status, to_status
+            )
+
+        if db_tx:
+            logger.info(
+                f"Transaction '{payment_id}' transitioned {from_status} -> {to_status}"
+            )
+        else:
+            logger.warning(
+                f"Transaction '{payment_id}' was NOT in status '{from_status}', "
+                f"skipping transition to '{to_status}'"
+            )
+
+        return TransactionDto.from_model(db_tx) if db_tx else None
+
     async def count(self) -> int:
         async with self.uow:
             count = await self.uow.repository.transactions.count()

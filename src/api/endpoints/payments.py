@@ -6,6 +6,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, Request, Response, status
 from loguru import logger
+from redis.asyncio import Redis
 
 from src.core.constants import API_V1, PAYMENTS_WEBHOOK_PATH
 from src.core.enums import PaymentGatewayType
@@ -19,6 +20,9 @@ from src.services.payment_gateway import PaymentGatewayService
 
 router = APIRouter(prefix=API_V1 + PAYMENTS_WEBHOOK_PATH)
 
+# Redis key TTL for webhook deduplication (10 minutes)
+_WEBHOOK_DEDUP_TTL = 600
+
 
 @router.post("/{gateway_type}")
 @inject
@@ -28,6 +32,7 @@ async def payments_webhook(
     payment_gateway_service: FromDishka[PaymentGatewayService],
     notification_service: FromDishka[NotificationService],
     uow: FromDishka[UnitOfWork],
+    redis_client: FromDishka[Redis],
 ) -> Response:
     start = time.monotonic()
     log_id: int | None = None
@@ -73,7 +78,22 @@ async def payments_webhook(
             return Response(status_code=status.HTTP_404_NOT_FOUND)
 
         payment_id, payment_status = await gateway.handle_webhook(request)
-        await handle_payment_transaction_task.kiq(payment_id, payment_status)
+
+        # Deduplicate: only enqueue the task if this payment_id hasn't been
+        # processed in the last _WEBHOOK_DEDUP_TTL seconds.  SET NX ensures
+        # only the first webhook delivery wins; duplicates get 200 but skip
+        # the task enqueue entirely.
+        dedup_key = f"webhook:dedup:{payment_id}:{payment_status.value}"
+        is_first = await redis_client.set(dedup_key, "1", nx=True, ex=_WEBHOOK_DEDUP_TTL)
+
+        if is_first:
+            await handle_payment_transaction_task.kiq(payment_id, payment_status)
+            logger.info(f"Webhook enqueued for payment '{payment_id}' status='{payment_status}'")
+        else:
+            logger.warning(
+                f"Duplicate webhook for payment '{payment_id}' status='{payment_status}', "
+                f"skipping task enqueue"
+            )
 
         if log_id is not None:
             await _update_log(uow, log_id, status_code=200, payment_id=payment_id)

@@ -1,3 +1,4 @@
+import time
 from decimal import Decimal
 from uuid import UUID
 
@@ -29,6 +30,7 @@ class TrialRequest(BaseModel):
 class TrialResponse(BaseModel):
     payment_url: str
     payment_id: str
+    timing: dict[str, float] | None = None
 
 
 class TrialStatusResponse(BaseModel):
@@ -43,6 +45,9 @@ async def create_trial(
     payment_gateway_service: FromDishka[PaymentGatewayService],
     uow: FromDishka[UnitOfWork],
 ) -> TrialResponse:
+    timing: dict[str, float] = {}
+    t0 = time.monotonic()
+
     try:
         gateway_instance = await payment_gateway_service._get_gateway_instance(
             PaymentGatewayType.PLATEGA
@@ -51,12 +56,18 @@ async def create_trial(
         logger.error("Platega gateway not configured")
         raise HTTPException(status_code=503, detail="Payment gateway not available")
 
+    timing["gateway_init_ms"] = round((time.monotonic() - t0) * 1000, 1)
+    t1 = time.monotonic()
+
     payment = await gateway_instance.handle_create_payment(
         amount=TRIAL_AMOUNT,
         details="Compono VPS — пробный период 3 дня",
         return_url=TRIAL_RETURN_URL,
         failed_url=TRIAL_FAILED_URL,
     )
+
+    timing["platega_api_ms"] = round((time.monotonic() - t1) * 1000, 1)
+    t2 = time.monotonic()
 
     async with uow:
         await uow.repository.web_orders.create(
@@ -69,8 +80,15 @@ async def create_trial(
             )
         )
 
-    logger.info(f"Web trial order created for '{body.email}', payment_id='{payment.id}'")
-    return TrialResponse(payment_url=str(payment.url), payment_id=str(payment.id))
+    timing["db_write_ms"] = round((time.monotonic() - t2) * 1000, 1)
+    timing["total_ms"] = round((time.monotonic() - t0) * 1000, 1)
+
+    logger.info(
+        f"Web trial order created for '{body.email}', payment_id='{payment.id}', timing={timing}"
+    )
+    return TrialResponse(
+        payment_url=str(payment.url), payment_id=str(payment.id), timing=timing
+    )
 
 
 @router.get("/trial/{payment_id}")
