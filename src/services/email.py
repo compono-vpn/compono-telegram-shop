@@ -1,6 +1,4 @@
-import aiosmtplib
-from email.message import EmailMessage
-
+import httpx
 from loguru import logger
 
 from src.core.config import AppConfig
@@ -8,14 +6,14 @@ from src.core.config import AppConfig
 
 class EmailService:
     def __init__(self, config: AppConfig) -> None:
-        self.config = config.smtp
+        self.api_key = config.resend_api_key
+        self.from_email = config.resend_from_email
 
     async def send_trial_bot_link(self, to_email: str, bot_link: str) -> None:
-        if not self.config.host:
-            logger.warning(f"SMTP not configured, skipping email to '{to_email}'")
+        if not self.api_key:
+            logger.warning(f"Resend API key not configured, skipping email to '{to_email}'")
             return
 
-        subject = "Compono VPS — ваш доступ готов"
         html = f"""\
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
     <h2 style="margin-bottom: 16px;">Добро пожаловать в Compono VPS!</h2>
@@ -37,23 +35,19 @@ class EmailService:
     <p style="color: #999; font-size: 12px;">Compono VPS — быстрый и безопасный интернет</p>
 </div>"""
 
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = f"{self.config.from_name} <{self.config.from_email}>"
-        msg["To"] = to_email
-        msg.set_content(f"Compono VPS — ваш доступ готов. Откройте ссылку: {bot_link}")
-        msg.add_alternative(html, subtype="html")
-
         try:
-            await aiosmtplib.send(
-                msg,
-                hostname=self.config.host,
-                port=self.config.port,
-                username=self.config.username,
-                password=self.config.password.get_secret_value(),
-                use_tls=self.config.port == 465,
-                start_tls=self.config.port == 587,
-            )
-            logger.info(f"Trial email sent to '{to_email}'")
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json={
+                        "from": self.from_email,
+                        "to": [to_email],
+                        "subject": "Compono VPS — ваш доступ готов",
+                        "html": html,
+                    },
+                )
+                resp.raise_for_status()
+                logger.info(f"Trial email sent to '{to_email}', id={resp.json().get('id')}")
         except Exception as e:
             logger.error(f"Failed to send email to '{to_email}': {e}")

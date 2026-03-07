@@ -15,7 +15,6 @@ from .build import BuildConfig
 from .database import DatabaseConfig
 from .redis import RedisConfig
 from .remnawave import RemnawaveConfig
-from .smtp import SmtpConfig
 from .validators import validate_not_change_me
 
 
@@ -37,7 +36,9 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     build: BuildConfig = Field(default_factory=BuildConfig)
-    smtp: SmtpConfig = Field(default_factory=SmtpConfig)
+
+    resend_api_key: str = ""
+    resend_from_email: str = "Compono VPS <noreply@mail.componovps.com>"
 
     @property
     def banners_dir(self) -> Path:
