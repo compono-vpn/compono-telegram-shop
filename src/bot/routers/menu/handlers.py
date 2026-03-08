@@ -72,28 +72,6 @@ async def _handle_web_trial_link(
     subscription_service: SubscriptionService,
     notification_service: NotificationService,
 ) -> None:
-    short_id = param[len("web_"):]
-    username = f"web_{short_id}"
-
-    async with uow:
-        order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
-
-    if not order or order.status != "completed" or not order.subscription_url:
-        logger.warning(f"{log(user)} Web trial link '{param}' — order not found or not completed")
-        return
-
-    if user.has_subscription:
-        logger.info(f"{log(user)} Already has subscription, skipping web trial link")
-        return
-
-    # Find the Remnawave user created for this web order
-    try:
-        remna_user = await remnawave_service.remnawave.users.get_user_by_username(username)
-    except Exception:
-        logger.error(f"{log(user)} Remnawave user '{username}' not found")
-        return
-
-    # Update Remnawave user with telegram_id and extend by 1 bonus day
     from datetime import timedelta  # noqa: PLC0415
     from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
     from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
@@ -101,6 +79,69 @@ async def _handle_web_trial_link(
     from src.core.utils.formatters import format_device_count  # noqa: PLC0415
     from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
 
+    short_id = param[len("web_"):]
+    username = f"web_{short_id}"
+
+    # 1. Validate the web order exists and is completed
+    async with uow:
+        order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
+
+    if not order or order.status != "completed" or not order.subscription_url:
+        logger.warning(f"{log(user)} Web trial link '{param}' — order not found or not completed")
+        await message.answer(
+            "Ссылка недействительна или оплата ещё не завершена. "
+            "Если вы только что оплатили — подождите минуту и попробуйте снова."
+        )
+        return
+
+    # 2. Check if this order was already claimed by someone
+    if order.claimed_by_telegram_id is not None:
+        if order.claimed_by_telegram_id == user.telegram_id:
+            logger.info(f"{log(user)} Re-opened already claimed web link '{param}'")
+            await message.answer("Этот пробный период уже активирован на вашем аккаунте.")
+        else:
+            logger.warning(f"{log(user)} Tried to claim web link '{param}' already claimed by {order.claimed_by_telegram_id}")
+            await message.answer("Эта ссылка уже была использована другим пользователем.")
+        return
+
+    # 3. Check if this telegram user already claimed any web order (one trial per TG account)
+    async with uow:
+        already_claimed = await uow.repository.web_orders.exists_claimed_by_telegram_id(user.telegram_id)
+
+    if already_claimed:
+        logger.warning(f"{log(user)} Already claimed a web trial, rejecting '{param}'")
+        await message.answer(
+            "Пробный период можно активировать только один раз. "
+            "Оформите подписку для продолжения использования."
+        )
+        return
+
+    # 4. Check if user already has a trial subscription (from auto-trial or manual)
+    has_trial = await subscription_service.has_used_trial(user.telegram_id)
+    if has_trial:
+        logger.warning(f"{log(user)} Already has trial subscription, rejecting web link '{param}'")
+        await message.answer(
+            "Пробный период можно активировать только один раз. "
+            "Оформите подписку для продолжения использования."
+        )
+        return
+
+    # 5. Find the Remnawave user created for this web order
+    try:
+        remna_user = await remnawave_service.remnawave.users.get_user_by_username(username)
+    except Exception:
+        logger.error(f"{log(user)} Remnawave user '{username}' not found")
+        await message.answer("Произошла ошибка при активации. Напишите в поддержку: support@componovps.com")
+        return
+
+    # 6. Claim the order — atomically set claimed_by_telegram_id
+    async with uow:
+        await uow.repository.web_orders.update_by_payment_id(
+            order.payment_id,
+            claimed_by_telegram_id=user.telegram_id,
+        )
+
+    # 7. Update Remnawave user with telegram_id and extend by 1 bonus day
     bonus_days = 1
     new_expire = remna_user.expire_at + timedelta(days=bonus_days)
 
@@ -112,7 +153,7 @@ async def _handle_web_trial_link(
         )
     )
 
-    # Create local subscription linked to this bot user
+    # 8. Create local subscription linked to this bot user
     total_days = order.plan_duration_days + bonus_days
 
     plan = PlanSnapshotDto(
@@ -146,7 +187,7 @@ async def _handle_web_trial_link(
     )
 
     await subscription_service.create(user, subscription)
-    logger.info(f"{log(user)} Linked web trial subscription '{username}' with +{bonus_days}d bonus")
+    logger.info(f"{log(user)} Linked web trial subscription '{username}' (email: {order.email}) with +{bonus_days}d bonus")
 
 
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)

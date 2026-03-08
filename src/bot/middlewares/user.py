@@ -85,7 +85,15 @@ class UserMiddleware(EventTypedMiddleware):
                 logger.info(f"Registered with referral code: '{referral_code}'")
                 await referral_service.handle_referral(user, referral_code)
 
-            await auto_assign_trial_task.kiq(user)
+            # Skip auto-trial if user came via web trial deep link — the
+            # web link handler will activate their subscription instead
+            is_web_trial = (
+                hasattr(event, "text") and event.text
+                and len(event.text.split()) > 1
+                and event.text.split()[1].startswith("web_")
+            )
+            if not is_web_trial:
+                await auto_assign_trial_task.kiq(user)
 
         elif not isinstance(aiogram_user, FakeUser):
             await user_service.compare_and_update(user, aiogram_user)

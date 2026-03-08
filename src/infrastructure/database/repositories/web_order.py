@@ -28,6 +28,15 @@ class WebOrderRepository(BaseRepository):
         )
         return count > 0
 
+    async def exists_claimed_by_telegram_id(self, telegram_id: int) -> bool:
+        """Check if this telegram user already claimed any web order."""
+        count = await self._count(
+            WebOrder,
+            WebOrder.claimed_by_telegram_id == telegram_id,
+            WebOrder.status != "canceled",
+        )
+        return count > 0
+
     async def update_by_payment_id(self, payment_id: UUID, **data: Any) -> Optional[WebOrder]:
         return await self._update(WebOrder, WebOrder.payment_id == payment_id, **data)
 
