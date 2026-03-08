@@ -72,7 +72,6 @@ async def _handle_web_trial_link(
     subscription_service: SubscriptionService,
     notification_service: NotificationService,
 ) -> None:
-    from datetime import timedelta  # noqa: PLC0415
     from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
     from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
     from src.core.enums import PlanType  # noqa: PLC0415
@@ -141,20 +140,16 @@ async def _handle_web_trial_link(
             claimed_by_telegram_id=user.telegram_id,
         )
 
-    # 7. Update Remnawave user with telegram_id and extend by 1 bonus day
-    bonus_days = 1
-    new_expire = remna_user.expire_at + timedelta(days=bonus_days)
-
+    # 7. Update Remnawave user with telegram_id
     await remnawave_service.remnawave.users.update_user(
         UpdateUserRequestDto(
             uuid=remna_user.uuid,
             telegram_id=user.telegram_id,
-            expire_at=new_expire,
         )
     )
 
     # 8. Create local subscription linked to this bot user
-    total_days = order.plan_duration_days + bonus_days
+    total_days = order.plan_duration_days
 
     web_trial_traffic_gb = 5
 
@@ -183,13 +178,13 @@ async def _handle_web_trial_link(
         tag=remna_user.tag,
         internal_squads=[s.uuid for s in remna_user.active_internal_squads],
         external_squad=remna_user.external_squad_uuid,
-        expire_at=new_expire,
+        expire_at=remna_user.expire_at,
         url=sub_url,
         plan=plan,
     )
 
     await subscription_service.create(user, subscription)
-    logger.info(f"{log(user)} Linked web trial subscription '{username}' (email: {order.email}) with +{bonus_days}d bonus")
+    logger.info(f"{log(user)} Linked web trial subscription '{username}' (email: {order.email}, {total_days}d)")
 
 
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)
