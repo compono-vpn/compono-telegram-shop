@@ -85,7 +85,7 @@ async def handle_web_order_task(
             CreateUserRequestDto(
                 username=username,
                 expire_at=format_days_to_datetime(order.plan_duration_days),
-                traffic_limit_bytes=0,
+                traffic_limit_bytes=5 * 1024 * 1024 * 1024,  # 5 GB
                 traffic_limit_strategy=TrafficLimitStrategy.NO_RESET,
                 description=f"Web trial: {order.email}",
                 hwid_device_limit=1,

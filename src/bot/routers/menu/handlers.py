@@ -156,12 +156,14 @@ async def _handle_web_trial_link(
     # 8. Create local subscription linked to this bot user
     total_days = order.plan_duration_days + bonus_days
 
+    web_trial_traffic_gb = 5
+
     plan = PlanSnapshotDto(
         id=-1,
         name="Web Trial",
         tag=remna_user.tag,
         type=PlanType.UNLIMITED,
-        traffic_limit=-1,
+        traffic_limit=web_trial_traffic_gb,
         device_limit=format_device_count(remna_user.hwid_device_limit),
         duration=total_days,
         traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
@@ -175,7 +177,7 @@ async def _handle_web_trial_link(
         user_remna_id=remna_user.uuid,
         status=remna_user.status,
         is_trial=True,
-        traffic_limit=-1,
+        traffic_limit=web_trial_traffic_gb,
         device_limit=format_device_count(remna_user.hwid_device_limit),
         traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
         tag=remna_user.tag,
