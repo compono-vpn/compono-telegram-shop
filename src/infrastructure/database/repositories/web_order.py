@@ -23,10 +23,10 @@ class WebOrderRepository(BaseRepository):
 
     async def exists_by_email(self, email: str) -> bool:
         """Check if a non-canceled order already exists for this email."""
-        order = await self._get_one(
+        count = await self._count(
             WebOrder, WebOrder.email == email, WebOrder.status != "canceled"
         )
-        return order is not None
+        return count > 0
 
     async def update_by_payment_id(self, payment_id: UUID, **data: Any) -> Optional[WebOrder]:
         return await self._update(WebOrder, WebOrder.payment_id == payment_id, **data)
