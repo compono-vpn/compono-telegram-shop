@@ -26,8 +26,8 @@ def get_banner(
         for directory in dirs:
             if not directory.exists():
                 continue
-            for format in BannerFormat:
-                for pattern in filenames:
+            for pattern in filenames:
+                for format in BannerFormat:
                     filename = pattern.format(format=format)
                     candidate = directory / filename
                     if candidate.exists():
