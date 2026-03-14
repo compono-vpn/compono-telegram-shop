@@ -44,7 +44,7 @@ def get_banner(
 
     logger.warning(f"Banner '{name}' not found in locales '{locale}' or '{default_locale}'")
 
-    result = find_in_dirs([banners_dir], [f"{BannerName.DEFAULT}.{{format}}"])
+    result = find_in_dirs([banners_dir], [f"{name}.{{format}}", f"{BannerName.DEFAULT}.{{format}}"])
     if result:
         return result
 

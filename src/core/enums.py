@@ -102,6 +102,7 @@ class BannerFormat(StrEnum):
     PNG = auto()
     GIF = auto()
     WEBP = auto()
+    MP4 = auto()
 
     @property
     def content_type(self) -> ContentType:
@@ -110,6 +111,8 @@ class BannerFormat(StrEnum):
                 return ContentType.PHOTO
             case BannerFormat.GIF:
                 return ContentType.ANIMATION
+            case BannerFormat.MP4:
+                return ContentType.VIDEO
 
 
 class MediaType(UpperStrEnum):
