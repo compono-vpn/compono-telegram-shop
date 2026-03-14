@@ -48,6 +48,8 @@ class User(BaseSql, TimestampMixin):
     purchase_discount_max_days: Mapped[int] = mapped_column(Integer, nullable=False)
     points: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_bot_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_rules_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)

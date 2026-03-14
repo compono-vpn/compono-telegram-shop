@@ -89,19 +89,25 @@ ntf-event-new-user =
     { hdr-user }
     { frg-user-info }
 
+    { $source ->
+    [0] { empty }
+    *[HAS]
+    <b>📍 Источник:</b> <code>{ $source }</code>
+    }
+
     { $has_referrer ->
     [0] { empty }
     *[HAS]
     <b>🤝 Реферер:</b>
     <blockquote>
     • <b>ID</b>: <code>{ $referrer_user_id }</code>
-    • <b>Имя</b>: { $referrer_user_name } { $referrer_username -> 
+    • <b>Имя</b>: { $referrer_user_name } { $referrer_username ->
         [0] { empty }
         *[HAS] (<a href="tg://user?id={ $referrer_user_id }">@{ $referrer_username }</a>)
     }
     </blockquote>
     }
-    
+
 ntf-event-subscription-trial =
     #EventTrialGetted
 

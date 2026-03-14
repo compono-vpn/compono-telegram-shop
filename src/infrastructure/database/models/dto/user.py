@@ -33,6 +33,8 @@ class BaseUserDto(TrackableDto):
     purchase_discount_max_days: int = 0
     points: int = 0
 
+    source: Optional[str] = None
+
     is_blocked: bool = False
     is_bot_blocked: bool = False
     is_rules_accepted: bool = False

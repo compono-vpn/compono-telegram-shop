@@ -51,7 +51,7 @@ class UserService(BaseService):
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.uow = uow
 
-    async def create(self, aiogram_user: AiogramUser) -> UserDto:
+    async def create(self, aiogram_user: AiogramUser, source: Optional[str] = None) -> UserDto:
         user = UserDto(
             telegram_id=aiogram_user.id,
             username=aiogram_user.username,
@@ -66,6 +66,7 @@ class UserService(BaseService):
                 if aiogram_user.language_code in self.config.locales
                 else self.config.default_locale
             ),
+            source=source,
         )
         db_user = User(**user.model_dump())
 

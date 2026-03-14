@@ -8,7 +8,7 @@ from loguru import logger
 
 from src.bot.keyboards import get_user_keyboard
 from src.core.config import AppConfig
-from src.core.constants import CONTAINER_KEY, IS_SUPER_DEV_KEY, USER_KEY
+from src.core.constants import CONTAINER_KEY, IS_SUPER_DEV_KEY, SOURCE_PREFIX, USER_KEY
 from src.core.enums import MiddlewareEventType, SystemNotificationType
 from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
@@ -52,13 +52,15 @@ class UserMiddleware(EventTypedMiddleware):
 
         if user is None:
             NEW_USERS_TOTAL.inc()
-            user = await user_service.create(aiogram_user)
+            source = self._parse_source(event)
+            user = await user_service.create(aiogram_user, source=source)
             referrer = await referral_service.get_referrer_by_event(event, user.telegram_id)
 
             base_i18n_kwargs = {
                 "user_id": str(user.telegram_id),
                 "user_name": user.name,
                 "username": user.username or False,
+                "source": source or False,
             }
 
             if referrer:
@@ -103,3 +105,15 @@ class UserMiddleware(EventTypedMiddleware):
         data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
 
         return await handler(event, data)
+
+    @staticmethod
+    def _parse_source(event: TelegramObject) -> Optional[str]:
+        if not hasattr(event, "text") or not event.text:
+            return None
+        parts = event.text.split()
+        if len(parts) <= 1:
+            return None
+        param = parts[1]
+        if param.startswith(SOURCE_PREFIX):
+            return param[len(SOURCE_PREFIX):]
+        return None
