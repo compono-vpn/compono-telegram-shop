@@ -27,7 +27,7 @@ PURCHASE_PREFIX: Final[str] = "purchase_"
 GOTO_PREFIX: Final[str] = "gt_"
 ENCRYPTED_PREFIX: Final[str] = "enc_"
 REFERRAL_PREFIX: Final[str] = "ref_"
-SOURCE_PREFIX: Final[str] = "source_"
+SOURCE_PREFIX: Final[str] = "source-"
 
 IMPORTED_TAG: Final[str] = "IMPORTED"
 
