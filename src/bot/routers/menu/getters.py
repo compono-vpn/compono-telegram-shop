@@ -4,6 +4,7 @@ from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
+from loguru import logger
 
 from src.core.config import AppConfig
 from src.core.exceptions import MenuRenderingError
@@ -97,17 +98,27 @@ async def devices_getter(
     **kwargs: Any,
 ) -> dict[str, Any]:
     if not user.current_subscription:
-        raise ValueError(f"Current subscription for user '{user.telegram_id}' not found")
+        logger.warning(f"User '{user.telegram_id}' has no subscription, returning empty devices")
+        return {
+            "current_count": 0,
+            "max_count": i18n_format_device_limit(0),
+            "devices": [],
+            "devices_empty": True,
+        }
 
-    devices = await remnawave_service.get_devices_user(user)
+    try:
+        devices = await remnawave_service.get_devices_user(user)
+    except Exception:
+        logger.opt(exception=True).warning(f"Failed to fetch devices for user '{user.telegram_id}'")
+        devices = []
 
     formatted_devices = [
         {
             "short_hwid": device.hwid[:32],
             "hwid": device.hwid,
-            "platform": device.platform,
-            "device_model": device.device_model,
-            "user_agent": device.user_agent,
+            "platform": device.platform or "",
+            "device_model": device.device_model or "",
+            "user_agent": device.user_agent or "",
         }
         for device in devices
     ]
