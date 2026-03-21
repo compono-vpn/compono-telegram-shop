@@ -1,5 +1,5 @@
 from aiogram import Dispatcher
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from prometheus_client import make_asgi_app
 from starlette.middleware.cors import CORSMiddleware
 
@@ -23,6 +23,13 @@ def create_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def no_cache_api(request: Request, call_next):
+        response: Response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return response
     app.include_router(health_router)
     app.include_router(payments_router)
     app.include_router(remnawave_router)
