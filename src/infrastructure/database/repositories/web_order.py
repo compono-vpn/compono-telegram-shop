@@ -40,6 +40,14 @@ class WebOrderRepository(BaseRepository):
     async def update_by_payment_id(self, payment_id: UUID, **data: Any) -> Optional[WebOrder]:
         return await self._update(WebOrder, WebOrder.payment_id == payment_id, **data)
 
+    async def count_by_promocode_id(self, promocode_id: int) -> int:
+        """Count non-canceled web orders that used this promocode."""
+        return await self._count(
+            WebOrder,
+            WebOrder.promocode_id == promocode_id,
+            WebOrder.status != "canceled",
+        )
+
     async def transition_status(
         self, payment_id: UUID, from_status: str, to_status: str, **extra: Any
     ) -> Optional[WebOrder]:

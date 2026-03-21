@@ -1,5 +1,6 @@
 import time
-from decimal import Decimal
+import uuid
+from decimal import ROUND_DOWN, Decimal
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -11,9 +12,18 @@ from loguru import logger
 from pydantic import BaseModel, EmailStr
 
 from src.core.constants import API_V1
-from src.core.enums import Currency, PaymentGatewayType, PlanAvailability
+from src.core.enums import (
+    Currency,
+    PaymentGatewayType,
+    PlanAvailability,
+    PromocodeAvailability,
+    PromocodeRewardType,
+    TransactionStatus,
+)
 from src.infrastructure.database import UnitOfWork
+from src.infrastructure.database.models.dto import PromocodeDto
 from src.infrastructure.database.models.sql.web_order import WebOrder
+from src.infrastructure.taskiq.tasks.payments import handle_web_order_task
 from src.services.payment_gateway import PaymentGatewayService
 
 router = APIRouter(prefix=API_V1 + "/web")
@@ -50,6 +60,21 @@ ALLOWED_RETURN_ORIGINS = {
 }
 
 
+class PromocodeValidateRequest(BaseModel):
+    code: str
+    plan_id: int
+    duration_days: int
+    currency: Currency
+
+
+class PromocodeValidateResponse(BaseModel):
+    valid: bool
+    discount_percent: int = 0
+    original_amount: float = 0
+    final_amount: float = 0
+    error: str | None = None
+
+
 class PurchaseRequest(BaseModel):
     email: EmailStr
     plan_id: int
@@ -58,6 +83,7 @@ class PurchaseRequest(BaseModel):
     lang: str = "en"
     return_url: str | None = None
     failed_url: str | None = None
+    promocode: str | None = None
 
 
 class PurchaseResponse(BaseModel):
@@ -81,6 +107,126 @@ class PlanResponse(BaseModel):
 
 class PlansResponse(BaseModel):
     plans: list[PlanResponse]
+
+
+WEB_DISCOUNT_REWARD_TYPES = {PromocodeRewardType.PERSONAL_DISCOUNT, PromocodeRewardType.PURCHASE_DISCOUNT}
+WEB_DISCOUNT_AVAILABILITIES = {PromocodeAvailability.ALL, PromocodeAvailability.NEW}
+
+
+def _apply_currency_rules(amount: Decimal, currency: Currency) -> Decimal:
+    match currency:
+        case Currency.RUB:
+            amount = amount.to_integral_value(rounding=ROUND_DOWN)
+            min_amount = Decimal(1)
+        case _:
+            amount = amount.quantize(Decimal("0.01"))
+            min_amount = Decimal("0.01")
+
+    if amount < min_amount:
+        amount = min_amount
+
+    return amount
+
+
+async def _validate_promocode_for_web(
+    uow: UnitOfWork,
+    code: str,
+    plan_id: int,
+    duration_days: int,
+    currency: Currency,
+) -> PromocodeValidateResponse:
+    """Validate a promocode for web purchase, returning price details."""
+    normalized = code.strip().upper()
+
+    async with uow:
+        db_promocode = await uow.repository.promocodes.get_by_code(normalized)
+
+    if not db_promocode:
+        return PromocodeValidateResponse(valid=False, error="Code not found")
+
+    promocode = PromocodeDto.from_model(db_promocode)
+
+    if not promocode or not promocode.is_active:
+        return PromocodeValidateResponse(valid=False, error="Code not found")
+
+    if promocode.is_expired:
+        return PromocodeValidateResponse(valid=False, error="Code expired")
+
+    # Check depletion: count both PromocodeActivation records and web orders
+    if promocode.max_activations is not None and promocode.max_activations >= 0:
+        async with uow:
+            web_order_count = await uow.repository.web_orders.count_by_promocode_id(promocode.id)
+        total_activations = len(promocode.activations) + web_order_count
+        if total_activations >= promocode.max_activations:
+            return PromocodeValidateResponse(valid=False, error="Code fully used")
+
+    if promocode.reward_type not in WEB_DISCOUNT_REWARD_TYPES:
+        return PromocodeValidateResponse(valid=False, error="Code not applicable")
+
+    if promocode.availability not in WEB_DISCOUNT_AVAILABILITIES:
+        return PromocodeValidateResponse(valid=False, error="Code not applicable")
+
+    # For PURCHASE_DISCOUNT: check max_days constraint
+    if promocode.reward_type == PromocodeRewardType.PURCHASE_DISCOUNT:
+        max_days = promocode.purchase_discount_max_days or 0
+        if max_days > 0 and duration_days > max_days:
+            return PromocodeValidateResponse(
+                valid=False, error="Code not applicable for this duration"
+            )
+
+    # Look up plan and price
+    async with uow:
+        db_plan = await uow.repository.plans.get(plan_id)
+
+    if not db_plan or not db_plan.is_active:
+        return PromocodeValidateResponse(valid=False, error="Plan not found")
+
+    duration = next((d for d in db_plan.durations if d.days == duration_days), None)
+    if not duration:
+        return PromocodeValidateResponse(valid=False, error="Duration not available")
+
+    price_obj = next((p for p in duration.prices if p.currency == currency), None)
+    if not price_obj:
+        return PromocodeValidateResponse(valid=False, error="Currency not available")
+
+    original_amount = price_obj.price
+    discount_percent = min(promocode.reward or 0, 100)
+
+    if discount_percent >= 100:
+        return PromocodeValidateResponse(
+            valid=True,
+            discount_percent=100,
+            original_amount=float(original_amount),
+            final_amount=0,
+        )
+
+    discounted = original_amount * (Decimal(100) - Decimal(discount_percent)) / Decimal(100)
+    final_amount = _apply_currency_rules(discounted, currency)
+
+    if final_amount == original_amount:
+        discount_percent = 0
+
+    return PromocodeValidateResponse(
+        valid=True,
+        discount_percent=discount_percent,
+        original_amount=float(original_amount),
+        final_amount=float(final_amount),
+    )
+
+
+@router.post("/promocode/validate")
+@inject
+async def validate_promocode(
+    body: PromocodeValidateRequest,
+    uow: FromDishka[UnitOfWork],
+) -> PromocodeValidateResponse:
+    return await _validate_promocode_for_web(
+        uow=uow,
+        code=body.code,
+        plan_id=body.plan_id,
+        duration_days=body.duration_days,
+        currency=body.currency,
+    )
 
 
 @router.get("/plans")
@@ -145,6 +291,78 @@ async def create_purchase(
         raise HTTPException(status_code=400, detail="Currency not available for this duration")
 
     amount = price_obj.price
+    promocode_id: int | None = None
+    discount_percent: int | None = None
+
+    # Apply promocode discount if provided
+    if body.promocode:
+        promo_result = await _validate_promocode_for_web(
+            uow=uow,
+            code=body.promocode,
+            plan_id=body.plan_id,
+            duration_days=body.duration_days,
+            currency=body.currency,
+        )
+        if not promo_result.valid:
+            raise HTTPException(status_code=400, detail=promo_result.error or "Invalid promocode")
+
+        if promo_result.discount_percent > 0:
+            amount = Decimal(str(promo_result.final_amount))
+            discount_percent = promo_result.discount_percent
+
+            # Resolve promocode_id for the order record
+            normalized_code = body.promocode.strip().upper()
+            async with uow:
+                db_promo = await uow.repository.promocodes.get_by_code(normalized_code)
+            if db_promo:
+                promocode_id = db_promo.id
+
+    # Build plan snapshot for order record
+    plan_snapshot = {
+        "id": db_plan.id,
+        "name": db_plan.name,
+        "type": db_plan.type.value,
+        "traffic_limit": db_plan.traffic_limit,
+        "device_limit": db_plan.device_limit,
+        "duration_days": body.duration_days,
+        "traffic_limit_strategy": db_plan.traffic_limit_strategy.value,
+    }
+
+    if discount_percent:
+        plan_snapshot["promocode_code"] = body.promocode.strip().upper()
+        plan_snapshot["discount_percent"] = discount_percent
+
+    # Handle free purchase (100% discount)
+    if amount <= 0:
+        free_payment_id = uuid.uuid4()
+
+        async with uow:
+            await uow.repository.web_orders.create(
+                WebOrder(
+                    email=body.email,
+                    payment_id=free_payment_id,
+                    status="pending",
+                    amount=Decimal(0),
+                    plan_duration_days=body.duration_days,
+                    plan_id=body.plan_id,
+                    plan_snapshot=plan_snapshot,
+                    gateway_type=None,
+                    currency=body.currency.value,
+                    is_trial=False,
+                    promocode_id=promocode_id,
+                    discount_percent=discount_percent,
+                )
+            )
+
+        # Immediately enqueue completion task
+        await handle_web_order_task.kiq(free_payment_id, TransactionStatus.COMPLETED)
+
+        logger.info(
+            f"Free web purchase (100% discount) for '{body.email}', "
+            f"plan='{db_plan.name}', duration={body.duration_days}d, "
+            f"payment_id='{free_payment_id}'"
+        )
+        return PurchaseResponse(payment_url="", payment_id=str(free_payment_id))
 
     # Determine gateway from currency
     gateway_type = CURRENCY_TO_GATEWAY.get(body.currency)
@@ -188,17 +406,6 @@ async def create_purchase(
             details=details,
         )
 
-    # Build plan snapshot for order record
-    plan_snapshot = {
-        "id": db_plan.id,
-        "name": db_plan.name,
-        "type": db_plan.type.value,
-        "traffic_limit": db_plan.traffic_limit,
-        "device_limit": db_plan.device_limit,
-        "duration_days": body.duration_days,
-        "traffic_limit_strategy": db_plan.traffic_limit_strategy.value,
-    }
-
     async with uow:
         await uow.repository.web_orders.create(
             WebOrder(
@@ -212,6 +419,8 @@ async def create_purchase(
                 gateway_type=gateway_type.value,
                 currency=body.currency.value,
                 is_trial=False,
+                promocode_id=promocode_id,
+                discount_percent=discount_percent,
             )
         )
 
@@ -219,6 +428,7 @@ async def create_purchase(
         f"Web purchase order created for '{body.email}', "
         f"plan='{db_plan.name}', duration={body.duration_days}d, "
         f"amount={amount} {body.currency.value}, payment_id='{payment.id}'"
+        f"{f', promocode_id={promocode_id}, discount={discount_percent}%' if promocode_id else ''}"
     )
     return PurchaseResponse(payment_url=str(payment.url), payment_id=str(payment.id))
 

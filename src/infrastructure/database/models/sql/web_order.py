@@ -26,6 +26,8 @@ class WebOrder(BaseSql):
     gateway_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     currency: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_trial: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    promocode_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    discount_percent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     claimed_by_telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
