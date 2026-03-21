@@ -81,14 +81,34 @@ async def handle_web_order_task(
         short_id = str(payment_id).split("-")[0]
         username = f"web_{short_id}"
 
+        # Determine limits from plan snapshot (full purchase) or hardcoded defaults (trial)
+        if order.plan_snapshot:
+            snapshot = order.plan_snapshot
+            traffic_limit_gb = snapshot.get("traffic_limit", 5)
+            traffic_limit_bytes = (
+                traffic_limit_gb * 1024 * 1024 * 1024 if traffic_limit_gb > 0 else 0
+            )
+            device_limit = snapshot.get("device_limit", 1)
+            strategy_value = snapshot.get("traffic_limit_strategy", "NO_RESET")
+            try:
+                traffic_strategy = TrafficLimitStrategy(strategy_value)
+            except ValueError:
+                traffic_strategy = TrafficLimitStrategy.NO_RESET
+            description = f"Web purchase: {order.email} — {snapshot.get('name', 'N/A')}"
+        else:
+            traffic_limit_bytes = 5 * 1024 * 1024 * 1024  # 5 GB
+            device_limit = 1
+            traffic_strategy = TrafficLimitStrategy.NO_RESET
+            description = f"Web trial: {order.email}"
+
         created = await remnawave_service.remnawave.users.create_user(
             CreateUserRequestDto(
                 username=username,
                 expire_at=format_days_to_datetime(order.plan_duration_days),
-                traffic_limit_bytes=5 * 1024 * 1024 * 1024,  # 5 GB
-                traffic_limit_strategy=TrafficLimitStrategy.NO_RESET,
-                description=f"Web trial: {order.email}",
-                hwid_device_limit=1,
+                traffic_limit_bytes=traffic_limit_bytes,
+                traffic_limit_strategy=traffic_strategy,
+                description=description,
+                hwid_device_limit=device_limit,
             )
         )
         subscription_url = remnawave_service._rewrite_sub_url(created.subscription_url)
@@ -107,10 +127,20 @@ async def handle_web_order_task(
             logger.warning(f"Web order '{payment_id}' was already processed by another worker")
             return
 
-        bot_link = f"https://t.me/compono_bot?start=web_{short_id}"
-        await email_service.send_trial_bot_link(order.email, bot_link)
-
-        logger.info(f"Web trial activated for '{order.email}', sub_url='{subscription_url}'")
+        if order.plan_snapshot:
+            # Full purchase — send subscription details directly via email
+            await email_service.send_purchase_subscription(
+                order.email, subscription_url, order.plan_snapshot.get("name", "Compono VPN")
+            )
+            logger.info(
+                f"Web purchase activated for '{order.email}', "
+                f"plan='{order.plan_snapshot.get('name')}', sub_url='{subscription_url}'"
+            )
+        else:
+            # Trial — send bot link
+            bot_link = f"https://t.me/compono_bot?start=web_{short_id}"
+            await email_service.send_trial_bot_link(order.email, bot_link)
+            logger.info(f"Web trial activated for '{order.email}', sub_url='{subscription_url}'")
 
     elif payment_status == TransactionStatus.CANCELED:
         async with uow:
