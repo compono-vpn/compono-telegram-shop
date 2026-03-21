@@ -326,6 +326,8 @@ async def create_purchase(
         "device_limit": db_plan.device_limit,
         "duration_days": body.duration_days,
         "traffic_limit_strategy": db_plan.traffic_limit_strategy.value,
+        "internal_squads": [str(s) for s in (db_plan.internal_squads or [])],
+        "external_squad": str(db_plan.external_squad) if db_plan.external_squad else None,
     }
 
     if discount_percent:

@@ -82,6 +82,9 @@ async def handle_web_order_task(
         username = f"web_{short_id}"
 
         # Determine limits from plan snapshot (full purchase) or hardcoded defaults (trial)
+        internal_squads = None
+        external_squad = None
+
         if order.plan_snapshot:
             snapshot = order.plan_snapshot
             traffic_limit_gb = snapshot.get("traffic_limit", 5)
@@ -95,21 +98,34 @@ async def handle_web_order_task(
             except ValueError:
                 traffic_strategy = TrafficLimitStrategy.NO_RESET
             description = f"Web purchase: {order.email} — {snapshot.get('name', 'N/A')}"
+
+            raw_squads = snapshot.get("internal_squads", [])
+            if raw_squads:
+                internal_squads = [UUID(s) for s in raw_squads]
+            raw_ext = snapshot.get("external_squad")
+            if raw_ext:
+                external_squad = UUID(raw_ext)
         else:
             traffic_limit_bytes = 5 * 1024 * 1024 * 1024  # 5 GB
             device_limit = 1
             traffic_strategy = TrafficLimitStrategy.NO_RESET
             description = f"Web trial: {order.email}"
 
+        create_kwargs = dict(
+            username=username,
+            expire_at=format_days_to_datetime(order.plan_duration_days),
+            traffic_limit_bytes=traffic_limit_bytes,
+            traffic_limit_strategy=traffic_strategy,
+            description=description,
+            hwid_device_limit=device_limit,
+        )
+        if internal_squads:
+            create_kwargs["active_internal_squads"] = internal_squads
+        if external_squad:
+            create_kwargs["external_squad_uuid"] = external_squad
+
         created = await remnawave_service.remnawave.users.create_user(
-            CreateUserRequestDto(
-                username=username,
-                expire_at=format_days_to_datetime(order.plan_duration_days),
-                traffic_limit_bytes=traffic_limit_bytes,
-                traffic_limit_strategy=traffic_strategy,
-                description=description,
-                hwid_device_limit=device_limit,
-            )
+            CreateUserRequestDto(**create_kwargs)
         )
         subscription_url = remnawave_service._rewrite_sub_url(created.subscription_url)
 
