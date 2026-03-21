@@ -209,6 +209,128 @@ async def _handle_web_link(
     logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
 
 
+@inject
+@router.message(F.text.contains("/api/sub/"))
+async def on_subscription_url_paste(
+    message: Message,
+    user: UserDto,
+    uow: FromDishka[UnitOfWork],
+    remnawave_service: FromDishka[RemnawaveService],
+    subscription_service: FromDishka[SubscriptionService],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    """Handle when user pastes a subscription URL to link their web purchase."""
+    import re  # noqa: PLC0415
+    from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
+    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
+    from src.core.enums import PlanType  # noqa: PLC0415
+    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
+    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
+
+    text = (message.text or "").strip()
+
+    # Extract the token (last path segment of the subscription URL)
+    match = re.search(r"/api/sub/([A-Za-z0-9_-]+)", text)
+    if not match:
+        await message.answer("Не удалось распознать ссылку подписки.")
+        return
+
+    token = match.group(1)
+
+    # Find the Remnawave user by subscription token (shortUuid)
+    try:
+        sub_info = await remnawave_service.remnawave.users.get_user_by_short_uuid(token)
+    except Exception:
+        logger.warning(f"{log(user)} Pasted sub URL with token '{token}' — remnawave user not found")
+        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
+        return
+
+    if not sub_info:
+        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
+        return
+
+    # Check if this remnawave user is already linked to a telegram account
+    if sub_info.telegram_id and sub_info.telegram_id != user.telegram_id:
+        await message.answer("Эта подписка уже привязана к другому аккаунту Telegram.")
+        return
+
+    if sub_info.telegram_id == user.telegram_id:
+        await message.answer("Эта подписка уже привязана к вашему аккаунту.")
+        return
+
+    # Check if this user already has a subscription linked
+    existing = await subscription_service.get_current(user.telegram_id)
+    if existing:
+        await message.answer(
+            "У вас уже есть активная подписка. "
+            "Для привязки другой подписки обратитесь в поддержку."
+        )
+        return
+
+    # Link: update remnawave user with telegram_id
+    await remnawave_service.remnawave.users.update_user(
+        UpdateUserRequestDto(
+            uuid=sub_info.uuid,
+            telegram_id=user.telegram_id,
+        )
+    )
+
+    # Try to find matching web order to claim it
+    if sub_info.username and sub_info.username.startswith("web_"):
+        short_id = sub_info.username[len("web_"):]
+        async with uow:
+            order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
+        if order and order.claimed_by_telegram_id is None:
+            async with uow:
+                await uow.repository.web_orders.update_by_payment_id(
+                    order.payment_id,
+                    claimed_by_telegram_id=user.telegram_id,
+                )
+
+    # Create local subscription
+    sub_url = remnawave_service._rewrite_sub_url(sub_info.subscription_url)
+
+    # Determine plan details from remnawave user
+    traffic_limit = sub_info.traffic_limit_bytes // (1024 ** 3) if sub_info.traffic_limit_bytes else -1
+    device_limit = format_device_count(sub_info.hwid_device_limit)
+
+    plan = PlanSnapshotDto(
+        id=-1,
+        name="Web Purchase",
+        tag=sub_info.tag,
+        type=PlanType.UNLIMITED,
+        traffic_limit=traffic_limit,
+        device_limit=device_limit,
+        duration=-1,
+        traffic_limit_strategy=sub_info.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+        internal_squads=[s.uuid for s in sub_info.active_internal_squads],
+        external_squad=sub_info.external_squad_uuid,
+    )
+
+    subscription = SubscriptionDto(
+        user_remna_id=sub_info.uuid,
+        status=sub_info.status,
+        is_trial=False,
+        traffic_limit=traffic_limit,
+        device_limit=device_limit,
+        traffic_limit_strategy=sub_info.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+        tag=sub_info.tag,
+        internal_squads=[s.uuid for s in sub_info.active_internal_squads],
+        external_squad=sub_info.external_squad_uuid,
+        expire_at=sub_info.expire_at,
+        url=sub_url,
+        plan=plan,
+    )
+
+    await subscription_service.create(user, subscription)
+    logger.info(f"{log(user)} Linked subscription via pasted URL, token='{token}'")
+
+    await message.answer(
+        "Подписка успешно привязана к вашему аккаунту! "
+        "Теперь вы можете управлять ей через бота."
+    )
+
+
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)
 async def on_rules_accept(
     callback: CallbackQuery,
