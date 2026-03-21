@@ -51,11 +51,11 @@ async def on_start_command(
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
-    # Handle web trial deep link: /start web_<short_id>
+    # Handle web deep link: /start web_<short_id>
     if message.text and len(message.text.split()) > 1:
         param = message.text.split()[1]
         if param.startswith("web_"):
-            await _handle_web_trial_link(
+            await _handle_web_link(
                 message, user, param, uow, remnawave_service,
                 subscription_service, notification_service,
             )
@@ -63,7 +63,7 @@ async def on_start_command(
     await on_start_dialog(user, dialog_manager)
 
 
-async def _handle_web_trial_link(
+async def _handle_web_link(
     message: Message,
     user: UserDto,
     param: str,
@@ -86,61 +86,63 @@ async def _handle_web_trial_link(
         order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
 
     if not order or order.status != "completed" or not order.subscription_url:
-        logger.warning(f"{log(user)} Web trial link '{param}' — order not found or not completed")
+        logger.warning(f"{log(user)} Web link '{param}' — order not found or not completed")
         await message.answer(
             "Ссылка недействительна или оплата ещё не завершена. "
             "Если вы только что оплатили — подождите минуту и попробуйте снова."
         )
         return
 
+    is_trial = order.is_trial
+
     # 2. Check if this order was already claimed by someone
     if order.claimed_by_telegram_id is not None:
         if order.claimed_by_telegram_id == user.telegram_id:
             logger.info(f"{log(user)} Re-opened already claimed web link '{param}'")
-            await message.answer("Этот пробный период уже активирован на вашем аккаунте.")
+            await message.answer("Эта подписка уже привязана к вашему аккаунту.")
         else:
             logger.warning(f"{log(user)} Tried to claim web link '{param}' already claimed by {order.claimed_by_telegram_id}")
             await message.answer("Эта ссылка уже была использована другим пользователем.")
         return
 
-    # 3. Check if this telegram user already claimed any web order (one trial per TG account)
-    async with uow:
-        already_claimed = await uow.repository.web_orders.exists_claimed_by_telegram_id(user.telegram_id)
+    # 3. Trial-only checks (skip for full purchases)
+    if is_trial:
+        async with uow:
+            already_claimed = await uow.repository.web_orders.exists_claimed_by_telegram_id(user.telegram_id)
 
-    if already_claimed:
-        logger.warning(f"{log(user)} Already claimed a web trial, rejecting '{param}'")
-        await message.answer(
-            "Пробный период можно активировать только один раз. "
-            "Оформите подписку для продолжения использования."
-        )
-        return
+        if already_claimed:
+            logger.warning(f"{log(user)} Already claimed a web trial, rejecting '{param}'")
+            await message.answer(
+                "Пробный период можно активировать только один раз. "
+                "Оформите подписку для продолжения использования."
+            )
+            return
 
-    # 4. Check if user already has a trial subscription (from auto-trial or manual)
-    has_trial = await subscription_service.has_used_trial(user.telegram_id)
-    if has_trial:
-        logger.warning(f"{log(user)} Already has trial subscription, rejecting web link '{param}'")
-        await message.answer(
-            "Пробный период можно активировать только один раз. "
-            "Оформите подписку для продолжения использования."
-        )
-        return
+        has_trial = await subscription_service.has_used_trial(user.telegram_id)
+        if has_trial:
+            logger.warning(f"{log(user)} Already has trial subscription, rejecting web link '{param}'")
+            await message.answer(
+                "Пробный период можно активировать только один раз. "
+                "Оформите подписку для продолжения использования."
+            )
+            return
 
-    # 5. Find the Remnawave user created for this web order
+    # 4. Find the Remnawave user created for this web order
     try:
         remna_user = await remnawave_service.remnawave.users.get_user_by_username(username)
     except Exception:
         logger.error(f"{log(user)} Remnawave user '{username}' not found")
-        await message.answer("Произошла ошибка при активации. Напишите в поддержку: support@componovps.com")
+        await message.answer("Произошла ошибка при активации. Напишите в поддержку: support@componovpn.com")
         return
 
-    # 6. Claim the order — atomically set claimed_by_telegram_id
+    # 5. Claim the order — atomically set claimed_by_telegram_id
     async with uow:
         await uow.repository.web_orders.update_by_payment_id(
             order.payment_id,
             claimed_by_telegram_id=user.telegram_id,
         )
 
-    # 7. Update Remnawave user with telegram_id
+    # 6. Update Remnawave user with telegram_id
     await remnawave_service.remnawave.users.update_user(
         UpdateUserRequestDto(
             uuid=remna_user.uuid,
@@ -148,32 +150,51 @@ async def _handle_web_trial_link(
         )
     )
 
-    # 8. Create local subscription linked to this bot user
+    # 7. Create local subscription linked to this bot user
     total_days = order.plan_duration_days
 
-    web_trial_traffic_gb = 5
-
-    plan = PlanSnapshotDto(
-        id=-1,
-        name="Web Trial",
-        tag=remna_user.tag,
-        type=PlanType.UNLIMITED,
-        traffic_limit=web_trial_traffic_gb,
-        device_limit=format_device_count(remna_user.hwid_device_limit),
-        duration=total_days,
-        traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-        internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-        external_squad=remna_user.external_squad_uuid,
-    )
+    if order.plan_snapshot and not is_trial:
+        # Full purchase — use plan snapshot
+        snapshot = order.plan_snapshot
+        plan = PlanSnapshotDto(
+            id=snapshot.get("id", -1),
+            name=snapshot.get("name", "Web Purchase"),
+            tag=remna_user.tag,
+            type=PlanType(snapshot.get("type", "UNLIMITED")),
+            traffic_limit=snapshot.get("traffic_limit", -1),
+            device_limit=snapshot.get("device_limit", -1),
+            duration=total_days,
+            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
+            external_squad=remna_user.external_squad_uuid,
+        )
+        traffic_limit = snapshot.get("traffic_limit", -1)
+        device_limit = snapshot.get("device_limit", -1)
+    else:
+        # Trial — hardcoded values
+        traffic_limit = 5
+        device_limit = format_device_count(remna_user.hwid_device_limit)
+        plan = PlanSnapshotDto(
+            id=-1,
+            name="Web Trial",
+            tag=remna_user.tag,
+            type=PlanType.UNLIMITED,
+            traffic_limit=traffic_limit,
+            device_limit=device_limit,
+            duration=total_days,
+            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
+            external_squad=remna_user.external_squad_uuid,
+        )
 
     sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
 
     subscription = SubscriptionDto(
         user_remna_id=remna_user.uuid,
         status=remna_user.status,
-        is_trial=True,
-        traffic_limit=web_trial_traffic_gb,
-        device_limit=format_device_count(remna_user.hwid_device_limit),
+        is_trial=is_trial,
+        traffic_limit=traffic_limit,
+        device_limit=device_limit,
         traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
         tag=remna_user.tag,
         internal_squads=[s.uuid for s in remna_user.active_internal_squads],
@@ -184,7 +205,8 @@ async def _handle_web_trial_link(
     )
 
     await subscription_service.create(user, subscription)
-    logger.info(f"{log(user)} Linked web trial subscription '{username}' (email: {order.email}, {total_days}d)")
+    kind = "trial" if is_trial else "purchase"
+    logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
 
 
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)

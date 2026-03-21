@@ -127,10 +127,13 @@ async def handle_web_order_task(
             logger.warning(f"Web order '{payment_id}' was already processed by another worker")
             return
 
+        bot_link = f"https://t.me/compono_bot?start=web_{short_id}"
+
         if order.plan_snapshot:
-            # Full purchase — send subscription details directly via email
+            # Full purchase — send subscription + bot link for account linking
             await email_service.send_purchase_subscription(
-                order.email, subscription_url, order.plan_snapshot.get("name", "Compono VPN")
+                order.email, subscription_url,
+                order.plan_snapshot.get("name", "Compono VPN"), bot_link,
             )
             logger.info(
                 f"Web purchase activated for '{order.email}', "
@@ -138,7 +141,6 @@ async def handle_web_order_task(
             )
         else:
             # Trial — send bot link
-            bot_link = f"https://t.me/compono_bot?start=web_{short_id}"
             await email_service.send_trial_bot_link(order.email, bot_link)
             logger.info(f"Web trial activated for '{order.email}', sub_url='{subscription_url}'")
 

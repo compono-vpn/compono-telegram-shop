@@ -53,11 +53,26 @@ class EmailService:
             logger.error(f"Failed to send email to '{to_email}': {e}")
 
     async def send_purchase_subscription(
-        self, to_email: str, subscription_url: str, plan_name: str
+        self, to_email: str, subscription_url: str, plan_name: str,
+        bot_link: str = "",
     ) -> None:
         if not self.api_key:
             logger.warning(f"Resend API key not configured, skipping email to '{to_email}'")
             return
+
+        bot_section = ""
+        if bot_link:
+            bot_section = f"""\
+    <h3 style="margin-top: 24px;">Привязать к Telegram</h3>
+    <p>Привяжите подписку к Telegram-боту, чтобы управлять ей, получать уведомления и продлевать:</p>
+    <p style="margin: 16px 0;">
+        <a href="{bot_link}"
+           style="display: inline-block; padding: 12px 24px; background: #FFD600;
+                  color: #1A1A1A; text-decoration: none; font-weight: bold;
+                  border: 3px solid #1A1A1A;">
+            Открыть в Telegram
+        </a>
+    </p>"""
 
         html = f"""\
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
@@ -86,6 +101,7 @@ class EmailService:
             <a href="https://github.com/hiddify/hiddify-app/releases">Windows / macOS — Hiddify</a>
         </li>
     </ul>
+    {bot_section}
     <hr style="margin-top: 32px; border: none; border-top: 1px solid #eee;">
     <p style="color: #999; font-size: 12px;">Compono VPN — быстрый и безопасный интернет</p>
 </div>"""
