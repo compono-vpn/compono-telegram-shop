@@ -24,6 +24,9 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     port: int = 5000
     relay_sync_url: str = ""
 
+    billing_url: str = "http://compono-billing:8080"
+    billing_secret: str
+
     locales: LocaleList = LocaleList([Locale.EN])
     default_locale: Locale = Locale.EN
 
