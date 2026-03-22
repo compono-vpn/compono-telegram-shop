@@ -130,6 +130,15 @@ class BillingClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def link_subscription_url(self, telegram_id: int, subscription_token: str) -> dict:
+        """Link a subscription URL (by token/shortUuid) to a telegram user."""
+        resp = await self._client.post(
+            "/api/v1/internal/subscription/link",
+            json={"telegram_id": telegram_id, "subscription_token": subscription_token},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     # --- Users ---
 
     async def get_user(self, telegram_id: int) -> dict | None:

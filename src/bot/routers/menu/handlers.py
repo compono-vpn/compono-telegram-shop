@@ -6,6 +6,7 @@ from aiogram_dialog.widgets.kbd import Button
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
+from httpx import HTTPStatusError
 from loguru import logger
 
 from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT
@@ -15,15 +16,12 @@ from src.core.enums import MediaType
 from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.database import UnitOfWork
-from src.infrastructure.database.models.dto import PlanSnapshotDto, UserDto
-from src.infrastructure.taskiq.tasks.subscriptions import trial_subscription_task
+from src.infrastructure.billing.client import BillingClient
+from src.infrastructure.database.models.dto import UserDto
 from src.services.notification import NotificationService
-from src.services.plan import PlanService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
-from src.services.subscription import SubscriptionService
 
 router = Router(name=__name__)
 
@@ -46,19 +44,13 @@ async def on_start_command(
     message: Message,
     user: UserDto,
     dialog_manager: DialogManager,
-    uow: FromDishka[UnitOfWork],
-    remnawave_service: FromDishka[RemnawaveService],
-    subscription_service: FromDishka[SubscriptionService],
-    notification_service: FromDishka[NotificationService],
+    billing_client: FromDishka[BillingClient],
 ) -> None:
     # Handle web deep link: /start web_<short_id>
     if message.text and len(message.text.split()) > 1:
         param = message.text.split()[1]
         if param.startswith("web_"):
-            await _handle_web_link(
-                message, user, param, uow, remnawave_service,
-                subscription_service, notification_service,
-            )
+            await _handle_web_link(message, user, param, billing_client)
 
     await on_start_dialog(user, dialog_manager)
 
@@ -67,146 +59,55 @@ async def _handle_web_link(
     message: Message,
     user: UserDto,
     param: str,
-    uow: UnitOfWork,
-    remnawave_service: RemnawaveService,
-    subscription_service: SubscriptionService,
-    notification_service: NotificationService,
+    billing_client: BillingClient,
 ) -> None:
-    from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
-    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
-    from src.core.enums import PlanType  # noqa: PLC0415
-    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
-    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
-
     short_id = param[len("web_"):]
-    username = f"web_{short_id}"
 
-    # 1. Validate the web order exists and is completed
-    async with uow:
-        order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
+    try:
+        result = await billing_client.claim_web_order(user.telegram_id, short_id)
+    except HTTPStatusError as e:
+        status = e.response.status_code
+        detail = ""
+        try:
+            detail = e.response.json().get("detail", "")
+        except Exception:
+            pass
 
-    if not order or order.status != "completed" or not order.subscription_url:
-        logger.warning(f"{log(user)} Web link '{param}' — order not found or not completed")
-        await message.answer(
-            "Ссылка недействительна или оплата ещё не завершена. "
-            "Если вы только что оплатили — подождите минуту и попробуйте снова."
-        )
-        return
-
-    is_trial = order.is_trial
-
-    # 2. Check if this order was already claimed by someone
-    if order.claimed_by_telegram_id is not None:
-        if order.claimed_by_telegram_id == user.telegram_id:
+        if status == 404:
+            logger.warning(f"{log(user)} Web link '{param}' — order not found or not completed")
+            await message.answer(
+                "Ссылка недействительна или оплата ещё не завершена. "
+                "Если вы только что оплатили — подождите минуту и попробуйте снова."
+            )
+        elif status == 409 and "already claimed by you" in detail:
             logger.info(f"{log(user)} Re-opened already claimed web link '{param}'")
             await message.answer("Эта подписка уже привязана к вашему аккаунту.")
-        else:
-            logger.warning(f"{log(user)} Tried to claim web link '{param}' already claimed by {order.claimed_by_telegram_id}")
+        elif status == 409:
+            logger.warning(f"{log(user)} Web link '{param}' conflict: {detail}")
             await message.answer("Эта ссылка уже была использована другим пользователем.")
+        elif status == 403:
+            logger.warning(f"{log(user)} Trial already used, rejecting web link '{param}'")
+            await message.answer(
+                "Пробный период можно активировать только один раз. "
+                "Оформите подписку для продолжения использования."
+            )
+        else:
+            logger.error(f"{log(user)} Web link '{param}' billing error: {status} {detail}")
+            await message.answer("Произошла ошибка при активации. Напишите в поддержку: support@componovpn.com")
         return
-
-    # 3. Trial-only checks (skip for full purchases)
-    if is_trial:
-        async with uow:
-            already_claimed = await uow.repository.web_orders.exists_claimed_by_telegram_id(user.telegram_id)
-
-        if already_claimed:
-            logger.warning(f"{log(user)} Already claimed a web trial, rejecting '{param}'")
-            await message.answer(
-                "Пробный период можно активировать только один раз. "
-                "Оформите подписку для продолжения использования."
-            )
-            return
-
-        has_trial = await subscription_service.has_used_trial(user.telegram_id)
-        if has_trial:
-            logger.warning(f"{log(user)} Already has trial subscription, rejecting web link '{param}'")
-            await message.answer(
-                "Пробный период можно активировать только один раз. "
-                "Оформите подписку для продолжения использования."
-            )
-            return
-
-    # 4. Find the Remnawave user created for this web order
-    try:
-        remna_user = await remnawave_service.remnawave.users.get_user_by_username(username)
-    except Exception:
-        logger.error(f"{log(user)} Remnawave user '{username}' not found")
+    except Exception as e:
+        logger.error(f"{log(user)} Web link '{param}' unexpected error: {e}")
         await message.answer("Произошла ошибка при активации. Напишите в поддержку: support@componovpn.com")
         return
 
-    # 5. Claim the order — atomically set claimed_by_telegram_id
-    async with uow:
-        await uow.repository.web_orders.update_by_payment_id(
-            order.payment_id,
-            claimed_by_telegram_id=user.telegram_id,
-        )
+    kind = "trial" if result.get("is_trial") else "purchase"
+    logger.info(f"{log(user)} Linked web {kind} subscription via billing service (short_id={short_id})")
 
-    # 6. Update Remnawave user with telegram_id
-    await remnawave_service.remnawave.users.update_user(
-        UpdateUserRequestDto(
-            uuid=remna_user.uuid,
-            telegram_id=user.telegram_id,
-        )
-    )
-
-    # 7. Create local subscription linked to this bot user
-    total_days = order.plan_duration_days
-
-    if order.plan_snapshot and not is_trial:
-        # Full purchase — use plan snapshot
-        snapshot = order.plan_snapshot
-        plan = PlanSnapshotDto(
-            id=snapshot.get("id", -1),
-            name=snapshot.get("name", "Web Purchase"),
-            tag=remna_user.tag,
-            type=PlanType(snapshot.get("type", "UNLIMITED")),
-            traffic_limit=snapshot.get("traffic_limit", -1),
-            device_limit=snapshot.get("device_limit", -1),
-            duration=total_days,
-            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-            external_squad=remna_user.external_squad_uuid,
-        )
-        traffic_limit = snapshot.get("traffic_limit", -1)
-        device_limit = snapshot.get("device_limit", -1)
-    else:
-        # Trial — hardcoded values
-        traffic_limit = 5
-        device_limit = format_device_count(remna_user.hwid_device_limit)
-        plan = PlanSnapshotDto(
-            id=-1,
-            name="Web Trial",
-            tag=remna_user.tag,
-            type=PlanType.UNLIMITED,
-            traffic_limit=traffic_limit,
-            device_limit=device_limit,
-            duration=total_days,
-            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-            external_squad=remna_user.external_squad_uuid,
-        )
-
-    sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
-
-    subscription = SubscriptionDto(
-        user_remna_id=remna_user.uuid,
-        status=remna_user.status,
-        is_trial=is_trial,
-        traffic_limit=traffic_limit,
-        device_limit=device_limit,
-        traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-        tag=remna_user.tag,
-        internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-        external_squad=remna_user.external_squad_uuid,
-        expire_at=remna_user.expire_at,
-        url=sub_url,
-        plan=plan,
-    )
-
-    await subscription_service.create(user, subscription)
-    kind = "trial" if is_trial else "purchase"
-    logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
+    # BILLING_MIGRATION: old code below — _handle_web_link previously did:
+    # - Direct DB lookup of web_orders via UnitOfWork
+    # - Direct Remnawave API calls (get user, update user telegram_id)
+    # - Direct subscription creation via SubscriptionService
+    # All of this is now handled by billing_client.claim_web_order()
 
 
 @inject
@@ -214,18 +115,10 @@ async def _handle_web_link(
 async def on_subscription_url_paste(
     message: Message,
     user: UserDto,
-    uow: FromDishka[UnitOfWork],
-    remnawave_service: FromDishka[RemnawaveService],
-    subscription_service: FromDishka[SubscriptionService],
-    notification_service: FromDishka[NotificationService],
+    billing_client: FromDishka[BillingClient],
 ) -> None:
     """Handle when user pastes a subscription URL to link their web purchase."""
     import re  # noqa: PLC0415
-    from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
-    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
-    from src.core.enums import PlanType  # noqa: PLC0415
-    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
-    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
 
     text = (message.text or "").strip()
 
@@ -237,98 +130,48 @@ async def on_subscription_url_paste(
 
     token = match.group(1)
 
-    # Find the Remnawave user by subscription token (shortUuid)
     try:
-        sub_info = await remnawave_service.remnawave.users.get_user_by_short_uuid(token)
-    except Exception:
-        logger.warning(f"{log(user)} Pasted sub URL with token '{token}' — remnawave user not found")
-        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
+        await billing_client.link_subscription_url(user.telegram_id, token)
+    except HTTPStatusError as e:
+        status = e.response.status_code
+        detail = ""
+        try:
+            detail = e.response.json().get("detail", "")
+        except Exception:
+            pass
+
+        if status == 404:
+            logger.warning(f"{log(user)} Pasted sub URL with token '{token}' — not found")
+            await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
+        elif status == 409 and "already linked to you" in detail:
+            await message.answer("Эта подписка уже привязана к вашему аккаунту.")
+        elif status == 409 and "another" in detail:
+            await message.answer("Эта подписка уже привязана к другому аккаунту Telegram.")
+        elif status == 409:
+            await message.answer(
+                "У вас уже есть активная подписка. "
+                "Для привязки другой подписки обратитесь в поддержку."
+            )
+        else:
+            logger.error(f"{log(user)} Link sub URL error: {status} {detail}")
+            await message.answer("Произошла ошибка. Попробуйте позже.")
+        return
+    except Exception as e:
+        logger.error(f"{log(user)} Link sub URL unexpected error: {e}")
+        await message.answer("Произошла ошибка. Попробуйте позже.")
         return
 
-    if not sub_info:
-        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
-        return
-
-    # Check if this remnawave user is already linked to a telegram account
-    if sub_info.telegram_id and sub_info.telegram_id != user.telegram_id:
-        await message.answer("Эта подписка уже привязана к другому аккаунту Telegram.")
-        return
-
-    if sub_info.telegram_id == user.telegram_id:
-        await message.answer("Эта подписка уже привязана к вашему аккаунту.")
-        return
-
-    # Check if this user already has a subscription linked
-    existing = await subscription_service.get_current(user.telegram_id)
-    if existing:
-        await message.answer(
-            "У вас уже есть активная подписка. "
-            "Для привязки другой подписки обратитесь в поддержку."
-        )
-        return
-
-    # Link: update remnawave user with telegram_id
-    await remnawave_service.remnawave.users.update_user(
-        UpdateUserRequestDto(
-            uuid=sub_info.uuid,
-            telegram_id=user.telegram_id,
-        )
-    )
-
-    # Try to find matching web order to claim it
-    if sub_info.username and sub_info.username.startswith("web_"):
-        short_id = sub_info.username[len("web_"):]
-        async with uow:
-            order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
-        if order and order.claimed_by_telegram_id is None:
-            async with uow:
-                await uow.repository.web_orders.update_by_payment_id(
-                    order.payment_id,
-                    claimed_by_telegram_id=user.telegram_id,
-                )
-
-    # Create local subscription
-    sub_url = remnawave_service._rewrite_sub_url(sub_info.subscription_url)
-
-    # Determine plan details from remnawave user
-    traffic_limit = sub_info.traffic_limit_bytes // (1024 ** 3) if sub_info.traffic_limit_bytes else -1
-    device_limit = format_device_count(sub_info.hwid_device_limit)
-
-    plan = PlanSnapshotDto(
-        id=-1,
-        name="Web Purchase",
-        tag=sub_info.tag,
-        type=PlanType.UNLIMITED,
-        traffic_limit=traffic_limit,
-        device_limit=device_limit,
-        duration=-1,
-        traffic_limit_strategy=sub_info.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-        internal_squads=[s.uuid for s in sub_info.active_internal_squads],
-        external_squad=sub_info.external_squad_uuid,
-    )
-
-    subscription = SubscriptionDto(
-        user_remna_id=sub_info.uuid,
-        status=sub_info.status,
-        is_trial=False,
-        traffic_limit=traffic_limit,
-        device_limit=device_limit,
-        traffic_limit_strategy=sub_info.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-        tag=sub_info.tag,
-        internal_squads=[s.uuid for s in sub_info.active_internal_squads],
-        external_squad=sub_info.external_squad_uuid,
-        expire_at=sub_info.expire_at,
-        url=sub_url,
-        plan=plan,
-    )
-
-    await subscription_service.create(user, subscription)
     logger.info(f"{log(user)} Linked subscription via pasted URL, token='{token}'")
-
     await message.answer(
         "Подписка успешно привязана к вашему аккаунту! "
         "Теперь вы можете управлять ей через бота."
     )
+
+    # BILLING_MIGRATION: old code below — on_subscription_url_paste previously did:
+    # - Direct Remnawave API calls (get_user_by_short_uuid, update_user)
+    # - Direct DB lookup/update of web_orders via UnitOfWork
+    # - Direct subscription creation via SubscriptionService
+    # All of this is now handled by billing_client.link_subscription_url()
 
 
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)
@@ -356,21 +199,46 @@ async def on_get_trial(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    plan = await plan_service.get_trial_plan()
 
-    if not plan:
+    # Look up the trial plan via billing service
+    trial_plan = await billing_client.get_trial_plan()
+    if not trial_plan:
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-trial-unavailable"),
         )
         raise ValueError("Trial plan not exist")
 
-    trial = PlanSnapshotDto.from_plan(plan, plan.durations[0].days)
-    await trial_subscription_task.kiq(user, trial, False)
+    plan_id = trial_plan["id"]
+
+    try:
+        await billing_client.create_trial(user.telegram_id, plan_id)
+    except HTTPStatusError as e:
+        logger.error(f"{log(user)} Failed to create trial via billing: {e.response.status_code} {e.response.text}")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-trial-unavailable"),
+        )
+        return
+    except Exception as e:
+        logger.error(f"{log(user)} Unexpected error creating trial: {e}")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-trial-unavailable"),
+        )
+        return
+
+    logger.info(f"{log(user)} Trial created via billing service (plan_id={plan_id})")
+
+    # BILLING_MIGRATION: old code below — on_get_trial previously did:
+    # - plan_service.get_trial_plan() — direct DB lookup
+    # - trial_subscription_task.kiq(user, trial, False) — taskiq task that
+    #   created remnawave user + local subscription
+    # Now handled by billing_client.get_trial_plan() + billing_client.create_trial()
 
 
 @inject

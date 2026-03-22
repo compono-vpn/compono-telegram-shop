@@ -1,3 +1,4 @@
+import asyncio
 import traceback
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -7,7 +8,9 @@ from aiogram.types import WebhookInfo
 from aiogram.utils.formatting import Text
 from dishka import AsyncContainer, Scope
 from fastapi import FastAPI
+from fluentogram import TranslatorHub
 from loguru import logger
+from redis.asyncio import Redis
 
 from src.__version__ import __version__
 from src.api.endpoints import TelegramWebhookEndpoint
@@ -15,6 +18,8 @@ from src.core.config.app import AppConfig
 from src.core.enums import SystemNotificationType
 from src.core.metrics import BOT_INFO
 from src.core.utils.message_payload import MessagePayload
+from src.infrastructure.billing.event_consumer import BillingEventConsumer
+from src.infrastructure.billing.event_handlers import BillingEventHandlers
 from src.infrastructure.taskiq.tasks.updates import check_bot_update
 from src.services.command import CommandService
 from src.services.notification import NotificationService
@@ -120,10 +125,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             ),
         )
 
+    # Start billing event consumer
+    redis_client: Redis = await container.get(Redis)
+    translator_hub: TranslatorHub = await container.get(TranslatorHub)
+
+    billing_event_consumer = BillingEventConsumer(redis_client, config)
+    billing_event_handlers = BillingEventHandlers(bot, translator_hub, config.bot.dev_id)
+
+    billing_event_consumer.register("payment.completed", billing_event_handlers.on_payment_completed)
+    billing_event_consumer.register("subscription.created", billing_event_handlers.on_subscription_created)
+    billing_event_consumer.register("subscription.expired", billing_event_handlers.on_subscription_expired)
+    billing_event_consumer.register("subscription.limited", billing_event_handlers.on_subscription_limited)
+    billing_event_consumer.register("referral.reward", billing_event_handlers.on_referral_reward)
+
+    billing_consumer_task = asyncio.create_task(billing_event_consumer.start())
+    logger.info("Billing event consumer started")
+
     BOT_INFO.labels(version=__version__).set(1)
     app.state.ready = True
 
     yield
+
+    # Stop billing event consumer
+    await billing_event_consumer.stop()
+    billing_consumer_task.cancel()
+    try:
+        await billing_consumer_task
+    except asyncio.CancelledError:
+        pass
+    logger.info("Billing event consumer stopped")
 
     await notification_service.system_notify(
         ntf_type=SystemNotificationType.BOT_LIFETIME,
