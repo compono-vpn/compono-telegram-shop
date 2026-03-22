@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - stage/**
 
 concurrency:
   group: build-${{ github.ref }}
@@ -23,10 +24,20 @@ jobs:
       tag: ${{ steps.new_tag.outputs.new_tag }}
       changelog: ${{ steps.new_tag.outputs.changelog }}
       sha_short: ${{ steps.get-short.outputs.sha_short }}
+      is_stage: ${{ steps.check-branch.outputs.is_stage }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Check branch type
+        id: check-branch
+        run: |
+          if [[ "${{ github.ref }}" == refs/heads/stage/* ]]; then
+            echo "is_stage=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_stage=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Get short Git SHA
         id: get-short
@@ -41,7 +52,7 @@ jobs:
           default_bump: patch
           tag_prefix: v
           create_annotated_tag: false
-          dry_run: false
+          dry_run: ${{ steps.check-branch.outputs.is_stage }}
 
   build:
     name: Build
@@ -72,10 +83,11 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.generate-tag.outputs.tag }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.generate-tag.outputs.sha_short }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ needs.generate-tag.outputs.is_stage != 'true' && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
 
   release:
     name: Create Release
+    if: needs.generate-tag.outputs.is_stage != 'true'
     needs: [generate-tag, build]
     runs-on: ubuntu-latest
     permissions:
@@ -110,7 +122,8 @@ jobs:
     needs: [generate-tag, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch tag update
+      - name: Dispatch tag update (prod)
+        if: needs.generate-tag.outputs.is_stage != 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.GH_PAT }}
@@ -120,4 +133,18 @@ jobs:
             {
               "tag": "${{ needs.generate-tag.outputs.tag }}",
               "path": "compono-shop"
+            }
+
+      - name: Dispatch tag update (stage)
+        if: needs.generate-tag.outputs.is_stage == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GH_PAT }}
+          repository: bdtfs/argocd
+          event-type: image-update
+          client-payload: |
+            {
+              "tag": "${{ needs.generate-tag.outputs.tag }}",
+              "path": "compono-shop",
+              "env": "stage"
             }
