@@ -41,6 +41,46 @@ class BillingClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def get_plan_by_name(self, plan_name: str) -> dict | None:
+        resp = await self._client.get("/api/v1/internal/plans/by-name", params={"name": plan_name})
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
+    async def create_plan(self, data: dict) -> dict:
+        resp = await self._client.post("/api/v1/internal/plans", json=data)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def update_plan(self, data: dict) -> dict:
+        resp = await self._client.put("/api/v1/internal/plans", json=data)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def delete_plan(self, plan_id: int) -> None:
+        resp = await self._client.delete(f"/api/v1/internal/plans/{plan_id}")
+        resp.raise_for_status()
+
+    async def move_plan_up(self, plan_id: int) -> bool:
+        resp = await self._client.post(f"/api/v1/internal/plans/{plan_id}/move-up")
+        if resp.status_code == 404:
+            return False
+        resp.raise_for_status()
+        return True
+
+    async def get_available_plans(self, telegram_id: int) -> list[dict]:
+        resp = await self._client.get(
+            "/api/v1/internal/plans/available", params={"telegram_id": telegram_id}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_allowed_plans(self) -> list[dict]:
+        resp = await self._client.get("/api/v1/internal/plans/allowed")
+        resp.raise_for_status()
+        return resp.json()
+
     # --- Payments ---
 
     async def create_payment(
@@ -91,6 +131,13 @@ class BillingClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def get_transaction(self, transaction_id: str) -> dict | None:
+        resp = await self._client.get(f"/api/v1/internal/transactions/detail/{transaction_id}")
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
     # --- Promocodes ---
 
     async def activate_promocode(self, code: str, telegram_id: int) -> dict:
@@ -98,6 +145,20 @@ class BillingClient:
             "/api/v1/internal/promocode/activate",
             json={"code": code, "telegram_id": telegram_id},
         )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_promocode(self, promocode_id: int) -> dict | None:
+        resp = await self._client.get(f"/api/v1/internal/promocodes/{promocode_id}")
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_promocode_by_code(self, code: str) -> dict | None:
+        resp = await self._client.get("/api/v1/internal/promocodes/by-code", params={"code": code})
+        if resp.status_code == 404:
+            return None
         resp.raise_for_status()
         return resp.json()
 
@@ -178,6 +239,81 @@ class BillingClient:
         return resp.json()
 
     # --- Gateways ---
+
+    async def get_gateway(self, gateway_id: int) -> dict | None:
+        resp = await self._client.get(f"/api/v1/internal/gateways/{gateway_id}")
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_gateway_by_type(self, gateway_type: str) -> dict | None:
+        resp = await self._client.get(
+            "/api/v1/internal/gateways/by-type", params={"type": gateway_type}
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
+    async def filter_active_gateways(self) -> list[dict]:
+        resp = await self._client.get("/api/v1/internal/gateways/active")
+        resp.raise_for_status()
+        return resp.json()
+
+    async def move_gateway_up(self, gateway_id: int) -> bool:
+        resp = await self._client.post(f"/api/v1/internal/gateways/{gateway_id}/move-up")
+        if resp.status_code == 404:
+            return False
+        resp.raise_for_status()
+        return True
+
+    async def create_test_payment(self, telegram_id: int, gateway_type: str) -> dict:
+        resp = await self._client.post(
+            "/api/v1/internal/gateways/test-payment",
+            json={"telegram_id": telegram_id, "gateway_type": gateway_type},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def calculate_price(
+        self,
+        telegram_id: int,
+        plan_id: int,
+        duration_days: int,
+        currency: str,
+    ) -> dict:
+        resp = await self._client.post(
+            "/api/v1/internal/pricing/calculate",
+            json={
+                "telegram_id": telegram_id,
+                "plan_id": plan_id,
+                "duration_days": duration_days,
+                "currency": currency,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_default_currency(self) -> str:
+        resp = await self._client.get("/api/v1/internal/settings/default-currency")
+        resp.raise_for_status()
+        return resp.json().get("currency", "XTR")
+
+    async def set_default_currency(self, currency: str) -> None:
+        resp = await self._client.put(
+            "/api/v1/internal/settings/default-currency",
+            json={"currency": currency},
+        )
+        resp.raise_for_status()
+
+    async def handle_free_payment(self, payment_id: str) -> dict:
+        resp = await self._client.post(
+            "/api/v1/internal/payment/handle-free",
+            json={"payment_id": payment_id},
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     async def list_gateways(self) -> list[dict]:
         resp = await self._client.get("/api/v1/internal/gateways")

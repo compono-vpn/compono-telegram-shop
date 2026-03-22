@@ -6,24 +6,22 @@ from dishka.integrations.aiogram_dialog import inject
 
 from src.core.config import AppConfig
 from src.core.enums import Currency
-from src.infrastructure.database.models.dto import PaymentGatewayDto
-from src.services.payment_gateway import PaymentGatewayService
-from src.services.settings import SettingsService
+from src.infrastructure.billing.client import BillingClient
 
 
 @inject
 async def gateways_getter(
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    gateways: list[PaymentGatewayDto] = await payment_gateway_service.get_all()
+    gateways = await billing_client.list_gateways()
 
     formatted_gateways = [
         {
-            "id": gateway.id,
-            "gateway_type": gateway.type,
-            "is_active": gateway.is_active,
+            "id": gateway.get("id"),
+            "gateway_type": gateway.get("type"),
+            "is_active": gateway.get("is_active"),
         }
         for gateway in gateways
     ]
@@ -37,47 +35,57 @@ async def gateways_getter(
 async def gateway_getter(
     dialog_manager: DialogManager,
     config: AppConfig,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     gateway_id = dialog_manager.dialog_data["gateway_id"]
-    gateway = await payment_gateway_service.get(gateway_id=gateway_id)
+    gateway = await billing_client.get_gateway(gateway_id)
 
     if not gateway:
         raise ValueError(f"Gateway '{gateway_id}' not found")
 
-    if not gateway.settings:
-        raise ValueError(f"Gateway '{gateway_id}' has not settings")
+    settings = gateway.get("settings")
+    if not settings:
+        raise ValueError(f"Gateway '{gateway_id}' has no settings")
+
+    # Build settings list from the dict returned by billing
+    settings_list = [
+        {"field": k, "value": v}
+        for k, v in settings.items()
+        if k not in ("id", "gateway_id")
+    ] if isinstance(settings, dict) else settings.get("settings_list", [])
+
+    gateway_type = gateway.get("type")
 
     return {
-        "id": gateway.id,
-        "gateway_type": gateway.type,
-        "is_active": gateway.is_active,
-        "settings": gateway.settings.get_settings_as_list_data,
-        "webhook": config.get_webhook(gateway.type),
-        "requires_webhook": gateway.requires_webhook,
+        "id": gateway.get("id"),
+        "gateway_type": gateway_type,
+        "is_active": gateway.get("is_active"),
+        "settings": settings_list,
+        "webhook": config.get_webhook(gateway_type),
+        "requires_webhook": gateway.get("requires_webhook", False),
     }
 
 
 @inject
 async def field_getter(
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     gateway_id = dialog_manager.dialog_data["gateway_id"]
     selected_field = dialog_manager.dialog_data["selected_field"]
 
-    gateway = await payment_gateway_service.get(gateway_id=gateway_id)
+    gateway = await billing_client.get_gateway(gateway_id)
 
     if not gateway:
         raise ValueError(f"Gateway '{gateway_id}' not found")
 
-    if not gateway.settings:
-        raise ValueError(f"Gateway '{gateway_id}' has not settings")
+    if not gateway.get("settings"):
+        raise ValueError(f"Gateway '{gateway_id}' has no settings")
 
     return {
-        "gateway_type": gateway.type,
+        "gateway_type": gateway.get("type"),
         "field": selected_field,
     }
 
@@ -85,15 +93,17 @@ async def field_getter(
 @inject
 async def currency_getter(
     dialog_manager: DialogManager,
-    settings_service: FromDishka[SettingsService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
+    default_currency_str = await billing_client.get_default_currency()
+
     return {
         "currency_list": [
             {
                 "symbol": currency.symbol,
                 "currency": currency.value,
-                "enabled": currency == await settings_service.get_default_currency(),
+                "enabled": currency.value == default_currency_str,
             }
             for currency in Currency
         ]
@@ -103,16 +113,16 @@ async def currency_getter(
 @inject
 async def placement_getter(
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    gateways: list[PaymentGatewayDto] = await payment_gateway_service.get_all(sorted=True)
+    gateways = await billing_client.list_gateways()
 
     formatted_gateways = [
         {
-            "id": gateway.id,
-            "gateway_type": gateway.type,
-            "is_active": gateway.is_active,
+            "id": gateway.get("id"),
+            "gateway_type": gateway.get("type"),
+            "is_active": gateway.get("is_active"),
         }
         for gateway in gateways
     ]

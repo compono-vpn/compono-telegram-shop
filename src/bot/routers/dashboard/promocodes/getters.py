@@ -7,9 +7,8 @@ from dishka.integrations.aiogram_dialog import inject
 from src.core.enums import PromocodeRewardType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import i18n_format_days, i18n_format_limit, i18n_format_traffic_limit
+from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.database.models.dto import PromocodeDto
-from src.services.plan import PlanService
-from src.services.promocode import PromocodeService
 
 
 async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -64,15 +63,15 @@ async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> d
 @inject
 async def list_getter(
     dialog_manager: DialogManager,
-    promocode_service: FromDishka[PromocodeService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    promocodes = await promocode_service.get_all()
+    promocodes = await billing_client.list_promocodes()
 
     formatted = [
         {
-            "id": p.id,
-            "name": f"{'🟢' if p.is_active else '🔴'} {p.code} ({p.reward_type})",
+            "id": p.get("id"),
+            "name": f"{'🟢' if p.get('is_active') else '🔴'} {p.get('code')} ({p.get('reward_type')})",
         }
         for p in promocodes
     ]
@@ -83,16 +82,16 @@ async def list_getter(
 @inject
 async def plan_select_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans = await plan_service.get_all()
-    active_plans = [p for p in plans if p.is_active]
+    plans = await billing_client.get_plans(active_only=False)
+    active_plans = [p for p in plans if p.get("is_active")]
 
     formatted_plans = [
         {
-            "plan_id": plan.id,
-            "plan_name": plan.name,
+            "plan_id": plan.get("id"),
+            "plan_name": plan.get("name"),
         }
         for plan in active_plans
     ]
@@ -103,14 +102,14 @@ async def plan_select_getter(
 @inject
 async def plan_duration_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
-    plan = await plan_service.get(selected_plan_id)
+    plan = await billing_client.get_plan(selected_plan_id)
 
     if not plan:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
 
-    durations = [duration.model_dump() for duration in plan.durations]
+    durations = plan.get("durations", [])
     return {"durations": durations}

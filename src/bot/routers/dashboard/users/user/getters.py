@@ -20,13 +20,11 @@ from src.core.utils.formatters import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.database.models.dto import UserDto
 from src.infrastructure.database.models.dto.subscription import RemnaSubscriptionDto
-from src.services.plan import PlanService
 from src.services.remnawave import RemnawaveService
-from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
-from src.services.transaction import TransactionService
 from src.services.user import UserService
 
 
@@ -37,10 +35,14 @@ async def user_getter(
     user: UserDto,
     user_service: FromDishka[UserService],
     subscription_service: FromDishka[SubscriptionService],
-    settings_service: FromDishka[SettingsService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    settings = await settings_service.get_referral_settings()
+    settings = await billing_client.get_settings()
+    referral_settings = settings.get("referral", {})
+    reward_settings = referral_settings.get("reward", {})
+    is_points = reward_settings.get("type") == "POINTS" or reward_settings.get("is_points", False)
+
     dialog_manager.dialog_data.pop("payload", None)
     start_data = cast(dict[str, Any], dialog_manager.start_data)
     target_telegram_id = start_data["target_telegram_id"]
@@ -58,7 +60,7 @@ async def user_getter(
         "user_name": target_user.name,
         "role": target_user.role,
         "language": target_user.language,
-        "show_points": settings.reward.is_points,
+        "show_points": is_points,
         "points": target_user.points,
         "personal_discount": target_user.personal_discount,
         "purchase_discount": target_user.purchase_discount,
@@ -391,22 +393,22 @@ async def expire_time_getter(
 @inject
 async def transactions_getter(
     dialog_manager: DialogManager,
-    transaction_service: FromDishka[TransactionService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
-    transactions = await transaction_service.get_by_user(target_telegram_id)
+    transactions = await billing_client.get_transactions(target_telegram_id)
 
     if not transactions:
         raise ValueError(f"Transactions not found for user '{target_telegram_id}'")
 
     formatted_transactions = [
         {
-            "payment_id": transaction.payment_id,
-            "status": transaction.status,
-            "created_at": transaction.created_at.strftime(DATETIME_FORMAT),  # type: ignore[union-attr]
+            "payment_id": t.get("payment_id"),
+            "status": t.get("status"),
+            "created_at": t.get("created_at", ""),
         }
-        for transaction in transactions
+        for t in transactions
     ]
 
     return {"transactions": list(reversed(formatted_transactions))}
@@ -415,34 +417,37 @@ async def transactions_getter(
 @inject
 async def transaction_getter(
     dialog_manager: DialogManager,
-    transaction_service: FromDishka[TransactionService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
     selected_transaction = dialog_manager.dialog_data["selected_transaction"]
-    transaction = await transaction_service.get(selected_transaction)
+    transaction = await billing_client.get_transaction(str(selected_transaction))
 
     if not transaction:
         raise ValueError(
             f"Transaction '{selected_transaction}' not found for user '{target_telegram_id}'"
         )
 
+    pricing = transaction.get("pricing", {})
+    plan = transaction.get("plan", {})
+
     return {
-        "is_test": transaction.is_test,
-        "payment_id": str(transaction.payment_id),
-        "purchase_type": transaction.purchase_type,
-        "transaction_status": transaction.status,
-        "gateway_type": transaction.gateway_type,
-        "final_amount": transaction.pricing.final_amount,
-        "currency": transaction.currency.symbol,
-        "discount_percent": transaction.pricing.discount_percent,
-        "original_amount": transaction.pricing.original_amount,
-        "created_at": transaction.created_at.strftime(DATETIME_FORMAT),  # type: ignore[union-attr]
-        "plan_name": transaction.plan.name,
-        "plan_type": transaction.plan.type,
-        "plan_traffic_limit": i18n_format_traffic_limit(transaction.plan.traffic_limit),
-        "plan_device_limit": i18n_format_device_limit(transaction.plan.device_limit),
-        "plan_duration": i18n_format_days(transaction.plan.duration),
+        "is_test": transaction.get("is_test", False),
+        "payment_id": str(transaction.get("payment_id", "")),
+        "purchase_type": transaction.get("purchase_type"),
+        "transaction_status": transaction.get("status"),
+        "gateway_type": transaction.get("gateway_type"),
+        "final_amount": pricing.get("final_amount", 0),
+        "currency": transaction.get("currency", {}).get("symbol", ""),
+        "discount_percent": pricing.get("discount_percent", 0),
+        "original_amount": pricing.get("original_amount", 0),
+        "created_at": transaction.get("created_at", ""),
+        "plan_name": plan.get("name", ""),
+        "plan_type": plan.get("type", ""),
+        "plan_traffic_limit": i18n_format_traffic_limit(plan.get("traffic_limit", -1)),
+        "plan_device_limit": i18n_format_device_limit(plan.get("device_limit", -1)),
+        "plan_duration": i18n_format_days(plan.get("duration", 0)),
     }
 
 
@@ -450,7 +455,7 @@ async def transaction_getter(
 async def give_access_getter(
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
@@ -459,16 +464,16 @@ async def give_access_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    plans = await plan_service.get_allowed_plans()
+    plans = await billing_client.get_allowed_plans()
 
     if not plans:
         raise ValueError("Allowed plans not found")
 
     formatted_plans = [
         {
-            "plan_name": plan.name,
-            "plan_id": plan.id,
-            "selected": True if target_telegram_id in plan.allowed_user_ids else False,
+            "plan_name": plan.get("name"),
+            "plan_id": plan.get("id"),
+            "selected": True if target_telegram_id in plan.get("allowed_user_ids", []) else False,
         }
         for plan in plans
     ]
@@ -480,7 +485,7 @@ async def give_access_getter(
 async def give_subscription_getter(
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
@@ -489,15 +494,15 @@ async def give_subscription_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    plans = await plan_service.get_available_plans(target_user)
+    plans = await billing_client.get_available_plans(target_telegram_id)
 
     if not plans:
         raise ValueError("Available plans not found")
 
     formatted_plans = [
         {
-            "plan_name": plan.name,
-            "plan_id": plan.id,
+            "plan_name": plan.get("name"),
+            "plan_id": plan.get("id"),
         }
         for plan in plans
     ]
@@ -508,16 +513,16 @@ async def give_subscription_getter(
 @inject
 async def subscription_duration_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
-    plan = await plan_service.get(selected_plan_id)
+    plan = await billing_client.get_plan(selected_plan_id)
 
     if not plan:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
 
-    durations = [duration.model_dump() for duration in plan.durations]
+    durations = plan.get("durations", [])
     return {"durations": durations}
 
 

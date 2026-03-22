@@ -9,22 +9,22 @@ from remnapy.enums.users import TrafficLimitStrategy
 
 from src.core.enums import Currency, PlanAvailability, PlanType
 from src.core.utils.adapter import DialogDataAdapter
+from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.database.models.dto import PlanDto, PlanDurationDto, PlanPriceDto
-from src.services.plan import PlanService
 
 
 @inject
 async def plans_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans: list[PlanDto] = await plan_service.get_all()
+    plans = await billing_client.get_plans(active_only=False)
     formatted_plans = [
         {
-            "id": plan.id,
-            "name": plan.name,
-            "is_active": plan.is_active,
+            "id": plan.get("id"),
+            "name": plan.get("name"),
+            "is_active": plan.get("is_active"),
         }
         for plan in plans
     ]
