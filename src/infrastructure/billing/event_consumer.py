@@ -27,15 +27,21 @@ class BillingEventConsumer:
         """Register a handler for an event type."""
         self._handlers[event_type] = handler
 
+    async def _ensure_consumer_group(self):
+        """Create the stream and consumer group if they don't exist."""
+        try:
+            await self._redis.xgroup_create(STREAM_KEY, GROUP_NAME, id="0", mkstream=True)
+            logger.info(f"Created consumer group '{GROUP_NAME}' on stream '{STREAM_KEY}'")
+        except Exception as e:
+            if "BUSYGROUP" in str(e):
+                pass  # Group already exists
+            else:
+                logger.warning(f"xgroup_create failed: {e}")
+
     async def start(self):
         """Start consuming events. Run as asyncio task."""
         self._running = True
-
-        # Create consumer group if not exists
-        try:
-            await self._redis.xgroup_create(STREAM_KEY, GROUP_NAME, id="0", mkstream=True)
-        except Exception:
-            pass  # Group already exists
+        await self._ensure_consumer_group()
 
         logger.info("Billing event consumer started")
 
@@ -56,6 +62,10 @@ class BillingEventConsumer:
             except asyncio.CancelledError:
                 break
             except Exception as e:
+                if "NOGROUP" in str(e):
+                    logger.warning("Consumer group lost, re-creating...")
+                    await self._ensure_consumer_group()
+                    continue
                 logger.error(f"Error reading billing events: {e}")
                 await asyncio.sleep(1)
 
