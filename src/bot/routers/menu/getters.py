@@ -166,8 +166,8 @@ async def invite_getter(
 
 
 @inject
-async def info_getter(config: FromDishka[AppConfig], **kwargs: Any) -> dict[str, Any]:
-    domain = config.hydra_primary_domain
+async def info_getter(app_config: FromDishka[AppConfig], **kwargs: Any) -> dict[str, Any]:
+    domain = app_config.hydra_primary_domain
     return {
         "privacy_url": f"https://{domain}/ru/privacy/",
         "terms_url": f"https://{domain}/ru/terms/",
