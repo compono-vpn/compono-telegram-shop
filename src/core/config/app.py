@@ -24,12 +24,16 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     port: int = 5000
     relay_sync_url: str = ""
 
+    billing_url: str = "http://compono-billing:8080"
+    billing_secret: str
+
     locales: LocaleList = LocaleList([Locale.EN])
     default_locale: Locale = Locale.EN
 
     crypt_key: SecretStr
     assets_dir: Path = ASSETS_DIR
     origins: StringList = StringList("")
+    hydra_domains: StringList = StringList("")
 
     bot: BotConfig = Field(default_factory=BotConfig)
     remnawave: RemnawaveConfig = Field(default_factory=RemnawaveConfig)
@@ -39,6 +43,16 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
 
     resend_api_key: str = ""
     resend_from_email: str = "Compono VPS <noreply@mail.componovps.com>"
+
+    @property
+    def hydra_primary_domain(self) -> str:
+        """First domain in HYDRA_DOMAINS list, used as default for fallback URLs."""
+        return self.hydra_domains[0] if self.hydra_domains and self.hydra_domains[0] else "componovpn.com"
+
+    @property
+    def hydra_allowed_origins(self) -> set[str]:
+        """Set of https:// origins for all hydra domains."""
+        return {f"https://{d}" for d in self.hydra_domains if d}
 
     @property
     def banners_dir(self) -> Path:

@@ -8,6 +8,7 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Select
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
+from httpx import HTTPStatusError
 from loguru import logger
 
 from src.bot.keyboards import get_user_keyboard
@@ -17,13 +18,9 @@ from src.core.enums import PaymentGatewayType, PurchaseType, SystemNotificationT
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.database.models.dto import PlanDto, PlanSnapshotDto, UserDto
+from src.infrastructure.billing.client import BillingClient
+from src.infrastructure.database.models.dto import PlanDto, PlanSnapshotDto, PriceDetailsDto, UserDto
 from src.services.notification import NotificationService
-from src.services.payment_gateway import PaymentGatewayService
-from src.services.plan import PlanService
-from src.services.pricing import PricingService
-from src.services.promocode import PromocodeService
-from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
 
 PAYMENT_CACHE_KEY = "payment_cache"
@@ -58,35 +55,41 @@ async def _create_payment_and_get_data(
     plan: PlanDto,
     duration_days: int,
     gateway_type: PaymentGatewayType,
-    payment_gateway_service: PaymentGatewayService,
+    billing_client: BillingClient,
     notification_service: NotificationService,
-    pricing_service: PricingService,
 ) -> Optional[CachedPaymentData]:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     duration = plan.get_duration(duration_days)
-    payment_gateway = await payment_gateway_service.get_by_type(gateway_type)
     purchase_type: PurchaseType = dialog_manager.dialog_data["purchase_type"]
 
-    if not duration or not payment_gateway:
-        logger.error(f"{log(user)} Failed to find duration or gateway for payment creation")
+    if not duration:
+        logger.error(f"{log(user)} Failed to find duration for payment creation")
         return None
 
-    transaction_plan = PlanSnapshotDto.from_plan(plan, duration.days)
-    price = duration.get_price(payment_gateway.currency)
-    pricing = pricing_service.calculate(user, price, payment_gateway.currency, duration_days=duration_days)
-
     try:
-        result = await payment_gateway_service.create_payment(
-            user=user,
-            plan=transaction_plan,
-            pricing=pricing,
-            purchase_type=purchase_type,
-            gateway_type=gateway_type,
+        # Determine currency from gateway
+        gateway_data = await billing_client.get_gateway_by_type(gateway_type.value)
+        currency = gateway_data.get("currency", "XTR") if gateway_data else "XTR"
+
+        result = await billing_client.create_payment(
+            telegram_id=user.telegram_id,
+            plan_id=plan.id,
+            duration_days=duration_days,
+            currency=currency,
+            gateway_type=gateway_type.value,
+            purchase_type=purchase_type.value,
+        )
+
+        pricing_data = result.get("pricing", {})
+        pricing = PriceDetailsDto(
+            final_amount=pricing_data.get("final_amount", 0),
+            original_amount=pricing_data.get("original_amount", 0),
+            discount_percent=pricing_data.get("discount_percent", 0),
         )
 
         return CachedPaymentData(
-            payment_id=str(result.id),
-            payment_url=result.url,
+            payment_id=str(result.get("id", result.get("payment_id", ""))),
+            payment_url=result.get("url"),
             final_pricing=pricing.model_dump_json(),
         )
 
@@ -124,17 +127,16 @@ async def _create_payment_and_get_data(
 async def on_purchase_type_select(
     purchase_type: PurchaseType,
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    plans: list[PlanDto] = await plan_service.get_available_plans(user)
-    gateways = await payment_gateway_service.filter_active()
+    plans_data = await billing_client.get_available_plans(user.telegram_id)
+    gateways = await billing_client.filter_active_gateways()
     dialog_manager.dialog_data["purchase_type"] = purchase_type
     dialog_manager.dialog_data.pop(CURRENT_DURATION_KEY, None)
 
-    if not plans:
+    if not plans_data:
         logger.warning(f"{log(user)} No available subscription plans")
         await notification_service.notify_user(
             user=user,
@@ -150,6 +152,7 @@ async def on_purchase_type_select(
         )
         return
 
+    plans = [PlanDto.model_validate(p) for p in plans_data]
     adapter = DialogDataAdapter(dialog_manager)
 
     if purchase_type == PurchaseType.RENEW:
@@ -189,16 +192,14 @@ async def on_subscription_plans(  # noqa: C901
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
-    pricing_service: FromDishka[PricingService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Opened subscription plans menu")
 
-    plans: list[PlanDto] = await plan_service.get_available_plans(user)
-    gateways = await payment_gateway_service.filter_active()
+    plans_data = await billing_client.get_available_plans(user.telegram_id)
+    gateways = await billing_client.filter_active_gateways()
 
     if not callback.data:
         raise ValueError("Callback data is empty")
@@ -208,7 +209,7 @@ async def on_subscription_plans(  # noqa: C901
 
     dialog_manager.dialog_data.pop(CURRENT_DURATION_KEY, None)
 
-    if not plans:
+    if not plans_data:
         logger.warning(f"{log(user)} No available subscription plans")
         await notification_service.notify_user(
             user=user,
@@ -224,6 +225,7 @@ async def on_subscription_plans(  # noqa: C901
         )
         return
 
+    plans = [PlanDto.model_validate(p) for p in plans_data]
     adapter = DialogDataAdapter(dialog_manager)
 
     if purchase_type == PurchaseType.RENEW:
@@ -258,18 +260,17 @@ async def on_subscription_plans(  # noqa: C901
             dialog_manager.dialog_data["only_single_duration"] = True
 
             if len(gateways) == 1:
-                logger.info(f"{log(user)} Auto-selected payment method '{gateways[0].type}'")
-                dialog_manager.dialog_data["selected_payment_method"] = gateways[0].type
-                dialog_manager.dialog_data["only_single_payment_method"] = True
+                gateway_type = PaymentGatewayType(gateways[0].get("type"))
+                logger.info(f"{log(user)} Auto-selected payment method '{gateway_type}'")
+                dialog_manager.dialog_data["selected_payment_method"] = gateway_type
 
                 payment_data = await _create_payment_and_get_data(
                     dialog_manager=dialog_manager,
                     plan=plans[0],
                     duration_days=plans[0].durations[0].days,
-                    gateway_type=gateways[0].type,
-                    payment_gateway_service=payment_gateway_service,
+                    gateway_type=gateway_type,
+                    billing_client=billing_client,
                     notification_service=notification_service,
-                    pricing_service=pricing_service,
                 )
 
                 if payment_data:
@@ -295,14 +296,15 @@ async def on_plan_select(
     widget: Select,
     dialog_manager: DialogManager,
     selected_plan: int,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    plan = await plan_service.get(plan_id=selected_plan)
+    plan_data = await billing_client.get_plan(plan_id=selected_plan)
 
-    if not plan:
+    if not plan_data:
         raise ValueError(f"Selected plan '{selected_plan}' not found")
 
+    plan = PlanDto.model_validate(plan_data)
     logger.info(f"{log(user)} Selected plan '{plan.id}'")
     adapter = DialogDataAdapter(dialog_manager)
     adapter.save(plan)
@@ -326,10 +328,8 @@ async def on_duration_select(
     widget: Select,
     dialog_manager: DialogManager,
     selected_duration: int,
-    settings_service: FromDishka[SettingsService],
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
-    pricing_service: FromDishka[PricingService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected subscription duration '{selected_duration}' days")
@@ -341,18 +341,25 @@ async def on_duration_select(
     if not plan:
         raise ValueError("PlanDto not found in dialog data")
 
-    gateways = await payment_gateway_service.filter_active()
-    currency = await settings_service.get_default_currency()
-    price = pricing_service.calculate(
-        user=user,
-        price=plan.get_duration(selected_duration).get_price(currency),  # type: ignore[union-attr]
-        currency=currency,
-        duration_days=selected_duration,
-    )
-    dialog_manager.dialog_data["is_free"] = price.is_free
+    gateways = await billing_client.filter_active_gateways()
 
-    if len(gateways) == 1 or price.is_free:
-        selected_payment_method = gateways[0].type
+    # Calculate price using billing service to check if free
+    default_currency = await billing_client.get_default_currency()
+    try:
+        price_data = await billing_client.calculate_price(
+            telegram_id=user.telegram_id,
+            plan_id=plan.id,
+            duration_days=selected_duration,
+            currency=default_currency,
+        )
+        is_free = price_data.get("is_free", False)
+    except HTTPStatusError:
+        is_free = False
+
+    dialog_manager.dialog_data["is_free"] = is_free
+
+    if len(gateways) == 1 or is_free:
+        selected_payment_method = PaymentGatewayType(gateways[0].get("type"))
         dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
 
         cache = _load_payment_data(dialog_manager)
@@ -371,9 +378,8 @@ async def on_duration_select(
             plan=plan,
             duration_days=selected_duration,
             gateway_type=selected_payment_method,
-            payment_gateway_service=payment_gateway_service,
+            billing_client=billing_client,
             notification_service=notification_service,
-            pricing_service=pricing_service,
         )
 
         if payment_data:
@@ -392,9 +398,8 @@ async def on_payment_method_select(
     widget: Select,
     dialog_manager: DialogManager,
     selected_payment_method: PaymentGatewayType,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
-    pricing_service: FromDishka[PricingService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected payment method '{selected_payment_method}'")
@@ -423,9 +428,8 @@ async def on_payment_method_select(
         plan=plan,
         duration_days=selected_duration,
         gateway_type=selected_payment_method,
-        payment_gateway_service=payment_gateway_service,
+        billing_client=billing_client,
         notification_service=notification_service,
-        pricing_service=pricing_service,
     )
 
     if payment_data:
@@ -440,12 +444,15 @@ async def on_get_subscription(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     payment_id = dialog_manager.dialog_data["payment_id"]
     logger.info(f"{log(user)} Getted free subscription '{payment_id}'")
-    await payment_gateway_service.handle_payment_succeeded(payment_id)
+    try:
+        await billing_client.handle_free_payment(payment_id)
+    except HTTPStatusError as e:
+        logger.error(f"{log(user)} Failed to handle free payment: {e.response.status_code}")
 
 
 @inject
@@ -453,7 +460,7 @@ async def on_promocode_input(
     message: Message,
     widget: MessageInput,
     dialog_manager: DialogManager,
-    promocode_service: FromDishka[PromocodeService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     dialog_manager.show_mode = ShowMode.EDIT
@@ -463,20 +470,37 @@ async def on_promocode_input(
         return
 
     code = message.text.strip()
-    result = await promocode_service.activate(user, code)
+
+    try:
+        result = await billing_client.activate_promocode(code=code, telegram_id=user.telegram_id)
+    except HTTPStatusError as e:
+        logger.error(f"{log(user)} Failed to activate promocode: {e.response.status_code}")
+        detail = ""
+        try:
+            detail = e.response.json().get("detail", "")
+        except Exception:
+            pass
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-promocode-activation-failed"),
+        )
+        return
+
+    notification_key = result.get("notification_key", "ntf-promocode-activated")
+    notification_kwargs = result.get("notification_kwargs", {})
 
     await notification_service.notify_user(
         user=user,
         payload=MessagePayload(
-            i18n_key=result.notification_key,
-            i18n_kwargs=result.notification_kwargs,
+            i18n_key=notification_key,
+            i18n_kwargs=notification_kwargs,
         ),
     )
 
-    if result.success:
+    if result.get("success"):
         # Send system notification to admins
-        promocode = await promocode_service.get_by_code(code.upper())
-        if promocode:
+        promocode_data = await billing_client.get_promocode_by_code(code.upper())
+        if promocode_data:
             await notification_service.system_notify(
                 payload=MessagePayload.not_deleted(
                     i18n_key="ntf-event-promocode-activated",
@@ -485,15 +509,16 @@ async def on_promocode_input(
                         "user_id": str(user.telegram_id),
                         "user_name": user.name,
                         "username": user.username or False,
-                        "code": promocode.code,
-                        "reward_type": str(promocode.reward_type),
-                        "reward": str(promocode.reward),
+                        "code": promocode_data.get("code", ""),
+                        "reward_type": str(promocode_data.get("reward_type", "")),
+                        "reward": str(promocode_data.get("reward", "")),
                     },
                     reply_markup=get_user_keyboard(user.telegram_id),
                 ),
                 ntf_type=SystemNotificationType.PROMOCODE_ACTIVATED,
             )
 
-        dialog_manager.dialog_data["promocode_reward_type"] = result.reward_type.value if result.reward_type else None
+        reward_type = result.get("reward_type")
+        dialog_manager.dialog_data["promocode_reward_type"] = reward_type
         dialog_manager.dialog_data["promocode_code"] = code.upper()
         await dialog_manager.switch_to(state=Subscription.PROMOCODE_SUCCESS)

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel, EmailStr
 
+from src.core.config import AppConfig
 from src.core.constants import API_V1
 from src.core.enums import (
     Currency,
@@ -52,12 +53,6 @@ class TrialResponse(BaseModel):
 class TrialStatusResponse(BaseModel):
     status: str
     subscription_url: str | None = None
-
-
-ALLOWED_RETURN_ORIGINS = {
-    "https://componovpn.com",
-    "https://ru.componovpn.com",
-}
 
 
 class PromocodeValidateRequest(BaseModel):
@@ -269,6 +264,7 @@ async def create_purchase(
     body: PurchaseRequest,
     payment_gateway_service: FromDishka[PaymentGatewayService],
     uow: FromDishka[UnitOfWork],
+    config: FromDishka[AppConfig],
 ) -> PurchaseResponse:
     # Look up plan
     async with uow:
@@ -378,18 +374,20 @@ async def create_purchase(
         raise HTTPException(status_code=503, detail="Payment gateway not available")
 
     # Use client-provided return URLs if they come from a trusted origin
+    allowed_origins = config.hydra_allowed_origins
     def validate_return_url(url: str | None, default: str) -> str:
         if not url:
             return default
         parsed = urlparse(url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        return url if origin in ALLOWED_RETURN_ORIGINS else default
+        return url if origin in allowed_origins else default
 
+    default_origin = f"https://{config.hydra_primary_domain}"
     return_url = validate_return_url(
-        body.return_url, f"https://componovpn.com/{body.lang}/purchase/success"
+        body.return_url, f"{default_origin}/{body.lang}/purchase/success"
     )
     failed_url = validate_return_url(
-        body.failed_url, f"https://componovpn.com/{body.lang}/purchase/failed"
+        body.failed_url, f"{default_origin}/{body.lang}/purchase/failed"
     )
 
     details = f"Compono VPN — {db_plan.name} ({body.duration_days} days)"

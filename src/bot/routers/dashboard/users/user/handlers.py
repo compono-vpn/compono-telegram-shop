@@ -9,6 +9,7 @@ from aiogram_dialog.widgets.kbd import Button, Select
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
+from httpx import HTTPStatusError
 from loguru import logger
 from remnapy import RemnawaveSDK
 from remnapy.exceptions import NotFoundError
@@ -22,6 +23,7 @@ from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.validators import is_double_click, parse_int
+from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.database.models.dto import UserDto
 from src.infrastructure.database.models.dto.plan import PlanSnapshotDto
 from src.infrastructure.database.models.dto.subscription import (
@@ -30,10 +32,8 @@ from src.infrastructure.database.models.dto.subscription import (
 )
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
 from src.services.notification import NotificationService
-from src.services.plan import PlanService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
-from src.services.transaction import TransactionService
 from src.services.user import UserService
 
 
@@ -650,12 +650,12 @@ async def on_transactions(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    transaction_service: FromDishka[TransactionService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
-    transactions = await transaction_service.get_by_user(target_telegram_id)
+    transactions = await billing_client.get_transactions(target_telegram_id)
 
     if not transactions:
         await notification_service.notify_user(
@@ -684,11 +684,11 @@ async def on_give_access(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    plans = await plan_service.get_allowed_plans()
+    plans = await billing_client.get_allowed_plans()
 
     if not plans:
         await notification_service.notify_user(
@@ -706,22 +706,29 @@ async def on_plan_select(
     widget: Select[int],
     dialog_manager: DialogManager,
     selected_plan_id: int,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected plan '{selected_plan_id}'")
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
-    plan = await plan_service.get(selected_plan_id)
+    plan_data = await billing_client.get_plan(selected_plan_id)
 
-    if not plan:
+    if not plan_data:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
 
-    if target_telegram_id not in plan.allowed_user_ids:
-        plan.allowed_user_ids.append(target_telegram_id)
+    allowed_user_ids = plan_data.get("allowed_user_ids", [])
+    if target_telegram_id not in allowed_user_ids:
+        allowed_user_ids.append(target_telegram_id)
     else:
-        plan.allowed_user_ids.remove(target_telegram_id)
+        allowed_user_ids.remove(target_telegram_id)
 
-    await plan_service.update(plan)
+    plan_data["allowed_user_ids"] = allowed_user_ids
+
+    try:
+        await billing_client.update_plan(plan_data)
+    except HTTPStatusError as e:
+        logger.error(f"{log(user)} Failed to update plan access: {e.response.status_code}")
+
     logger.info(
         f"{log(user)} Given access to plan '{selected_plan_id}' for user '{target_telegram_id}'"
     )
@@ -1023,7 +1030,7 @@ async def on_give_subscription(
     widget: Button,
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -1033,7 +1040,7 @@ async def on_give_subscription(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    plans = await plan_service.get_available_plans(target_user)
+    plans = await billing_client.get_available_plans(target_telegram_id)
 
     if not plans:
         await notification_service.notify_user(
@@ -1065,7 +1072,7 @@ async def on_subscription_duration_select(
     dialog_manager: DialogManager,
     selected_duration: int,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     subscription_service: FromDishka[SubscriptionService],
     remnawave_service: FromDishka[RemnawaveService],
 ) -> None:
@@ -1078,11 +1085,12 @@ async def on_subscription_duration_select(
         raise ValueError(f"User '{target_telegram_id}' not found")
 
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
-    plan = await plan_service.get(selected_plan_id)
+    plan_data = await billing_client.get_plan(selected_plan_id)
 
-    if not plan:
+    if not plan_data:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
 
+    plan = PlanDto.model_validate(plan_data)
     plan_snapshot = PlanSnapshotDto.from_plan(plan, selected_duration)
     subscription = await subscription_service.get_current(target_telegram_id)
 

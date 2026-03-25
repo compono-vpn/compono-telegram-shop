@@ -4,6 +4,8 @@ from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
+from httpx import HTTPStatusError
+from loguru import logger
 
 from src.core.config import AppConfig
 from src.core.enums import PurchaseType
@@ -14,11 +16,8 @@ from src.core.utils.formatters import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.database.models.dto import PlanDto, PriceDetailsDto, UserDto
-from src.services.payment_gateway import PaymentGatewayService
-from src.services.plan import PlanService
-from src.services.pricing import PricingService
-from src.services.settings import SettingsService
 from src.core.enums import PromocodeRewardType
 from src.services.subscription import SubscriptionService
 
@@ -41,15 +40,15 @@ async def subscription_getter(
 async def plans_getter(
     dialog_manager: DialogManager,
     user: UserDto,
-    plan_service: FromDishka[PlanService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans = await plan_service.get_available_plans(user)
+    plans = await billing_client.get_available_plans(user.telegram_id)
 
     formatted_plans = [
         {
-            "id": plan.id,
-            "name": plan.name,
+            "id": plan.get("id"),
+            "name": plan.get("name"),
         }
         for plan in plans
     ]
@@ -64,8 +63,7 @@ async def duration_getter(
     dialog_manager: DialogManager,
     user: UserDto,
     i18n: FromDishka[TranslatorRunner],
-    settings_service: FromDishka[SettingsService],
-    pricing_service: FromDishka[PricingService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -74,23 +72,42 @@ async def duration_getter(
     if not plan:
         raise ValueError("PlanDto not found in dialog data")
 
-    currency = await settings_service.get_default_currency()
+    default_currency = await billing_client.get_default_currency()
     only_single_plan = dialog_manager.dialog_data.get("only_single_plan", False)
     dialog_manager.dialog_data["is_free"] = False
     durations = []
 
     for duration in plan.durations:
         key, kw = i18n_format_days(duration.days)
-        price = pricing_service.calculate(user, duration.get_price(currency), currency, duration_days=duration.days)
+
+        try:
+            price_data = await billing_client.calculate_price(
+                telegram_id=user.telegram_id,
+                plan_id=plan.id,
+                duration_days=duration.days,
+                currency=default_currency,
+            )
+            final_amount = price_data.get("final_amount", 0)
+            discount_percent = price_data.get("discount_percent", 0)
+            original_amount = price_data.get("original_amount", 0)
+        except HTTPStatusError:
+            logger.error(f"Failed to calculate price for plan {plan.id}, duration {duration.days}")
+            final_amount = 0
+            discount_percent = 0
+            original_amount = 0
+
+        from src.core.enums import Currency
+        currency_enum = Currency(default_currency) if isinstance(default_currency, str) else default_currency
+
         durations.append(
             {
                 "days": duration.days,
                 "period": i18n.get(key, **kw),
-                "final_amount": price.final_amount,
-                "discount_percent": price.discount_percent,
-                "original_amount": price.original_amount,
-                "currency": currency.symbol,
-                "has_discount": int(price.discount_percent > 0),
+                "final_amount": final_amount,
+                "discount_percent": discount_percent,
+                "original_amount": original_amount,
+                "currency": currency_enum.symbol if hasattr(currency_enum, 'symbol') else default_currency,
+                "has_discount": int(discount_percent > 0),
             }
         )
 
@@ -112,8 +129,7 @@ async def duration_getter(
 async def payment_method_getter(
     dialog_manager: DialogManager,
     user: UserDto,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
-    pricing_service: FromDishka[PricingService],
+    billing_client: FromDishka[BillingClient],
     i18n: FromDishka[TranslatorRunner],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -123,7 +139,7 @@ async def payment_method_getter(
     if not plan:
         raise ValueError("PlanDto not found in dialog data")
 
-    gateways = await payment_gateway_service.filter_active()
+    gateways = await billing_client.filter_active_gateways()
     selected_duration = dialog_manager.dialog_data["selected_duration"]
     only_single_duration = dialog_manager.dialog_data.get("only_single_duration", False)
     duration = plan.get_duration(selected_duration)
@@ -133,18 +149,32 @@ async def payment_method_getter(
 
     payment_methods = []
     for gateway in gateways:
-        price = pricing_service.calculate(
-            user,
-            duration.get_price(gateway.currency),
-            gateway.currency,
-            duration_days=duration.days,
-        )
+        gateway_currency = gateway.get("currency", "XTR")
+        try:
+            price_data = await billing_client.calculate_price(
+                telegram_id=user.telegram_id,
+                plan_id=plan.id,
+                duration_days=selected_duration,
+                currency=gateway_currency,
+            )
+            final_amount = price_data.get("final_amount", 0)
+            discount_percent = price_data.get("discount_percent", 0)
+        except HTTPStatusError:
+            final_amount = 0
+            discount_percent = 0
+
+        from src.core.enums import Currency
+        try:
+            currency_symbol = Currency(gateway_currency).symbol
+        except (ValueError, KeyError):
+            currency_symbol = gateway_currency
+
         payment_methods.append(
             {
-                "gateway_type": gateway.type,
-                "price": price.final_amount,
-                "currency": gateway.currency.symbol,
-                "has_discount": int(price.discount_percent > 0),
+                "gateway_type": gateway.get("type"),
+                "price": final_amount,
+                "currency": currency_symbol,
+                "has_discount": int(discount_percent > 0),
             }
         )
 
@@ -168,7 +198,7 @@ async def payment_method_getter(
 async def confirm_getter(
     dialog_manager: DialogManager,
     i18n: FromDishka[TranslatorRunner],
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing_client: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -182,13 +212,16 @@ async def confirm_getter(
     is_free = dialog_manager.dialog_data.get("is_free", False)
     selected_payment_method = dialog_manager.dialog_data["selected_payment_method"]
     purchase_type = dialog_manager.dialog_data["purchase_type"]
-    payment_gateway = await payment_gateway_service.get_by_type(selected_payment_method)
     duration = plan.get_duration(selected_duration)
 
     if not duration:
         raise ValueError(f"Duration '{selected_duration}' not found in plan '{plan.name}'")
 
-    if not payment_gateway:
+    gateway_data = await billing_client.get_gateway_by_type(
+        selected_payment_method.value if hasattr(selected_payment_method, 'value') else selected_payment_method
+    )
+
+    if not gateway_data:
         raise ValueError(f"Not found PaymentGateway by selected type '{selected_payment_method}'")
 
     result_url = dialog_manager.dialog_data["payment_url"]
@@ -196,7 +229,14 @@ async def confirm_getter(
     pricing = PriceDetailsDto.model_validate_json(pricing_data)
 
     key, kw = i18n_format_days(duration.days)
-    gateways = await payment_gateway_service.filter_active()
+    gateways = await billing_client.filter_active_gateways()
+
+    from src.core.enums import Currency
+    gateway_currency = gateway_data.get("currency", "XTR")
+    try:
+        currency_symbol = Currency(gateway_currency).symbol
+    except (ValueError, KeyError):
+        currency_symbol = gateway_currency
 
     return {
         "purchase_type": purchase_type,
@@ -210,7 +250,7 @@ async def confirm_getter(
         "final_amount": pricing.final_amount,
         "discount_percent": pricing.discount_percent,
         "original_amount": pricing.original_amount,
-        "currency": payment_gateway.currency.symbol,
+        "currency": currency_symbol,
         "url": result_url,
         "only_single_gateway": len(gateways) == 1,
         "only_single_duration": only_single_duration,
