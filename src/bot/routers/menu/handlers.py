@@ -233,6 +233,11 @@ async def _handle_web_link(
             f"{log(user)} Extended existing subscription by {total_days}d "
             f"(new expiry: {existing.expire_at}, email: {order.email})"
         )
+        await message.answer(
+            f"✅ Подписка продлена на {total_days} дней!\n"
+            f"📦 План: {plan.name}\n"
+            f"📅 Действует до: {existing.expire_at.strftime('%d.%m.%Y')}"
+        )
     else:
         # No existing subscription — create new one
         sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
@@ -253,6 +258,11 @@ async def _handle_web_link(
         await subscription_service.create(user, subscription)
         kind = "trial" if is_trial else "purchase"
         logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
+        await message.answer(
+            f"✅ Подписка привязана!\n"
+            f"📦 План: {plan.name} ({total_days}д)\n"
+            f"🔗 Ваша ссылка для подключения уже в профиле."
+        )
 
     await notification_service.system_notify(
         ntf_type=SystemNotificationType.WEB_CLAIM,
