@@ -139,6 +139,9 @@ class SystemNotificationType(UpperStrEnum):  # == SystemNotificationDto
     PROMOCODE_ACTIVATED = auto()
     TRIAL_GETTED = auto()
     #
+    WEB_PURCHASE = auto()
+    WEB_CLAIM = auto()
+    #
     NODE_STATUS = auto()
     USER_FIRST_CONNECTED = auto()
     USER_HWID = auto()

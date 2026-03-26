@@ -11,7 +11,7 @@ from loguru import logger
 from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT
 from src.bot.states import MainMenu
 from src.core.constants import USER_KEY
-from src.core.enums import MediaType
+from src.core.enums import MediaType, SystemNotificationType
 from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
@@ -207,6 +207,21 @@ async def _handle_web_link(
     await subscription_service.create(user, subscription)
     kind = "trial" if is_trial else "purchase"
     logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
+
+    await notification_service.system_notify(
+        ntf_type=SystemNotificationType.WEB_CLAIM,
+        payload=MessagePayload.not_deleted(
+            i18n_key="ntf-event-web-claim",
+            i18n_kwargs={
+                "user_id": str(user.telegram_id),
+                "user_name": user.name,
+                "username": user.username or False,
+                "email": order.email,
+                "plan_name": plan.name,
+                "plan_duration": total_days,
+            },
+        ),
+    )
 
 
 @inject

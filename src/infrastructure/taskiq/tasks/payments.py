@@ -5,11 +5,13 @@ from loguru import logger
 from remnapy.enums.users import TrafficLimitStrategy
 from remnapy.models import CreateUserRequestDto
 
-from src.core.enums import TransactionStatus
+from src.core.enums import SystemNotificationType, TransactionStatus
 from src.core.utils.formatters import format_days_to_datetime
+from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.taskiq.broker import broker
 from src.services.email import EmailService
+from src.services.notification import NotificationService
 from src.services.payment_gateway import PaymentGatewayService
 from src.services.remnawave import RemnawaveService
 from src.services.transaction import TransactionService
@@ -65,6 +67,7 @@ async def handle_web_order_task(
     uow: FromDishka[UnitOfWork],
     remnawave_service: FromDishka[RemnawaveService],
     email_service: FromDishka[EmailService],
+    notification_service: FromDishka[NotificationService],
 ) -> None:
     async with uow:
         order = await uow.repository.web_orders.get_by_payment_id(payment_id)
@@ -154,6 +157,20 @@ async def handle_web_order_task(
             logger.info(
                 f"Web purchase activated for '{order.email}', "
                 f"plan='{order.plan_snapshot.get('name')}', sub_url='{subscription_url}'"
+            )
+            await notification_service.system_notify(
+                ntf_type=SystemNotificationType.WEB_PURCHASE,
+                payload=MessagePayload.not_deleted(
+                    i18n_key="ntf-event-web-purchase",
+                    i18n_kwargs={
+                        "email": order.email,
+                        "amount": float(order.amount),
+                        "currency": order.currency or "RUB",
+                        "plan_name": order.plan_snapshot.get("name", "N/A"),
+                        "plan_duration": order.plan_duration_days,
+                        "bot_link": bot_link,
+                    },
+                ),
             )
         else:
             # Trial — send bot link
