@@ -1,7 +1,7 @@
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import cast, String, update
+from sqlalchemy import cast, String, desc, select, update
 
 from src.infrastructure.database.models.sql.web_order import WebOrder
 
@@ -20,6 +20,21 @@ class WebOrderRepository(BaseRepository):
             WebOrder,
             cast(WebOrder.payment_id, String).like(f"{prefix}%"),
         )
+
+    async def get_latest_completed_by_email(self, email: str) -> Optional[WebOrder]:
+        """Get the most recent completed order with a subscription URL for this email."""
+        stmt = (
+            select(WebOrder)
+            .where(
+                WebOrder.email == email,
+                WebOrder.status == "completed",
+                WebOrder.subscription_url.isnot(None),
+            )
+            .order_by(desc(WebOrder.created_at))
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def exists_by_email(self, email: str) -> bool:
         """Check if a non-canceled order already exists for this email."""

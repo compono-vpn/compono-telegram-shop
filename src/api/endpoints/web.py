@@ -7,7 +7,7 @@ from uuid import UUID
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 from pydantic import BaseModel, EmailStr
 
@@ -526,3 +526,125 @@ async def get_trial_status(
         content={"status": order.status, "subscription_url": order.subscription_url},
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
     )
+
+
+# --- Portal: subscription lookup by email ---
+
+
+class PortalLookupRequest(BaseModel):
+    email: EmailStr
+
+
+@router.post("/portal/lookup")
+@inject
+async def portal_lookup(
+    body: PortalLookupRequest,
+    uow: FromDishka[UnitOfWork],
+) -> JSONResponse:
+    async with uow:
+        order = await uow.repository.web_orders.get_latest_completed_by_email(body.email)
+
+    if not order or not order.subscription_url:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+
+    return JSONResponse(content={"subscription_url": order.subscription_url})
+
+
+# --- Mirrors page: branded HTML showing active/blocked domains ---
+
+BLOCKED_DOMAINS = ["componovpn.com"]
+
+MIRRORS_HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compono VPN — Зеркала / Mirrors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:'Inter',sans-serif;background:#0f172a;color:#f5f0e8;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem}}
+.container{{max-width:640px;width:100%}}
+.logo{{text-align:center;margin-bottom:2rem}}
+.logo h1{{font-size:2.5rem;font-weight:900;letter-spacing:-0.02em}}
+.logo span{{color:#fde047}}
+.subtitle{{text-align:center;color:#94a3b8;margin-bottom:2.5rem;font-size:1.05rem;line-height:1.6}}
+.section{{margin-bottom:2rem}}
+.section-title{{font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;padding-left:0.25rem}}
+.section-title.active{{color:#4ade80}}
+.section-title.blocked{{color:#f87171}}
+.domain-list{{display:flex;flex-direction:column;gap:0.5rem}}
+.domain{{display:flex;align-items:center;justify-content:space-between;background:#1e293b;border:2px solid #334155;border-radius:0.5rem;padding:0.85rem 1rem;transition:border-color 0.15s,transform 0.1s}}
+.domain.active:hover{{border-color:#4ade80;transform:translateY(-1px)}}
+.domain.blocked{{opacity:0.5;border-color:#475569}}
+.domain-name{{font-weight:700;font-size:1.05rem}}
+.domain-name a{{color:#f5f0e8;text-decoration:none}}
+.domain.active .domain-name a:hover{{color:#fde047}}
+.badge{{font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:0.2rem 0.6rem;border-radius:9999px}}
+.badge.ok{{background:#064e3b;color:#4ade80}}
+.badge.blocked{{background:#450a0a;color:#f87171}}
+.footer{{text-align:center;color:#475569;font-size:0.8rem;margin-top:3rem;line-height:1.6}}
+.portal-link{{display:block;text-align:center;margin-top:2rem;padding:0.85rem;background:#fde047;color:#0f172a;font-weight:900;border-radius:0.5rem;text-decoration:none;font-size:1rem;border:2px solid #fde047;transition:background 0.15s}}
+.portal-link:hover{{background:#fbbf24}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="logo"><h1><span>C</span>ompono VPN</h1></div>
+<p class="subtitle">
+Если основной сайт <strong>componovpn.com</strong> заблокирован, используйте любое из зеркал ниже.<br>
+If the main site is blocked, use any mirror below.
+</p>
+<div class="section">
+<div class="section-title active">&#9679; Рабочие зеркала / Active mirrors</div>
+<div class="domain-list">{active_domains}</div>
+</div>
+<div class="section">
+<div class="section-title blocked">&#9679; Заблокированы / Blocked</div>
+<div class="domain-list">{blocked_domains}</div>
+</div>
+<a class="portal-link" href="https://{primary_domain}/portal">
+&#128274; Найти подписку по email / Find subscription by email
+</a>
+<div class="footer">
+Compono VPN &mdash; быстрый и надежный VPN<br>
+Telegram: <a href="https://t.me/compono_bot" style="color:#64748b">@compono_bot</a>
+</div>
+</div>
+</body>
+</html>"""
+
+
+@router.get("/mirrors")
+@inject
+async def mirrors_page(
+    config: FromDishka[AppConfig],
+) -> HTMLResponse:
+    active = [d for d in config.hydra_domains if d and d not in BLOCKED_DOMAINS]
+    blocked = [d for d in BLOCKED_DOMAINS]
+    primary = config.hydra_primary_domain
+
+    active_html = "\n".join(
+        f'<div class="domain active">'
+        f'<span class="domain-name"><a href="https://{d}/" target="_blank">{d}</a></span>'
+        f'<span class="badge ok">OK</span>'
+        f'</div>'
+        for d in active
+    )
+
+    blocked_html = "\n".join(
+        f'<div class="domain blocked">'
+        f'<span class="domain-name">{d}</span>'
+        f'<span class="badge blocked">blocked</span>'
+        f'</div>'
+        for d in blocked
+    )
+
+    html = MIRRORS_HTML_TEMPLATE.format(
+        active_domains=active_html,
+        blocked_domains=blocked_html,
+        primary_domain=primary,
+    )
+
+    return HTMLResponse(content=html)
