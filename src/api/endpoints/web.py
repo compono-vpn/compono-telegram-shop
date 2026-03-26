@@ -801,7 +801,7 @@ a.card:hover .card-domain {{ color: var(--accent-hover) }}
     <div class="domains">{blocked_domains}</div>
   </div>
 
-  <a class="cta" href="https://{primary_domain}/portal">
+  <a class="cta" href="https://componovpn.org/portal">
     Найти подписку по email
   </a>
 
@@ -822,7 +822,6 @@ async def mirrors_page(
 ) -> HTMLResponse:
     active = [d for d in config.hydra_domains if d and d not in BLOCKED_DOMAINS]
     blocked = list(BLOCKED_DOMAINS)
-    primary = config.hydra_primary_domain
 
     active_html = "\n".join(
         f'<a class="card" href="https://{d}/" target="_blank" rel="noopener">'
@@ -845,7 +844,6 @@ async def mirrors_page(
     html = MIRRORS_HTML_TEMPLATE.format(
         active_domains=active_html,
         blocked_domains=blocked_html,
-        primary_domain=primary,
     )
 
     return HTMLResponse(content=html)
