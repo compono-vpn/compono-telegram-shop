@@ -222,12 +222,13 @@ async def _handle_web_link(
         existing.expire_at = updated_remna.expire_at
         await subscription_service.update(existing)
 
-        # Delete orphaned web Remnawave user since we kept the existing one
+        # Disable orphaned web Remnawave user (don't delete — deletion triggers
+        # a webhook that can race with the merge and nuke the real subscription)
         try:
-            await remnawave_service.remnawave.users.delete_user(remna_user.uuid)
-            logger.info(f"{log(user)} Deleted orphaned web Remnawave user '{username}'")
+            await remnawave_service.remnawave.users.disable_user(remna_user.uuid)
+            logger.info(f"{log(user)} Disabled orphaned web Remnawave user '{username}'")
         except Exception:
-            logger.warning(f"{log(user)} Failed to delete orphaned web Remnawave user '{username}'")
+            logger.warning(f"{log(user)} Failed to disable orphaned web Remnawave user '{username}'")
 
         logger.info(
             f"{log(user)} Extended existing subscription by {total_days}d "
