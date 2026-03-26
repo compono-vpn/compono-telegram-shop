@@ -559,58 +559,257 @@ MIRRORS_HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Compono VPN — Зеркала / Mirrors</title>
+<title>Compono VPN &mdash; Зеркала сайта</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:'Inter',sans-serif;background:#0f172a;color:#f5f0e8;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem}}
-.container{{max-width:640px;width:100%}}
-.logo{{text-align:center;margin-bottom:2rem}}
-.logo h1{{font-size:2.5rem;font-weight:900;letter-spacing:-0.02em}}
-.logo span{{color:#fde047}}
-.subtitle{{text-align:center;color:#94a3b8;margin-bottom:2.5rem;font-size:1.05rem;line-height:1.6}}
-.section{{margin-bottom:2rem}}
-.section-title{{font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;padding-left:0.25rem}}
-.section-title.active{{color:#4ade80}}
-.section-title.blocked{{color:#f87171}}
-.domain-list{{display:flex;flex-direction:column;gap:0.5rem}}
-.domain{{display:flex;align-items:center;justify-content:space-between;background:#1e293b;border:2px solid #334155;border-radius:0.5rem;padding:0.85rem 1rem;transition:border-color 0.15s,transform 0.1s}}
-.domain.active:hover{{border-color:#4ade80;transform:translateY(-1px)}}
-.domain.blocked{{opacity:0.5;border-color:#475569}}
-.domain-name{{font-weight:700;font-size:1.05rem}}
-.domain-name a{{color:#f5f0e8;text-decoration:none}}
-.domain.active .domain-name a:hover{{color:#fde047}}
-.badge{{font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:0.2rem 0.6rem;border-radius:9999px}}
-.badge.ok{{background:#064e3b;color:#4ade80}}
-.badge.blocked{{background:#450a0a;color:#f87171}}
-.footer{{text-align:center;color:#475569;font-size:0.8rem;margin-top:3rem;line-height:1.6}}
-.portal-link{{display:block;text-align:center;margin-top:2rem;padding:0.85rem;background:#fde047;color:#0f172a;font-weight:900;border-radius:0.5rem;text-decoration:none;font-size:1rem;border:2px solid #fde047;transition:background 0.15s}}
-.portal-link:hover{{background:#fbbf24}}
+:root {{
+  --bg: #fafaf8;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f7f7f5;
+  --text: #18181b;
+  --text-secondary: #71717a;
+  --border: #e4e4e7;
+  --border-hover: #d4d4d8;
+  --accent: #eab308;
+  --accent-hover: #ca8a04;
+  --green: #16a34a;
+  --green-bg: #f0fdf4;
+  --green-border: #bbf7d0;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --amber-border: #fde68a;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-hover: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.05);
+}}
+@media (prefers-color-scheme: dark) {{
+  :root {{
+    --bg: #0c0c0e;
+    --bg-card: #18181b;
+    --bg-card-hover: #1f1f23;
+    --text: #fafaf8;
+    --text-secondary: #a1a1aa;
+    --border: #27272a;
+    --border-hover: #3f3f46;
+    --green-bg: #052e16;
+    --green-border: #166534;
+    --amber-bg: #451a03;
+    --amber-border: #92400e;
+    --shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
+    --shadow-hover: 0 2px 8px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+  }}
+}}
+* {{ margin:0; padding:0; box-sizing:border-box }}
+html {{ scroll-behavior: smooth }}
+body {{
+  font-family: 'Onest', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 1rem;
+  -webkit-font-smoothing: antialiased;
+}}
+
+.page {{ max-width: 520px; width: 100%; padding: 3.5rem 0 2.5rem }}
+
+/* ---- header ---- */
+.header {{ text-align: center; margin-bottom: 3rem }}
+.brand {{
+  font-family: 'Unbounded', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.2rem;
+}}
+.brand em {{
+  font-style: normal;
+  color: var(--accent);
+}}
+.tagline {{
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  max-width: 380px;
+  margin: 0.8rem auto 0;
+}}
+
+/* ---- sections ---- */
+.section {{ margin-bottom: 2rem }}
+.section-label {{
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin-bottom: 0.6rem;
+  padding-left: 0.1rem;
+}}
+
+/* ---- domain cards ---- */
+.domains {{ display: flex; flex-direction: column; gap: 0.45rem }}
+
+.card {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  text-decoration: none;
+  color: inherit;
+  cursor: default;
+}}
+a.card {{
+  cursor: pointer;
+}}
+a.card:hover {{
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+}}
+
+.card-left {{ display: flex; align-items: center; gap: 0.7rem }}
+.card-dot {{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}}
+.card-dot.live {{
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-bg);
+  animation: pulse-green 2.5s ease-in-out infinite;
+}}
+.card-dot.vpn {{
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-bg);
+}}
+@keyframes pulse-green {{
+  0%, 100% {{ opacity: 1 }}
+  50% {{ opacity: 0.5 }}
+}}
+
+.card-domain {{
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}}
+a.card .card-domain {{ color: var(--text) }}
+a.card:hover .card-domain {{ color: var(--accent-hover) }}
+
+.badge {{
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 5px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}}
+.badge-live {{
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}}
+.badge-vpn {{
+  background: var(--amber-bg);
+  color: var(--amber);
+  border: 1px solid var(--amber-border);
+}}
+
+/* ---- portal cta ---- */
+.cta {{
+  display: block;
+  text-align: center;
+  margin-top: 2.2rem;
+  padding: 0.85rem 1.5rem;
+  background: var(--accent);
+  color: #18181b;
+  font-family: 'Onest', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-radius: 0.6rem;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.1s ease;
+  box-shadow: 0 1px 3px rgba(234,179,8,0.15);
+}}
+.cta:hover {{ background: var(--accent-hover); transform: translateY(-1px) }}
+
+/* ---- divider ---- */
+.divider {{
+  height: 1px;
+  background: var(--border);
+  margin: 2rem 0;
+}}
+
+/* ---- footer ---- */
+.foot {{
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.7;
+  padding-bottom: 2rem;
+}}
+.foot a {{ color: var(--text-secondary); text-decoration: none; border-bottom: 1px solid var(--border) }}
+.foot a:hover {{ color: var(--text); border-color: var(--text) }}
+
+/* ---- stagger entrance ---- */
+.card {{ opacity:0; animation: card-in 0.35s ease forwards }}
+.card:nth-child(1) {{ animation-delay: 0.05s }}
+.card:nth-child(2) {{ animation-delay: 0.1s }}
+.card:nth-child(3) {{ animation-delay: 0.15s }}
+.card:nth-child(4) {{ animation-delay: 0.2s }}
+.card:nth-child(5) {{ animation-delay: 0.25s }}
+.card:nth-child(6) {{ animation-delay: 0.3s }}
+.card:nth-child(7) {{ animation-delay: 0.35s }}
+.card:nth-child(8) {{ animation-delay: 0.4s }}
+@keyframes card-in {{
+  from {{ opacity:0; transform: translateY(8px) }}
+  to   {{ opacity:1; transform: translateY(0) }}
+}}
+
+@media (max-width: 480px) {{
+  .brand {{ font-size: 1.35rem }}
+  .tagline {{ font-size: 0.88rem }}
+  .card {{ padding: 0.8rem 0.85rem }}
+}}
 </style>
 </head>
 <body>
-<div class="container">
-<div class="logo"><h1><span>C</span>ompono VPN</h1></div>
-<p class="subtitle">
-Если основной сайт <strong>componovpn.com</strong> заблокирован, используйте любое из зеркал ниже.<br>
-If the main site is blocked, use any mirror below.
-</p>
-<div class="section">
-<div class="section-title active">&#9679; Рабочие зеркала / Active mirrors</div>
-<div class="domain-list">{active_domains}</div>
-</div>
-<div class="section">
-<div class="section-title blocked">&#9679; Заблокированы / Blocked</div>
-<div class="domain-list">{blocked_domains}</div>
-</div>
-<a class="portal-link" href="https://{primary_domain}/portal">
-&#128274; Найти подписку по email / Find subscription by email
-</a>
-<div class="footer">
-Compono VPN &mdash; быстрый и надежный VPN<br>
-Telegram: <a href="https://t.me/compono_bot" style="color:#64748b">@compono_bot</a>
-</div>
+<div class="page">
+  <div class="header">
+    <div class="brand"><em>C</em>ompono VPN</div>
+    <p class="tagline">Если основной сайт недоступен &mdash; откройте любое зеркало ниже. Все ссылки ведут на один и тот же сервис.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Зеркала</div>
+    <div class="domains">{active_domains}</div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Только через VPN</div>
+    <div class="domains">{blocked_domains}</div>
+  </div>
+
+  <a class="cta" href="https://{primary_domain}/portal">
+    Найти подписку по email
+  </a>
+
+  <div class="divider"></div>
+  <div class="foot">
+    Compono VPN<br>
+    Telegram-бот: <a href="https://t.me/compono_bot">@compono_bot</a>
+  </div>
 </div>
 </body>
 </html>"""
@@ -622,21 +821,23 @@ async def mirrors_page(
     config: FromDishka[AppConfig],
 ) -> HTMLResponse:
     active = [d for d in config.hydra_domains if d and d not in BLOCKED_DOMAINS]
-    blocked = [d for d in BLOCKED_DOMAINS]
+    blocked = list(BLOCKED_DOMAINS)
     primary = config.hydra_primary_domain
 
     active_html = "\n".join(
-        f'<div class="domain active">'
-        f'<span class="domain-name"><a href="https://{d}/" target="_blank">{d}</a></span>'
-        f'<span class="badge ok">OK</span>'
-        f'</div>'
+        f'<a class="card" href="https://{d}/" target="_blank" rel="noopener">'
+        f'<span class="card-left"><span class="card-dot live"></span>'
+        f'<span class="card-domain">{d}</span></span>'
+        f'<span class="badge badge-live">OK</span>'
+        f'</a>'
         for d in active
     )
 
     blocked_html = "\n".join(
-        f'<div class="domain blocked">'
-        f'<span class="domain-name">{d}</span>'
-        f'<span class="badge blocked">blocked</span>'
+        f'<div class="card">'
+        f'<span class="card-left"><span class="card-dot vpn"></span>'
+        f'<span class="card-domain">{d}</span></span>'
+        f'<span class="badge badge-vpn">Через VPN</span>'
         f'</div>'
         for d in blocked
     )
