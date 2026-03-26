@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from .referral import Referral
     from .subscription import Subscription
 
-from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, BigInteger, Boolean, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.enums import Locale, UserRole
@@ -49,6 +49,7 @@ class User(BaseSql, TimestampMixin):
     points: Mapped[int] = mapped_column(Integer, nullable=False)
 
     source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    linked_emails: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
 
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_bot_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)

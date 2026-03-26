@@ -142,6 +142,17 @@ async def _handle_web_link(
             claimed_by_telegram_id=user.telegram_id,
         )
 
+    # 5b. Append email to user's linked_emails (deduplicated)
+    if order.email and order.email not in (user.linked_emails or []):
+        emails = list(user.linked_emails or [])
+        emails.append(order.email)
+        user.linked_emails = emails
+        async with uow:
+            await uow.repository.users.update(
+                user.telegram_id, linked_emails=emails,
+            )
+        logger.info(f"{log(user)} Linked email '{order.email}' (total: {len(emails)})")
+
     # 6. Update Remnawave user with telegram_id
     await remnawave_service.remnawave.users.update_user(
         UpdateUserRequestDto(

@@ -34,6 +34,7 @@ class BaseUserDto(TrackableDto):
     points: int = 0
 
     source: Optional[str] = None
+    linked_emails: list[str] = Field(default_factory=list)
 
     is_blocked: bool = False
     is_bot_blocked: bool = False
