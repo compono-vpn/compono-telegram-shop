@@ -445,8 +445,11 @@ async def get_purchase_status(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    short_id = str(order.payment_id).split("-")[0]
+    bot_link = f"https://t.me/compono_bot?start=web_{short_id}" if order.status == "completed" else None
+
     return JSONResponse(
-        content={"status": order.status, "subscription_url": order.subscription_url},
+        content={"status": order.status, "subscription_url": order.subscription_url, "bot_link": bot_link},
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
     )
 
