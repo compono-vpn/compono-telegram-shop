@@ -150,11 +150,13 @@ async def _handle_web_link(
         )
     )
 
-    # 7. Create local subscription linked to this bot user
+    # 7. Build plan snapshot from web order
+    from datetime import timedelta  # noqa: PLC0415
+    from src.core.utils.time import datetime_now  # noqa: PLC0415
+
     total_days = order.plan_duration_days
 
     if order.plan_snapshot and not is_trial:
-        # Full purchase — use plan snapshot
         snapshot = order.plan_snapshot
         plan = PlanSnapshotDto(
             id=snapshot.get("id", -1),
@@ -171,7 +173,6 @@ async def _handle_web_link(
         traffic_limit = snapshot.get("traffic_limit", -1)
         device_limit = snapshot.get("device_limit", -1)
     else:
-        # Trial — hardcoded values
         traffic_limit = 5
         device_limit = format_device_count(remna_user.hwid_device_limit)
         plan = PlanSnapshotDto(
@@ -187,26 +188,60 @@ async def _handle_web_link(
             external_squad=remna_user.external_squad_uuid,
         )
 
-    sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
+    # 8. Merge into existing subscription or create new
+    existing = await subscription_service.get_current(user.telegram_id)
 
-    subscription = SubscriptionDto(
-        user_remna_id=remna_user.uuid,
-        status=remna_user.status,
-        is_trial=is_trial,
-        traffic_limit=traffic_limit,
-        device_limit=device_limit,
-        traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-        tag=remna_user.tag,
-        internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-        external_squad=remna_user.external_squad_uuid,
-        expire_at=remna_user.expire_at,
-        url=sub_url,
-        plan=plan,
-    )
+    if existing and existing.expire_at:
+        # Extend existing subscription — stack days on top of current expiry
+        base_date = max(existing.expire_at, datetime_now())
+        new_expire = base_date + timedelta(days=total_days)
 
-    await subscription_service.create(user, subscription)
-    kind = "trial" if is_trial else "purchase"
-    logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
+        # Take the higher limits between existing and web order plan
+        existing.traffic_limit = max(existing.traffic_limit or 0, traffic_limit or 0)
+        existing.device_limit = max(existing.device_limit or 0, device_limit or 0)
+        existing.expire_at = new_expire
+        existing.is_trial = False
+        existing.plan = plan
+
+        updated_remna = await remnawave_service.updated_user(
+            user=user,
+            uuid=existing.user_remna_id,
+            subscription=existing,
+        )
+        existing.expire_at = updated_remna.expire_at
+        await subscription_service.update(existing)
+
+        # Delete orphaned web Remnawave user since we kept the existing one
+        try:
+            await remnawave_service.remnawave.users.delete_user(remna_user.uuid)
+            logger.info(f"{log(user)} Deleted orphaned web Remnawave user '{username}'")
+        except Exception:
+            logger.warning(f"{log(user)} Failed to delete orphaned web Remnawave user '{username}'")
+
+        logger.info(
+            f"{log(user)} Extended existing subscription by {total_days}d "
+            f"(new expiry: {existing.expire_at}, email: {order.email})"
+        )
+    else:
+        # No existing subscription — create new one
+        sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
+        subscription = SubscriptionDto(
+            user_remna_id=remna_user.uuid,
+            status=remna_user.status,
+            is_trial=is_trial,
+            traffic_limit=traffic_limit,
+            device_limit=device_limit,
+            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+            tag=remna_user.tag,
+            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
+            external_squad=remna_user.external_squad_uuid,
+            expire_at=remna_user.expire_at,
+            url=sub_url,
+            plan=plan,
+        )
+        await subscription_service.create(user, subscription)
+        kind = "trial" if is_trial else "purchase"
+        logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
 
     await notification_service.system_notify(
         ntf_type=SystemNotificationType.WEB_CLAIM,
