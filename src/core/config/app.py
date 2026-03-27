@@ -41,6 +41,11 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     resend_api_key: str = ""
     resend_from_email: str = "Compono VPS <noreply@mail.componovps.com>"
 
+    jwt_secret: SecretStr = SecretStr("")
+    otp_ttl_seconds: int = 300
+    otp_max_attempts: int = 5
+    jwt_expiry_days: int = 30
+
     @property
     def hydra_primary_domain(self) -> str:
         """First domain in HYDRA_DOMAINS list, used as default for fallback URLs."""

@@ -9,6 +9,43 @@ class EmailService:
         self.api_key = config.resend_api_key
         self.from_email = config.resend_from_email
 
+    async def send_otp_code(self, to_email: str, code: str) -> None:
+        if not self.api_key:
+            logger.warning(f"Resend API key not configured, skipping OTP email to '{to_email}'")
+            return
+
+        html = f"""\
+<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+    <h2 style="margin-bottom: 16px;">Вход в Compono</h2>
+    <p>Ваш код подтверждения:</p>
+    <div style="margin: 24px 0; padding: 16px; background: #f5f5f5; border: 1px solid #ddd;
+                border-radius: 8px; text-align: center;">
+        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">
+            {code}
+        </span>
+    </div>
+    <p style="color: #666; font-size: 14px;">Код действителен 5 минут. Если вы не запрашивали код, проигнорируйте это письмо.</p>
+    <hr style="margin-top: 32px; border: none; border-top: 1px solid #eee;">
+    <p style="color: #999; font-size: 12px;">Compono VPN — быстрый и безопасный интернет</p>
+</div>"""
+
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json={
+                        "from": self.from_email,
+                        "to": [to_email],
+                        "subject": "Compono — код подтверждения",
+                        "html": html,
+                    },
+                )
+                resp.raise_for_status()
+                logger.info(f"OTP email sent to '{to_email}', id={resp.json().get('id')}")
+        except Exception as e:
+            logger.error(f"Failed to send OTP email to '{to_email}': {e}")
+
     async def send_trial_bot_link(self, to_email: str, bot_link: str) -> None:
         if not self.api_key:
             logger.warning(f"Resend API key not configured, skipping email to '{to_email}'")

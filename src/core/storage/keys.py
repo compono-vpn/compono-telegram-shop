@@ -16,3 +16,11 @@ class AccessWaitListKey(StorageKey, prefix="access_wait_list"): ...
 
 
 class RecentActivityUsersKey(StorageKey, prefix="recent_activity_users"): ...
+
+
+class OtpKey(StorageKey, prefix="otp"):
+    email: str
+
+
+class OtpRateLimitKey(StorageKey, prefix="otp_rate"):
+    email: str
