@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .broadcast import BroadcastRepository
+from .customer import CustomerRepository
 from .payment_gateway import PaymentGatewayRepository
 from .plan import PlanRepository
 from .promocode import PromocodeRepository
@@ -16,6 +17,7 @@ from .webhook_log import WebhookLogRepository
 class RepositoriesFacade:
     session: AsyncSession
 
+    customers: CustomerRepository
     gateways: PaymentGatewayRepository
     plans: PlanRepository
     promocodes: PromocodeRepository
@@ -31,6 +33,7 @@ class RepositoriesFacade:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+        self.customers = CustomerRepository(session)
         self.gateways = PaymentGatewayRepository(session)
         self.plans = PlanRepository(session)
         self.promocodes = PromocodeRepository(session)

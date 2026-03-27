@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
+    from .customer import Customer
     from .referral import Referral
     from .subscription import Subscription
 
@@ -55,9 +56,20 @@ class User(BaseSql, TimestampMixin):
     is_bot_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_rules_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
+    customer_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     current_subscription_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("subscriptions.id", ondelete="SET NULL"),
         nullable=True,
+    )
+
+    customer: Mapped[Optional["Customer"]] = relationship(
+        "Customer",
+        foreign_keys=[customer_id],
+        lazy="selectin",
     )
 
     current_subscription: Mapped[Optional["Subscription"]] = relationship(

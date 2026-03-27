@@ -142,7 +142,27 @@ async def _handle_web_link(
             claimed_by_telegram_id=user.telegram_id,
         )
 
-    # 5b. Append email to user's linked_emails (deduplicated)
+    # 5b. Link Customer to this telegram user
+    customer = None
+    if order.customer_id:
+        async with uow:
+            customer = await uow.repository.customers.get_by_id(order.customer_id)
+    if not customer and order.email:
+        async with uow:
+            customer = await uow.repository.customers.get_by_email(order.email)
+    if customer:
+        if not customer.telegram_id:
+            async with uow:
+                await uow.repository.customers.update(
+                    customer.id, telegram_id=user.telegram_id
+                )
+        if not user.customer_id:
+            async with uow:
+                await uow.repository.users.update(
+                    user.telegram_id, customer_id=customer.id
+                )
+
+    # 5c. Append email to user's linked_emails (deduplicated)
     if order.email and order.email not in (user.linked_emails or []):
         emails = list(user.linked_emails or [])
         emails.append(order.email)
@@ -346,6 +366,21 @@ async def on_subscription_url_paste(
             telegram_id=user.telegram_id,
         )
     )
+
+    # Link Customer if one exists for this Remnawave user
+    async with uow:
+        customer = await uow.repository.customers.get_by_remna_user_uuid(sub_info.uuid)
+    if customer:
+        if not customer.telegram_id:
+            async with uow:
+                await uow.repository.customers.update(
+                    customer.id, telegram_id=user.telegram_id
+                )
+        if not user.customer_id:
+            async with uow:
+                await uow.repository.users.update(
+                    user.telegram_id, customer_id=customer.id
+                )
 
     # Try to find matching web order to claim it
     if sub_info.username and sub_info.username.startswith("web_"):

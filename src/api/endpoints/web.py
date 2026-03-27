@@ -448,8 +448,16 @@ async def get_purchase_status(
     short_id = str(order.payment_id).split("-")[0]
     bot_link = f"https://t.me/compono_bot?start=web_{short_id}" if order.status == "completed" else None
 
+    # Prefer customer's subscription_url (always current) over order snapshot
+    subscription_url = order.subscription_url
+    if order.customer_id:
+        async with uow:
+            customer = await uow.repository.customers.get_by_id(order.customer_id)
+        if customer and customer.subscription_url:
+            subscription_url = customer.subscription_url
+
     return JSONResponse(
-        content={"status": order.status, "subscription_url": order.subscription_url, "bot_link": bot_link},
+        content={"status": order.status, "subscription_url": subscription_url, "bot_link": bot_link},
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
     )
 
@@ -544,6 +552,14 @@ async def portal_lookup(
     body: PortalLookupRequest,
     uow: FromDishka[UnitOfWork],
 ) -> JSONResponse:
+    # Look up customer directly — always has the current subscription URL
+    async with uow:
+        customer = await uow.repository.customers.get_by_email(body.email)
+
+    if customer and customer.subscription_url:
+        return JSONResponse(content={"subscription_url": customer.subscription_url})
+
+    # Fallback for pre-migration orders without a customer record
     async with uow:
         order = await uow.repository.web_orders.get_latest_completed_by_email(body.email)
 

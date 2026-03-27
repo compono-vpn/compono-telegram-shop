@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, JSON, Numeric, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String
 from sqlalchemy import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,10 @@ class WebOrder(BaseSql):
     is_trial: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     promocode_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     discount_percent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    customer_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     claimed_by_telegram_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

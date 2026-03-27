@@ -1,5 +1,6 @@
 from .base import BaseSql
 from .broadcast import Broadcast, BroadcastMessage
+from .customer import Customer
 from .payment_gateway import PaymentGateway
 from .plan import Plan, PlanDuration, PlanPrice
 from .promocode import Promocode, PromocodeActivation
@@ -15,6 +16,7 @@ __all__ = [
     "BaseSql",
     "Broadcast",
     "BroadcastMessage",
+    "Customer",
     "PaymentGateway",
     "Plan",
     "PlanDuration",

@@ -1,5 +1,6 @@
 from .base import BaseDto, TrackableDto
 from .broadcast import BroadcastDto, BroadcastMessageDto
+from .customer import CustomerDto
 from .payment_gateway import (
     AnyGatewaySettingsDto,
     CryptomusGatewaySettingsDto,
@@ -21,6 +22,7 @@ from .transaction import BaseTransactionDto, PriceDetailsDto, TransactionDto
 from .user import BaseUserDto, UserDto
 
 BaseSubscriptionDto.model_rebuild()
+CustomerDto.model_rebuild()
 SubscriptionDto.model_rebuild()
 BaseUserDto.model_rebuild()
 UserDto.model_rebuild()
@@ -35,6 +37,7 @@ __all__ = [
     "BaseDto",
     "BroadcastDto",
     "BroadcastMessageDto",
+    "CustomerDto",
     "TrackableDto",
     "AnyGatewaySettingsDto",
     "CryptomusGatewaySettingsDto",
