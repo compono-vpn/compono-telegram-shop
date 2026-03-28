@@ -9,20 +9,18 @@ from remnapy.enums.users import TrafficLimitStrategy
 
 from src.core.enums import Currency, PlanAvailability, PlanType
 from src.core.utils.adapter import DialogDataAdapter
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto
 from src.infrastructure.database.models.dto import PlanDto, PlanDurationDto, PlanPriceDto
-from src.services.plan import PlanService
 
 
-# TODO(billing-migration): Replace plan_service.get_all() with BillingClient.list_plans().
-#   After migration, inject BillingClient instead of PlanService here and map
-#   BillingPlan responses to the format expected by the template.
 @inject
 async def plans_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans: list[PlanDto] = await plan_service.get_all()
+    billing_plans = await billing.list_plans()
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     formatted_plans = [
         {
             "id": plan.id,

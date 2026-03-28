@@ -1,5 +1,3 @@
-# TODO(billing-migration): Replace PlanService, PricingService, TransactionService,
-#   and SettingsService calls with BillingClient methods for subscription purchase flow.
 from typing import Any, cast
 
 from aiogram_dialog import DialogManager
@@ -16,11 +14,8 @@ from src.core.utils.formatters import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_price_details_to_dto, billing_gateway_to_dto
 from src.infrastructure.database.models.dto import PlanDto, PriceDetailsDto, UserDto
-from src.services.payment_gateway import PaymentGatewayService
-from src.services.plan import PlanService
-from src.services.pricing import PricingService
-from src.services.settings import SettingsService
 from src.core.enums import PromocodeRewardType
 from src.services.subscription import SubscriptionService
 
@@ -43,10 +38,11 @@ async def subscription_getter(
 async def plans_getter(
     dialog_manager: DialogManager,
     user: UserDto,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans = await plan_service.get_available_plans(user)
+    billing_plans = await billing.get_available_plans(user.telegram_id)
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
 
     formatted_plans = [
         {
@@ -66,8 +62,7 @@ async def duration_getter(
     dialog_manager: DialogManager,
     user: UserDto,
     i18n: FromDishka[TranslatorRunner],
-    settings_service: FromDishka[SettingsService],
-    pricing_service: FromDishka[PricingService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -76,23 +71,31 @@ async def duration_getter(
     if not plan:
         raise ValueError("PlanDto not found in dialog data")
 
-    currency = await settings_service.get_default_currency()
+    default_currency = await billing.get_default_currency()
     only_single_plan = dialog_manager.dialog_data.get("only_single_plan", False)
     dialog_manager.dialog_data["is_free"] = False
     durations = []
 
     for duration in plan.durations:
         key, kw = i18n_format_days(duration.days)
-        price = pricing_service.calculate(user, duration.get_price(currency), currency, duration_days=duration.days)
+        price_details = await billing.calculate_price(
+            telegram_id=user.telegram_id,
+            plan_id=plan.id,
+            duration_days=duration.days,
+            currency=default_currency,
+        )
+        pricing = billing_price_details_to_dto(price_details)
+        from src.core.enums import Currency  # noqa: PLC0415
+        currency_enum = Currency(default_currency)
         durations.append(
             {
                 "days": duration.days,
                 "period": i18n.get(key, **kw),
-                "final_amount": price.final_amount,
-                "discount_percent": price.discount_percent,
-                "original_amount": price.original_amount,
-                "currency": currency.symbol,
-                "has_discount": int(price.discount_percent > 0),
+                "final_amount": pricing.final_amount,
+                "discount_percent": pricing.discount_percent,
+                "original_amount": pricing.original_amount,
+                "currency": currency_enum.symbol,
+                "has_discount": int(pricing.discount_percent > 0),
             }
         )
 
@@ -114,8 +117,7 @@ async def duration_getter(
 async def payment_method_getter(
     dialog_manager: DialogManager,
     user: UserDto,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
-    pricing_service: FromDishka[PricingService],
+    billing: FromDishka[BillingClient],
     i18n: FromDishka[TranslatorRunner],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -125,7 +127,8 @@ async def payment_method_getter(
     if not plan:
         raise ValueError("PlanDto not found in dialog data")
 
-    gateways = await payment_gateway_service.filter_active()
+    billing_gateways = await billing.list_active_gateways()
+    gateways = [billing_gateway_to_dto(g) for g in billing_gateways]
     selected_duration = dialog_manager.dialog_data["selected_duration"]
     only_single_duration = dialog_manager.dialog_data.get("only_single_duration", False)
     duration = plan.get_duration(selected_duration)
@@ -135,18 +138,19 @@ async def payment_method_getter(
 
     payment_methods = []
     for gateway in gateways:
-        price = pricing_service.calculate(
-            user,
-            duration.get_price(gateway.currency),
-            gateway.currency,
+        price_details = await billing.calculate_price(
+            telegram_id=user.telegram_id,
+            plan_id=plan.id,
             duration_days=duration.days,
+            currency=gateway.currency.value,
         )
+        pricing = billing_price_details_to_dto(price_details)
         payment_methods.append(
             {
                 "gateway_type": gateway.type,
-                "price": price.final_amount,
+                "price": pricing.final_amount,
                 "currency": gateway.currency.symbol,
-                "has_discount": int(price.discount_percent > 0),
+                "has_discount": int(pricing.discount_percent > 0),
             }
         )
 
@@ -170,7 +174,7 @@ async def payment_method_getter(
 async def confirm_getter(
     dialog_manager: DialogManager,
     i18n: FromDishka[TranslatorRunner],
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -184,21 +188,22 @@ async def confirm_getter(
     is_free = dialog_manager.dialog_data.get("is_free", False)
     selected_payment_method = dialog_manager.dialog_data["selected_payment_method"]
     purchase_type = dialog_manager.dialog_data["purchase_type"]
-    payment_gateway = await payment_gateway_service.get_by_type(selected_payment_method)
+    billing_gateway = await billing.get_gateway_by_type(selected_payment_method.value if hasattr(selected_payment_method, 'value') else str(selected_payment_method))
     duration = plan.get_duration(selected_duration)
 
     if not duration:
         raise ValueError(f"Duration '{selected_duration}' not found in plan '{plan.name}'")
 
-    if not payment_gateway:
+    if not billing_gateway:
         raise ValueError(f"Not found PaymentGateway by selected type '{selected_payment_method}'")
 
+    payment_gateway = billing_gateway_to_dto(billing_gateway)
     result_url = dialog_manager.dialog_data["payment_url"]
     pricing_data = dialog_manager.dialog_data["final_pricing"]
     pricing = PriceDetailsDto.model_validate_json(pricing_data)
 
     key, kw = i18n_format_days(duration.days)
-    gateways = await payment_gateway_service.filter_active()
+    billing_active_gateways = await billing.list_active_gateways()
 
     return {
         "purchase_type": purchase_type,
@@ -214,7 +219,7 @@ async def confirm_getter(
         "original_amount": pricing.original_amount,
         "currency": payment_gateway.currency.symbol,
         "url": result_url,
-        "only_single_gateway": len(gateways) == 1,
+        "only_single_gateway": len(billing_active_gateways) == 1,
         "only_single_duration": only_single_duration,
         "is_free": is_free,
     }

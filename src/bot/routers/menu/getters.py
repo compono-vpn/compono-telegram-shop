@@ -1,5 +1,3 @@
-# TODO(billing-migration): Replace PlanService, SubscriptionService, and UserService
-#   calls with BillingClient methods for plan listing, subscription status, and user data.
 from typing import Any
 
 from aiogram_dialog import DialogManager
@@ -16,11 +14,10 @@ from src.core.utils.formatters import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.infrastructure.billing import BillingClient
 from src.infrastructure.database.models.dto import UserDto
-from src.services.plan import PlanService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
-from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
 
 
@@ -30,18 +27,21 @@ async def menu_getter(
     config: AppConfig,
     user: UserDto,
     i18n: FromDishka[TranslatorRunner],
-    plan_service: FromDishka[PlanService],
-    subscription_service: FromDishka[SubscriptionService],
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
     referral_service: FromDishka[ReferralService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     try:
-        plan = await plan_service.get_trial_plan()
-        has_used_trial = await subscription_service.has_used_trial(user.telegram_id)
+        trial_plan = await billing.get_trial_plan()
+        has_used_trial = await billing.has_used_trial(user.telegram_id)
+        settings = await billing.get_settings()
         support_username = config.bot.support_username.get_secret_value()
         ref_link = await referral_service.get_ref_link(user.referral_code)
         support_link = format_username_to_url(support_username, i18n.get("contact-support-help"))
+
+        is_referral_enable = bool(
+            settings.Referral and settings.Referral.get("enable", False)
+        ) if settings.Referral else False
 
         base_data = {
             "user_id": str(user.telegram_id),
@@ -51,7 +51,7 @@ async def menu_getter(
             "invite": i18n.get("referral-invite-message", url=ref_link),
             "has_subscription": user.has_subscription,
             "is_app": config.bot.is_mini_app,
-            "is_referral_enable": await settings_service.is_referral_enable(),
+            "is_referral_enable": is_referral_enable,
         }
 
         subscription = user.current_subscription
@@ -61,7 +61,7 @@ async def menu_getter(
                 {
                     "status": None,
                     "is_trial": False,
-                    "trial_available": not has_used_trial and plan,
+                    "trial_available": not has_used_trial and trial_plan,
                     "has_device_limit": False,
                     "connectable": False,
                 }
@@ -141,11 +141,16 @@ async def invite_getter(
     user: UserDto,
     config: AppConfig,
     i18n: FromDishka[TranslatorRunner],
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
     referral_service: FromDishka[ReferralService],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    settings = await settings_service.get_referral_settings()
+    settings = await billing.get_settings()
+    referral_settings = settings.Referral or {}
+    reward_config = referral_settings.get("reward", {})
+    reward_type = reward_config.get("type", "EXTRA_DAYS")
+    is_points = reward_type == "POINTS"
+
     referrals = await referral_service.get_referral_count(user.telegram_id)
     payments = await referral_service.get_reward_count(user.telegram_id)
     ref_link = await referral_service.get_ref_link(user.referral_code)
@@ -155,11 +160,11 @@ async def invite_getter(
     )
 
     return {
-        "reward_type": settings.reward.type,
+        "reward_type": reward_type,
         "referrals": referrals,
         "payments": payments,
         "points": user.points,
-        "is_points_reward": settings.reward.is_points,
+        "is_points_reward": is_points,
         "has_points": True if user.points > 0 else False,
         "referral_link": ref_link,
         "invite": i18n.get("referral-invite-message", url=ref_link),
@@ -180,30 +185,40 @@ async def info_getter(app_config: FromDishka[AppConfig], **kwargs: Any) -> dict[
 async def invite_about_getter(
     dialog_manager: DialogManager,
     i18n: FromDishka[TranslatorRunner],
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    settings = await settings_service.get_referral_settings()
-    reward_config = settings.reward.config
+    settings = await billing.get_settings()
+    referral_settings = settings.Referral or {}
+    reward_config_raw = referral_settings.get("reward", {})
+    reward_strategy = reward_config_raw.get("strategy", "AMOUNT")
+    reward_type = reward_config_raw.get("type", "EXTRA_DAYS")
+    config_levels = reward_config_raw.get("config", {})
+    accrual_strategy = referral_settings.get("accrual_strategy", "ON_FIRST_PAYMENT")
 
-    max_level = settings.level.value
-    identical_reward = settings.reward.is_identical
+    max_level_raw = referral_settings.get("level", 1)
+    max_level = int(max_level_raw) if max_level_raw else 1
+
+    # Check if all reward values are identical
+    values = list(config_levels.values())
+    identical_reward = len(values) <= 1 or all(v == values[0] for v in values)
 
     reward_levels: dict[str, str] = {}
-    for lvl, val in reward_config.items():
-        if lvl.value <= max_level:
-            reward_levels[f"reward_level_{lvl.value}"] = i18n.get(
+    for lvl_str, val in config_levels.items():
+        lvl_int = int(lvl_str) if isinstance(lvl_str, str) else lvl_str
+        if lvl_int <= max_level:
+            reward_levels[f"reward_level_{lvl_int}"] = i18n.get(
                 "msg-invite-reward",
                 value=val,
-                reward_strategy_type=settings.reward.strategy,
-                reward_type=settings.reward.type,
+                reward_strategy_type=reward_strategy,
+                reward_type=reward_type,
             )
 
     return {
         **reward_levels,
-        "reward_type": settings.reward.type,
-        "reward_strategy_type": settings.reward.strategy,
-        "accrual_strategy": settings.accrual_strategy,
+        "reward_type": reward_type,
+        "reward_strategy_type": reward_strategy,
+        "accrual_strategy": accrual_strategy,
         "identical_reward": identical_reward,
         "max_level": max_level,
     }

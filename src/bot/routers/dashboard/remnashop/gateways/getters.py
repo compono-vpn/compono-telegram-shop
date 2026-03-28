@@ -1,5 +1,3 @@
-# TODO(billing-migration): Replace PaymentGatewayService and SettingsService calls
-#   with BillingClient gateway and settings methods.
 from typing import Any
 
 from aiogram_dialog import DialogManager
@@ -8,26 +6,26 @@ from dishka.integrations.aiogram_dialog import inject
 
 from src.core.config import AppConfig
 from src.core.enums import Currency
+from src.infrastructure.billing import BillingClient, billing_gateway_to_dto
 from src.infrastructure.database.models.dto import PaymentGatewayDto
 from src.services.payment_gateway import PaymentGatewayService
-from src.services.settings import SettingsService
 
 
 @inject
 async def gateways_getter(
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    gateways: list[PaymentGatewayDto] = await payment_gateway_service.get_all()
+    billing_gateways = await billing.list_gateways()
 
     formatted_gateways = [
         {
-            "id": gateway.id,
-            "gateway_type": gateway.type,
-            "is_active": gateway.is_active,
+            "id": g.ID,
+            "gateway_type": g.Type,
+            "is_active": g.IsActive,
         }
-        for gateway in gateways
+        for g in billing_gateways
     ]
 
     return {
@@ -43,6 +41,8 @@ async def gateway_getter(
     **kwargs: Any,
 ) -> dict[str, Any]:
     gateway_id = dialog_manager.dialog_data["gateway_id"]
+    # Gateway settings (secrets) are not exposed via billing API,
+    # so we still use PaymentGatewayService for detail view with settings.
     gateway = await payment_gateway_service.get(gateway_id=gateway_id)
 
     if not gateway:
@@ -70,6 +70,7 @@ async def field_getter(
     gateway_id = dialog_manager.dialog_data["gateway_id"]
     selected_field = dialog_manager.dialog_data["selected_field"]
 
+    # Gateway settings need local service for secret field display
     gateway = await payment_gateway_service.get(gateway_id=gateway_id)
 
     if not gateway:
@@ -87,15 +88,17 @@ async def field_getter(
 @inject
 async def currency_getter(
     dialog_manager: DialogManager,
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
+    default_currency_str = await billing.get_default_currency()
+    default_currency = Currency(default_currency_str) if default_currency_str else Currency.XTR
     return {
         "currency_list": [
             {
                 "symbol": currency.symbol,
                 "currency": currency.value,
-                "enabled": currency == await settings_service.get_default_currency(),
+                "enabled": currency == default_currency,
             }
             for currency in Currency
         ]
@@ -105,18 +108,18 @@ async def currency_getter(
 @inject
 async def placement_getter(
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    gateways: list[PaymentGatewayDto] = await payment_gateway_service.get_all(sorted=True)
+    billing_gateways = await billing.list_gateways()
 
     formatted_gateways = [
         {
-            "id": gateway.id,
-            "gateway_type": gateway.type,
-            "is_active": gateway.is_active,
+            "id": g.ID,
+            "gateway_type": g.Type,
+            "is_active": g.IsActive,
         }
-        for gateway in gateways
+        for g in billing_gateways
     ]
 
     return {
