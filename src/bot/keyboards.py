@@ -167,23 +167,6 @@ def get_remnashop_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_remnashop_update_keyboard() -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-
-    builder.row(
-        InlineKeyboardButton(
-            text="btn-remnashop-release-latest",
-            url=f"{REPOSITORY}/releases/latest",
-        ),
-        InlineKeyboardButton(
-            text="btn-remnashop-how-upgrade",
-            url=f"{REPOSITORY}?tab=readme-ov-file#step-5--how-to-upgrade",
-        ),
-    )
-
-    return builder.as_markup()
-
-
 def get_connect_keyboard(connect_url: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(

@@ -15,7 +15,6 @@ from src.core.config.app import AppConfig
 from src.core.enums import SystemNotificationType
 from src.core.metrics import BOT_INFO
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.taskiq.tasks.updates import check_bot_update
 from src.services.command import CommandService
 from src.services.notification import NotificationService
 from src.services.payment_gateway import PaymentGatewayService
@@ -90,7 +89,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         <yellow>Registration allowed: '{settings.registration_allowed}'</>
         """  # noqa: W605
     )
-    await check_bot_update.kiq()
     await notification_service.system_notify(
         ntf_type=SystemNotificationType.BOT_LIFETIME,
         payload=MessagePayload.not_deleted(
