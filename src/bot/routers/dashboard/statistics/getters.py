@@ -23,6 +23,9 @@ from src.services.transaction import TransactionService
 from src.services.user import UserService
 
 
+# TODO(billing-migration): Replace individual service calls with BillingClient.get_statistics()
+#   for aggregate stats. For detailed breakdowns, consider adding new billing API endpoints
+#   or keeping the current approach with paginated data from the billing service.
 @inject
 async def statistics_getter(
     dialog_manager: DialogManager,

@@ -1,6 +1,7 @@
 from dishka import Provider
 from dishka.integrations.aiogram import AiogramProvider
 
+from .billing import BillingProvider
 from .bot import BotProvider
 from .config import ConfigProvider
 from .database import DatabaseProvider
@@ -14,6 +15,7 @@ from .services import ServicesProvider
 def get_providers() -> list[Provider]:
     return [
         AiogramProvider(),
+        BillingProvider(),
         BotProvider(),
         ConfigProvider(),
         DatabaseProvider(),

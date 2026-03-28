@@ -46,6 +46,9 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     otp_max_attempts: int = 5
     jwt_expiry_days: int = 30
 
+    billing_api_url: str = ""
+    billing_internal_secret: SecretStr = SecretStr("")
+
     @property
     def hydra_primary_domain(self) -> str:
         """First domain in HYDRA_DOMAINS list, used as default for fallback URLs."""

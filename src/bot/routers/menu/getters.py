@@ -1,3 +1,5 @@
+# TODO(billing-migration): Replace PlanService, SubscriptionService, and UserService
+#   calls with BillingClient methods for plan listing, subscription status, and user data.
 from typing import Any
 
 from aiogram_dialog import DialogManager

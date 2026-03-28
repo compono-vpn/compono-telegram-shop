@@ -1,3 +1,5 @@
+# TODO(billing-migration): Replace PlanService, PricingService, TransactionService,
+#   and SettingsService calls with BillingClient methods for subscription purchase flow.
 from typing import Any, cast
 
 from aiogram_dialog import DialogManager

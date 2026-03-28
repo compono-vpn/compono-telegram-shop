@@ -1,3 +1,5 @@
+# TODO(billing-migration): Replace PromocodeService calls with BillingClient promocode methods.
+#   Inject BillingClient and map BillingPromocode responses to PromocodeDto format.
 from typing import Any
 
 from aiogram_dialog import DialogManager

@@ -13,6 +13,9 @@ from src.infrastructure.database.models.dto import PlanDto, PlanDurationDto, Pla
 from src.services.plan import PlanService
 
 
+# TODO(billing-migration): Replace plan_service.get_all() with BillingClient.list_plans().
+#   After migration, inject BillingClient instead of PlanService here and map
+#   BillingPlan responses to the format expected by the template.
 @inject
 async def plans_getter(
     dialog_manager: DialogManager,

@@ -1,3 +1,5 @@
+# TODO(billing-migration): Replace PaymentGatewayService and SettingsService calls
+#   with BillingClient gateway and settings methods.
 from typing import Any
 
 from aiogram_dialog import DialogManager
