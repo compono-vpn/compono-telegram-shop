@@ -7,9 +7,8 @@ from dishka.integrations.aiogram_dialog import inject
 from src.core.enums import PromocodeRewardType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import i18n_format_days, i18n_format_limit, i18n_format_traffic_limit
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_promocode_to_dto
 from src.infrastructure.database.models.dto import PromocodeDto
-from src.services.plan import PlanService
-from src.services.promocode import PromocodeService
 
 
 async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -64,10 +63,11 @@ async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> d
 @inject
 async def list_getter(
     dialog_manager: DialogManager,
-    promocode_service: FromDishka[PromocodeService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    promocodes = await promocode_service.get_all()
+    billing_promos = await billing.list_promocodes()
+    promocodes = [billing_promocode_to_dto(bp) for bp in billing_promos]
 
     formatted = [
         {
@@ -83,10 +83,11 @@ async def list_getter(
 @inject
 async def plan_select_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans = await plan_service.get_all()
+    billing_plans = await billing.list_plans()
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     active_plans = [p for p in plans if p.is_active]
 
     formatted_plans = [
@@ -103,14 +104,15 @@ async def plan_select_getter(
 @inject
 async def plan_duration_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
-    plan = await plan_service.get(selected_plan_id)
+    billing_plan = await billing.get_plan(selected_plan_id)
 
-    if not plan:
+    if not billing_plan:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
 
+    plan = billing_plan_to_dto(billing_plan)
     durations = [duration.model_dump() for duration in plan.durations]
     return {"durations": durations}

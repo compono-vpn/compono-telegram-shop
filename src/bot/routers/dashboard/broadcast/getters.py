@@ -7,19 +7,19 @@ from dishka.integrations.aiogram_dialog import inject
 from src.bot.keyboards import get_goto_buttons
 from src.core.constants import DATETIME_FORMAT
 from src.core.enums import PlanAvailability
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto
 from src.infrastructure.database.models.dto import PlanDto
 from src.services.broadcast import BroadcastService
-from src.services.plan import PlanService
-from src.services.settings import SettingsService
 
 
 @inject
 async def plans_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plans: list[PlanDto] = await plan_service.get_all()
+    billing_plans = await billing.list_plans()
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     formatted_plans = [
         {
             "id": plan.id,
@@ -51,11 +51,13 @@ async def send_getter(
 @inject
 async def buttons_getter(
     dialog_manager: DialogManager,
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     buttons = dialog_manager.dialog_data.get("buttons", [])
-    is_referral_enable = await settings_service.is_referral_enable()
+    settings = await billing.get_settings()
+    referral_settings = settings.Referral or {}
+    is_referral_enable = bool(referral_settings.get("enable", False))
 
     if not buttons:
         buttons = [

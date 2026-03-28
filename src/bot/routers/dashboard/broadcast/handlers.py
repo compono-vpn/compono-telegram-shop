@@ -23,12 +23,11 @@ from src.core.utils.formatters import format_user_log as log
 from src.core.utils.formatters import format_username_to_url
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto
 from src.infrastructure.database.models.dto import BroadcastDto, PlanDto, UserDto
 from src.infrastructure.taskiq.tasks.broadcast import delete_broadcast_task, send_broadcast_task
 from src.services.broadcast import BroadcastService
 from src.services.notification import NotificationService
-from src.services.plan import PlanService
-from src.services.settings import SettingsService
 
 
 def _update_payload(dialog_manager: DialogManager, **updates: Any) -> MessagePayload:
@@ -130,12 +129,13 @@ async def on_plan_select(
     widget: Select,
     dialog_manager: DialogManager,
     selected_plan_id: int,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     broadcast_service: FromDishka[BroadcastService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    plan: Optional[PlanDto] = await plan_service.get(plan_id=selected_plan_id)
+    billing_plan = await billing.get_plan(plan_id=selected_plan_id)
+    plan: Optional[PlanDto] = billing_plan_to_dto(billing_plan) if billing_plan else None
 
     if not plan:
         raise ValueError(f"Attempted to select non-existent plan '{selected_plan_id}'")
@@ -212,7 +212,7 @@ async def on_button_select(
     sub_manager: SubManager,
     config: FromDishka[AppConfig],
     i18n: FromDishka[TranslatorRunner],
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     await sub_manager.load_data()
     user: UserDto = sub_manager.middleware_data[USER_KEY]
@@ -224,7 +224,9 @@ async def on_button_select(
             button["selected"] = not button.get("selected", False)
             break
 
-    is_referral_enable = await settings_service.is_referral_enable()
+    settings = await billing.get_settings()
+    referral_settings = settings.Referral or {}
+    is_referral_enable = bool(referral_settings.get("enable", False))
     goto_buttons = get_goto_buttons(is_referral_enable)
     builder = InlineKeyboardBuilder()
 

@@ -22,11 +22,10 @@ from src.core.utils.formatters import (
 )
 from src.infrastructure.database.models.dto import UserDto
 from src.infrastructure.database.models.dto.subscription import RemnaSubscriptionDto
-from src.services.plan import PlanService
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_transaction_to_dto
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
-from src.services.transaction import TransactionService
 from src.services.user import UserService
 
 
@@ -391,11 +390,12 @@ async def expire_time_getter(
 @inject
 async def transactions_getter(
     dialog_manager: DialogManager,
-    transaction_service: FromDishka[TransactionService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
-    transactions = await transaction_service.get_by_user(target_telegram_id)
+    billing_txns = await billing.list_transactions(target_telegram_id)
+    transactions = [billing_transaction_to_dto(t) for t in billing_txns]
 
     if not transactions:
         raise ValueError(f"Transactions not found for user '{target_telegram_id}'")
@@ -415,12 +415,14 @@ async def transactions_getter(
 @inject
 async def transaction_getter(
     dialog_manager: DialogManager,
-    transaction_service: FromDishka[TransactionService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
     selected_transaction = dialog_manager.dialog_data["selected_transaction"]
-    transaction = await transaction_service.get(selected_transaction)
+    from uuid import UUID  # noqa: PLC0415
+    billing_txn = await billing.get_transaction(UUID(str(selected_transaction)))
+    transaction = billing_transaction_to_dto(billing_txn) if billing_txn else None
 
     if not transaction:
         raise ValueError(
@@ -450,7 +452,7 @@ async def transaction_getter(
 async def give_access_getter(
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
@@ -459,7 +461,8 @@ async def give_access_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    plans = await plan_service.get_allowed_plans()
+    billing_plans = await billing.get_allowed_plans()
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
 
     if not plans:
         raise ValueError("Allowed plans not found")
@@ -480,7 +483,7 @@ async def give_access_getter(
 async def give_subscription_getter(
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
@@ -489,7 +492,8 @@ async def give_subscription_getter(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    plans = await plan_service.get_available_plans(target_user)
+    billing_plans = await billing.get_available_plans(target_telegram_id)
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
 
     if not plans:
         raise ValueError("Available plans not found")
@@ -508,15 +512,16 @@ async def give_subscription_getter(
 @inject
 async def subscription_duration_getter(
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
-    plan = await plan_service.get(selected_plan_id)
+    billing_plan = await billing.get_plan(selected_plan_id)
 
-    if not plan:
+    if not billing_plan:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
 
+    plan = billing_plan_to_dto(billing_plan)
     durations = [duration.model_dump() for duration in plan.durations]
     return {"durations": durations}
 

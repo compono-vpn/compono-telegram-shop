@@ -11,10 +11,10 @@ from src.core.constants import IMPORTED_TAG, REMNASHOP_PREFIX
 from src.core.enums import SubscriptionStatus
 from src.core.utils.time import datetime_now
 
-from .base import BaseService
+from .base_billing import BaseBillingService
 
 
-class ImporterService(BaseService):
+class ImporterService(BaseBillingService):
     def get_users_from_xui(self, db_path: Path) -> list[dict[str, Any]]:
         if not self._xui_validate_db(db_path):
             raise ValueError("Invalid or inaccessible 3X-UI database")

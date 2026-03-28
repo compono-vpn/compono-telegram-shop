@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
 
-from aiogram import Bot
-from fluentogram import TranslatorHub
 from loguru import logger
 from redis.asyncio import Redis
 
@@ -17,7 +15,7 @@ from src.infrastructure.redis import RedisRepository
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 
-from .base import BaseService
+from .base_billing import BaseBillingService
 
 
 @dataclass
@@ -36,22 +34,20 @@ class ActivationResult:
         return self.reward_type in (PromocodeRewardType.SUBSCRIPTION, PromocodeRewardType.DURATION)
 
 
-class PromocodeService(BaseService):
+class PromocodeService(BaseBillingService):
     uow: UnitOfWork
 
     def __init__(
         self,
         config: AppConfig,
-        bot: Bot,
         redis_client: Redis,
         redis_repository: RedisRepository,
-        translator_hub: TranslatorHub,
         #
         uow: UnitOfWork,
         subscription_service: SubscriptionService,
         remnawave_service: RemnawaveService,
     ) -> None:
-        super().__init__(config, bot, redis_client, redis_repository, translator_hub)
+        super().__init__(config, redis_client, redis_repository)
         self.uow = uow
         self.subscription_service = subscription_service
         self.remnawave_service = remnawave_service
