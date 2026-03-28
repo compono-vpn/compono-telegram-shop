@@ -71,16 +71,6 @@ ntf-event-bot-shutdown =
 
     <b>🔅 Событие: Бот остановлен!</b>
 
-ntf-event-bot-update =
-    #EventBotUpdate
-
-    <b>🔅 Событие: Обнаружено обновление Remnashop!</b>
-
-    <blockquote>
-    • <b>Текущая версия</b>: { $local_version }
-    • <b>Доступная версия</b>: { $remote_version }
-    </blockquote>
-
 ntf-event-new-user =
     #EventNewUser
 

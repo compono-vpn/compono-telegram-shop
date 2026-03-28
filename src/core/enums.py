@@ -132,7 +132,6 @@ class MediaType(UpperStrEnum):
 
 class SystemNotificationType(UpperStrEnum):  # == SystemNotificationDto
     BOT_LIFETIME = auto()
-    BOT_UPDATE = auto()
     #
     USER_REGISTERED = auto()
     SUBSCRIPTION = auto()
