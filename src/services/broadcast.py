@@ -1,8 +1,6 @@
 from typing import Optional
 from uuid import UUID
 
-from aiogram import Bot
-from fluentogram import TranslatorHub
 from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy import and_
@@ -20,23 +18,21 @@ from src.infrastructure.database.models.sql import Broadcast, BroadcastMessage, 
 from src.infrastructure.database.models.sql.plan import Plan
 from src.infrastructure.redis import RedisRepository
 
-from .base import BaseService
+from .base_billing import BaseBillingService
 
 
-class BroadcastService(BaseService):
+class BroadcastService(BaseBillingService):
     uow: UnitOfWork
 
     def __init__(
         self,
         config: AppConfig,
-        bot: Bot,
         redis_client: Redis,
         redis_repository: RedisRepository,
-        translator_hub: TranslatorHub,
         #
         uow: UnitOfWork,
     ) -> None:
-        super().__init__(config, bot, redis_client, redis_repository, translator_hub)
+        super().__init__(config, redis_client, redis_repository)
         self.uow = uow
 
     async def create(self, broadcast: BroadcastDto) -> BroadcastDto:

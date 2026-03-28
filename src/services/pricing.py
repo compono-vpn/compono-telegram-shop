@@ -6,10 +6,10 @@ from loguru import logger
 from src.core.enums import Currency
 from src.infrastructure.database.models.dto import PriceDetailsDto, UserDto
 
-from .base import BaseService
+from .base_billing import BaseBillingService
 
 
-class PricingService(BaseService):
+class PricingService(BaseBillingService):
     def calculate(
         self,
         user: UserDto,
