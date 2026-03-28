@@ -15,14 +15,13 @@ from src.core.enums import MediaType, SystemNotificationType
 from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import PlanSnapshotDto, UserDto
 from src.infrastructure.taskiq.tasks.subscriptions import trial_subscription_task
 from src.services.notification import NotificationService
-from src.services.plan import PlanService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
-from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
 
 router = Router(name=__name__)
@@ -463,19 +462,20 @@ async def on_get_trial(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    plan = await plan_service.get_trial_plan()
+    billing_plan = await billing.get_trial_plan()
 
-    if not plan:
+    if not billing_plan:
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-trial-unavailable"),
         )
         raise ValueError("Trial plan not exist")
 
+    plan = billing_plan_to_dto(billing_plan)
     trial = PlanSnapshotDto.from_plan(plan, plan.durations[0].days)
     await trial_subscription_task.kiq(user, trial, False)
 
@@ -579,9 +579,12 @@ async def on_invite(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
 ) -> None:
-    if await settings_service.is_referral_enable():
+    settings = await billing.get_settings()
+    referral_settings = settings.Referral or {}
+    is_referral_enable = bool(referral_settings.get("enable", False))
+    if is_referral_enable:
         await dialog_manager.switch_to(state=MainMenu.INVITE)
     else:
         return

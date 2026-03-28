@@ -12,10 +12,10 @@ from src.core.constants import USER_KEY
 from src.core.enums import Currency
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
+from src.infrastructure.billing import BillingClient
 from src.infrastructure.database.models.dto import UserDto
 from src.services.notification import NotificationService
 from src.services.payment_gateway import PaymentGatewayService
-from src.services.settings import SettingsService
 
 
 @inject
@@ -28,6 +28,7 @@ async def on_gateway_select(
 ) -> None:
     user: UserDto = sub_manager.middleware_data[USER_KEY]
     gateway_id = int(sub_manager.item_id)
+    # Use local service for gateway detail (needs settings/secrets)
     gateway = await payment_gateway_service.get(gateway_id)
 
     if not gateway:
@@ -51,11 +52,13 @@ async def on_gateway_test(
     callback: CallbackQuery,
     widget: Button,
     sub_manager: SubManager,
+    billing: FromDishka[BillingClient],
     payment_gateway_service: FromDishka[PaymentGatewayService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = sub_manager.middleware_data[USER_KEY]
     gateway_id = int(sub_manager.item_id)
+    # Need local service for settings check
     gateway = await payment_gateway_service.get(gateway_id)
 
     if not gateway:
@@ -72,13 +75,13 @@ async def on_gateway_test(
     logger.info(f"{log(user)} Testing gateway '{gateway_id}'")
 
     try:
-        payment = await payment_gateway_service.create_test_payment(user, gateway.type)
+        payment = await billing.create_test_payment(user.telegram_id, gateway.type.value)
         logger.info(f"{log(user)} Test payment successful for gateway '{gateway_id}'")
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(
                 i18n_key="ntf-gateway-test-payment-created",
-                i18n_kwargs={"url": payment.url},
+                i18n_kwargs={"url": payment.URL},
             ),
         )
 
@@ -186,11 +189,11 @@ async def on_default_currency_select(
     widget: Select[Currency],
     dialog_manager: DialogManager,
     selected_currency: Currency,
-    settings_service: FromDishka[SettingsService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Set default currency '{selected_currency}'")
-    await settings_service.set_default_currency(selected_currency)
+    await billing.set_default_currency(selected_currency.value)
 
 
 @inject
@@ -198,13 +201,13 @@ async def on_gateway_move(
     callback: CallbackQuery,
     widget: Button,
     sub_manager: SubManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     await sub_manager.load_data()
     user: UserDto = sub_manager.middleware_data[USER_KEY]
     gateway_id = int(sub_manager.item_id)
 
-    moved = await payment_gateway_service.move_gateway_up(gateway_id)
+    moved = await billing.move_gateway_up(gateway_id)
     if moved:
         logger.info(f"{log(user)} Moved plan '{gateway_id}' up successfully")
     else:

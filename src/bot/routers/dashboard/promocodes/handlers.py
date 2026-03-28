@@ -15,10 +15,9 @@ from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click, parse_int
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_promocode_to_dto
 from src.infrastructure.database.models.dto import PlanSnapshotDto, PromocodeDto, UserDto
 from src.services.notification import NotificationService
-from src.services.plan import PlanService
-from src.services.promocode import PromocodeService
 
 
 async def on_active_toggle(
@@ -181,7 +180,7 @@ async def on_confirm(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    promocode_service: FromDishka[PromocodeService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -191,30 +190,49 @@ async def on_confirm(
     if not promocode:
         raise ValueError("PromocodeDto not found in dialog data")
 
+    promo_data = {
+        "code": promocode.code,
+        "is_active": promocode.is_active,
+        "availability": promocode.availability.value if hasattr(promocode.availability, 'value') else str(promocode.availability),
+        "reward_type": promocode.reward_type.value if hasattr(promocode.reward_type, 'value') else str(promocode.reward_type),
+        "reward": promocode.reward,
+        "lifetime": promocode.lifetime,
+        "max_activations": promocode.max_activations,
+        "allowed_telegram_ids": promocode.allowed_telegram_ids,
+        "purchase_discount_max_days": promocode.purchase_discount_max_days,
+    }
+
+    if promocode.plan:
+        promo_data["plan"] = {
+            "id": promocode.plan.id,
+            "name": promocode.plan.name,
+            "type": promocode.plan.type.value if hasattr(promocode.plan.type, 'value') else str(promocode.plan.type),
+            "traffic_limit": promocode.plan.traffic_limit,
+            "device_limit": promocode.plan.device_limit,
+            "duration": promocode.plan.duration,
+        }
+
     if promocode.id is not None:
-        # Update existing
-        updated = await promocode_service.update(promocode)
-        if updated:
-            await notification_service.notify_user(
-                user=user,
-                payload=MessagePayload(
-                    i18n_key="ntf-promocode-updated",
-                    i18n_kwargs={"code": promocode.code},
-                ),
-            )
-            logger.info(f"{log(user)} Updated promocode '{promocode.code}'")
+        promo_data["id"] = promocode.id
+        await billing.update_promocode(promo_data)
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(
+                i18n_key="ntf-promocode-updated",
+                i18n_kwargs={"code": promocode.code},
+            ),
+        )
+        logger.info(f"{log(user)} Updated promocode '{promocode.code}'")
     else:
-        # Create new
-        created = await promocode_service.create(promocode)
-        if created:
-            await notification_service.notify_user(
-                user=user,
-                payload=MessagePayload(
-                    i18n_key="ntf-promocode-created",
-                    i18n_kwargs={"code": promocode.code},
-                ),
-            )
-            logger.info(f"{log(user)} Created promocode '{promocode.code}'")
+        await billing.create_promocode(promo_data)
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(
+                i18n_key="ntf-promocode-created",
+                i18n_kwargs={"code": promocode.code},
+            ),
+        )
+        logger.info(f"{log(user)} Created promocode '{promocode.code}'")
 
     await dialog_manager.start(state=DashboardPromocodes.MAIN, mode=StartMode.RESET_STACK)
 
@@ -225,14 +243,15 @@ async def on_list_select(
     widget: Select[int],
     dialog_manager: DialogManager,
     selected_id: int,
-    promocode_service: FromDishka[PromocodeService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    promocode = await promocode_service.get(selected_id)
+    billing_promo = await billing.get_promocode(selected_id)
 
-    if not promocode:
+    if not billing_promo:
         raise ValueError(f"Promocode '{selected_id}' not found")
 
+    promocode = billing_promocode_to_dto(billing_promo)
     adapter = DialogDataAdapter(dialog_manager)
     adapter.save(promocode)
     logger.info(f"{log(user)} Selected promocode '{promocode.code}' for editing")
@@ -244,11 +263,11 @@ async def on_list(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    promocode_service: FromDishka[PromocodeService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    promocodes = await promocode_service.get_all()
+    promocodes = await billing.list_promocodes()
 
     if not promocodes:
         await notification_service.notify_user(
@@ -265,7 +284,7 @@ async def on_search_input(
     message: Message,
     widget: MessageInput,
     dialog_manager: DialogManager,
-    promocode_service: FromDishka[PromocodeService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     dialog_manager.show_mode = ShowMode.EDIT
@@ -274,15 +293,16 @@ async def on_search_input(
     if not message.text:
         return
 
-    promocode = await promocode_service.get_by_code(message.text.strip().upper())
+    billing_promo = await billing.get_promocode_by_code(message.text.strip().upper())
 
-    if not promocode:
+    if not billing_promo:
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-promocode-not-found"),
         )
         return
 
+    promocode = billing_promocode_to_dto(billing_promo)
     adapter = DialogDataAdapter(dialog_manager)
     adapter.save(promocode)
     logger.info(f"{log(user)} Found promocode '{promocode.code}' via search")
@@ -294,7 +314,7 @@ async def on_delete(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    promocode_service: FromDishka[PromocodeService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -305,7 +325,7 @@ async def on_delete(
         raise ValueError("PromocodeDto not found in dialog data")
 
     if is_double_click(dialog_manager, key=f"delete_confirm_{promocode.id}", cooldown=10):
-        await promocode_service.delete(promocode.id)
+        await billing.delete_promocode(promocode.id)
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-promocode-deleted"),
@@ -436,15 +456,16 @@ async def on_plan_duration_select(
     widget: Select[int],
     dialog_manager: DialogManager,
     selected_duration: int,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
-    plan = await plan_service.get(selected_plan_id)
+    billing_plan = await billing.get_plan(selected_plan_id)
 
-    if not plan:
+    if not billing_plan:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
 
+    plan = billing_plan_to_dto(billing_plan)
     adapter = DialogDataAdapter(dialog_manager)
     promocode = adapter.load(PromocodeDto)
 

@@ -29,11 +29,10 @@ from src.infrastructure.database.models.dto.subscription import (
     SubscriptionDto,
 )
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_transaction_to_dto
 from src.services.notification import NotificationService
-from src.services.plan import PlanService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
-from src.services.transaction import TransactionService
 from src.services.user import UserService
 
 
@@ -650,12 +649,12 @@ async def on_transactions(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    transaction_service: FromDishka[TransactionService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
-    transactions = await transaction_service.get_by_user(target_telegram_id)
+    transactions = await billing.list_transactions(target_telegram_id)
 
     if not transactions:
         await notification_service.notify_user(
@@ -684,11 +683,12 @@ async def on_give_access(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    plans = await plan_service.get_allowed_plans()
+    billing_plans = await billing.get_allowed_plans()
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
 
     if not plans:
         await notification_service.notify_user(
@@ -706,22 +706,29 @@ async def on_plan_select(
     widget: Select[int],
     dialog_manager: DialogManager,
     selected_plan_id: int,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected plan '{selected_plan_id}'")
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
-    plan = await plan_service.get(selected_plan_id)
+    billing_plan = await billing.get_plan(selected_plan_id)
 
-    if not plan:
+    if not billing_plan:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
+
+    plan = billing_plan_to_dto(billing_plan)
 
     if target_telegram_id not in plan.allowed_user_ids:
         plan.allowed_user_ids.append(target_telegram_id)
     else:
         plan.allowed_user_ids.remove(target_telegram_id)
 
-    await plan_service.update(plan)
+    # Update via billing API
+    plan_data = {
+        "id": plan.id,
+        "allowed_user_ids": plan.allowed_user_ids,
+    }
+    await billing.update_plan(plan_data)
     logger.info(
         f"{log(user)} Given access to plan '{selected_plan_id}' for user '{target_telegram_id}'"
     )
@@ -1023,7 +1030,7 @@ async def on_give_subscription(
     widget: Button,
     dialog_manager: DialogManager,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -1033,7 +1040,8 @@ async def on_give_subscription(
     if not target_user:
         raise ValueError(f"User '{target_telegram_id}' not found")
 
-    plans = await plan_service.get_available_plans(target_user)
+    billing_plans = await billing.get_available_plans(target_telegram_id)
+    plans = [billing_plan_to_dto(bp) for bp in billing_plans]
 
     if not plans:
         await notification_service.notify_user(
@@ -1065,7 +1073,7 @@ async def on_subscription_duration_select(
     dialog_manager: DialogManager,
     selected_duration: int,
     user_service: FromDishka[UserService],
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
     subscription_service: FromDishka[SubscriptionService],
     remnawave_service: FromDishka[RemnawaveService],
 ) -> None:
@@ -1078,10 +1086,12 @@ async def on_subscription_duration_select(
         raise ValueError(f"User '{target_telegram_id}' not found")
 
     selected_plan_id = dialog_manager.dialog_data["selected_plan_id"]
-    plan = await plan_service.get(selected_plan_id)
+    billing_plan = await billing.get_plan(selected_plan_id)
 
-    if not plan:
+    if not billing_plan:
         raise ValueError(f"Plan '{selected_plan_id}' not found")
+
+    plan = billing_plan_to_dto(billing_plan)
 
     plan_snapshot = PlanSnapshotDto.from_plan(plan, selected_duration)
     subscription = await subscription_service.get_current(target_telegram_id)

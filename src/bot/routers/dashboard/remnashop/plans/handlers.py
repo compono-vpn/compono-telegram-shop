@@ -19,11 +19,10 @@ from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click, parse_int
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto
 from src.infrastructure.database.models.dto import PlanDto, PlanDurationDto, PlanPriceDto, UserDto
 from src.services.notification import NotificationService
-from src.services.plan import PlanService
 from src.services.pricing import PricingService
-from src.services.user import UserService
 
 
 @inject
@@ -31,14 +30,15 @@ async def on_plan_select(
     callback: CallbackQuery,
     widget: Button,
     sub_manager: SubManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = sub_manager.middleware_data[USER_KEY]
-    plan: Optional[PlanDto] = await plan_service.get(plan_id=int(sub_manager.item_id))
+    billing_plan = await billing.get_plan(plan_id=int(sub_manager.item_id))
 
-    if not plan:
+    if not billing_plan:
         raise ValueError(f"Attempted to select non-existent plan '{sub_manager.item_id}'")
 
+    plan = billing_plan_to_dto(billing_plan)
     logger.info(f"{log(user)} Selected plan ID '{plan.id}'")
 
     adapter = DialogDataAdapter(sub_manager.manager)
@@ -53,13 +53,13 @@ async def on_plan_move(
     callback: CallbackQuery,
     widget: Button,
     sub_manager: SubManager,
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     await sub_manager.load_data()
     user: UserDto = sub_manager.middleware_data[USER_KEY]
     plan_id = int(sub_manager.item_id)
 
-    moved = await plan_service.move_plan_up(plan_id)
+    moved = await billing.move_plan_up(plan_id)
     if moved:
         logger.info(f"{log(user)} Moved plan '{plan_id}' up successfully")
     else:
@@ -72,7 +72,7 @@ async def on_plan_delete(
     widget: Button,
     dialog_manager: SubManager,
     notification_service: FromDishka[NotificationService],
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
 
@@ -83,7 +83,7 @@ async def on_plan_delete(
         raise ValueError("PlanDto not found in dialog data")
 
     if is_double_click(dialog_manager, key=f"delete_confirm_{plan.id}", cooldown=10):
-        await plan_service.delete(plan.id)  # type: ignore[arg-type]
+        await billing.delete_plan(plan.id)  # type: ignore[arg-type]
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-plan-deleted-success"),
@@ -105,7 +105,7 @@ async def on_name_input(
     widget: MessageInput,
     dialog_manager: DialogManager,
     notification_service: FromDishka[NotificationService],
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     dialog_manager.show_mode = ShowMode.EDIT
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -119,7 +119,8 @@ async def on_name_input(
         )
         return
 
-    if await plan_service.get_by_name(plan_name=message.text):
+    existing = await billing.get_plan_by_name(plan_name=message.text)
+    if existing:
         logger.warning(f"{log(user)} Tried to set duplicate plan name '{message.text}'")
         await notification_service.notify_user(
             user=user,
@@ -575,7 +576,7 @@ async def on_allowed_user_input(
     message: Message,
     widget: MessageInput,
     dialog_manager: DialogManager,
-    user_service: FromDishka[UserService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     dialog_manager.show_mode = ShowMode.EDIT
@@ -709,7 +710,7 @@ async def on_confirm_plan(  # noqa: C901
     widget: Button,
     dialog_manager: DialogManager,
     notification_service: FromDishka[NotificationService],
-    plan_service: FromDishka[PlanService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
 
@@ -746,8 +747,8 @@ async def on_confirm_plan(  # noqa: C901
         plan_dto.allowed_user_ids = []
 
     if plan_dto.availability == PlanAvailability.TRIAL:
-        existing_trial = await plan_service.get_trial_plan()
-        if existing_trial and existing_trial.id != plan_dto.id:
+        existing_trial = await billing.get_trial_plan()
+        if existing_trial and existing_trial.ID != plan_dto.id:
             await notification_service.notify_user(
                 user=user,
                 payload=MessagePayload(i18n_key="ntf-plan-trial-already-exists"),
@@ -765,16 +766,46 @@ async def on_confirm_plan(  # noqa: C901
             for price in duration.prices:
                 price.price = Decimal("0")
 
+    # Build plan data dict for billing API
+    plan_data = {
+        "name": plan_dto.name,
+        "description": plan_dto.description,
+        "tag": plan_dto.tag,
+        "is_active": plan_dto.is_active,
+        "type": plan_dto.type.value if hasattr(plan_dto.type, 'value') else str(plan_dto.type),
+        "availability": plan_dto.availability.value if hasattr(plan_dto.availability, 'value') else str(plan_dto.availability),
+        "traffic_limit": plan_dto.traffic_limit,
+        "device_limit": plan_dto.device_limit,
+        "traffic_limit_strategy": plan_dto.traffic_limit_strategy.value if hasattr(plan_dto.traffic_limit_strategy, 'value') else str(plan_dto.traffic_limit_strategy),
+        "allowed_user_ids": plan_dto.allowed_user_ids,
+        "internal_squads": [str(s) for s in plan_dto.internal_squads],
+        "external_squad": str(plan_dto.external_squad) if plan_dto.external_squad else None,
+        "durations": [
+            {
+                "days": d.days,
+                "prices": [
+                    {
+                        "currency": p.currency.value if hasattr(p.currency, 'value') else str(p.currency),
+                        "price": str(p.price),
+                    }
+                    for p in d.prices
+                ],
+            }
+            for d in plan_dto.durations
+        ],
+    }
+
     if plan_dto.id:
+        plan_data["id"] = plan_dto.id
         logger.info(f"{log(user)} Updating existing plan with ID '{plan_dto.id}'")
-        await plan_service.update(plan_dto)
+        await billing.update_plan(plan_data)
         logger.info(f"{log(user)} Plan '{plan_dto.name}' updated successfully")
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-plan-updated-success"),
         )
     else:
-        existing_plan: Optional[PlanDto] = await plan_service.get_by_name(plan_name=plan_dto.name)
+        existing_plan = await billing.get_plan_by_name(plan_name=plan_dto.name)
         if existing_plan:
             logger.warning(f"{log(user)} Plan with name '{plan_dto.name}' already exists. Aborting")
             await notification_service.notify_user(
@@ -784,8 +815,8 @@ async def on_confirm_plan(  # noqa: C901
             return
 
         logger.info(f"{log(user)} Creating new plan with name '{plan_dto.name}'")
-        plan = await plan_service.create(plan_dto)
-        logger.info(f"{log(user)} Plan '{plan.name}' created successfully")
+        await billing.create_plan(plan_data)
+        logger.info(f"{log(user)} Plan '{plan_dto.name}' created successfully")
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-plan-created-success"),
