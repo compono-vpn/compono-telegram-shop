@@ -6,22 +6,14 @@ from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 
-from src.core.enums import Currency, PaymentGatewayType, PromocodeRewardType, SubscriptionStatus
-from src.core.utils.formatters import format_percent, i18n_format_days
-from src.core.utils.time import datetime_now
+from src.core.enums import PromocodeRewardType
 from src.infrastructure.billing import (
     BillingClient,
     billing_plan_to_dto,
     billing_promocode_to_dto,
-    billing_subscription_to_dto,
-    billing_transaction_to_dto,
 )
 from src.infrastructure.database.models.dto import (
-    PlanDto,
     PromocodeDto,
-    SubscriptionDto,
-    TransactionDto,
-    UserDto,
 )
 
 
