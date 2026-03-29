@@ -110,7 +110,7 @@ jobs:
     needs: [generate-tag, build]
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch tag update
+      - name: Dispatch prod tag update
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.GH_PAT }}
@@ -120,4 +120,17 @@ jobs:
             {
               "tag": "${{ needs.generate-tag.outputs.tag }}",
               "path": "compono-shop"
+            }
+
+      - name: Dispatch stage tag update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GH_PAT }}
+          repository: bdtfs/argocd
+          event-type: image-update
+          client-payload: |
+            {
+              "tag": "${{ needs.generate-tag.outputs.tag }}",
+              "path": "compono-shop",
+              "env": "stage"
             }
