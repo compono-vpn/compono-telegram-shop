@@ -69,15 +69,31 @@ async def payments_webhook(
         return Response(status_code=status.HTTP_404_NOT_FOUND)
 
     try:
-        gateway = await payment_gateway_service._get_gateway_instance(gateway_enum)
-
-        if not gateway.data.is_active:
-            logger.warning(f"Webhook received for disabled payment gateway {gateway_enum}")
+        # Fetch all active gateways of this type to handle multi-channel webhooks
+        all_gws = await payment_gateway_service.list_active_by_type(gateway_enum)
+        if not all_gws:
+            logger.warning(f"No active gateways for type {gateway_enum}")
             if log_id is not None:
-                await _update_log(uow, log_id, status_code=404, error="Gateway is disabled")
+                await _update_log(uow, log_id, status_code=404, error="No active gateway")
             return Response(status_code=status.HTTP_404_NOT_FOUND)
 
-        payment_id, payment_status = await gateway.handle_webhook(request)
+        payment_id = None
+        payment_status = None
+        last_error = None
+        for gw_data in all_gws:
+            try:
+                gw_instance = await payment_gateway_service._get_gateway_instance(
+                    gw_data.type, channel=gw_data.channel
+                )
+                payment_id, payment_status = await gw_instance.handle_webhook(request)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                continue
+
+        if last_error is not None or payment_id is None:
+            raise last_error or ValueError("No gateway could verify webhook")
 
         # Deduplicate: only enqueue the task if this payment_id hasn't been
         # processed in the last _WEBHOOK_DEDUP_TTL seconds.  SET NX ensures

@@ -10,6 +10,7 @@ from uuid import UUID
 
 from src.core.enums import (
     Currency,
+    GatewayChannel,
     PaymentGatewayType,
     PlanAvailability,
     PlanType,
@@ -235,6 +236,7 @@ def billing_gateway_to_dto(bg: BillingPaymentGateway) -> PaymentGatewayDto:
         id=bg.ID if bg.ID else None,
         order_index=bg.OrderIndex,
         type=PaymentGatewayType(bg.Type) if bg.Type else PaymentGatewayType.TELEGRAM_STARS,
+        channel=GatewayChannel(bg.Channel) if bg.Channel else GatewayChannel.ALL,
         currency=Currency(bg.Currency) if bg.Currency else Currency.USD,
         is_active=bg.IsActive,
         settings=None,

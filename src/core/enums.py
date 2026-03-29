@@ -234,6 +234,12 @@ class PaymentGatewayType(UpperStrEnum):
     PLATEGA = auto()
 
 
+class GatewayChannel(UpperStrEnum):
+    BOT = auto()
+    WEB = auto()
+    ALL = auto()
+
+
 class Currency(UpperStrEnum):
     USD = auto()
     XTR = auto()

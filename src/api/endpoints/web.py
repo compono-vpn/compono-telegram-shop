@@ -15,6 +15,7 @@ from src.core.config import AppConfig
 from src.core.constants import API_V1
 from src.core.enums import (
     Currency,
+    GatewayChannel,
     PaymentGatewayType,
     PlanAvailability,
     PromocodeAvailability,
@@ -366,7 +367,7 @@ async def create_purchase(
     # Try to find an active gateway for this currency from DB
     async with uow:
         all_gateways = await uow.repository.gateways.get_all()
-        matching = [g for g in all_gateways if g.is_active and g.currency == body.currency]
+        matching = [g for g in all_gateways if g.is_active and g.currency == body.currency and g.channel in (GatewayChannel.WEB, GatewayChannel.ALL)]
         if matching:
             gateway_type = matching[0].type
 
@@ -374,7 +375,7 @@ async def create_purchase(
         raise HTTPException(status_code=400, detail="Unsupported currency")
 
     try:
-        gateway_instance = await payment_gateway_service._get_gateway_instance(gateway_type)
+        gateway_instance = await payment_gateway_service._get_gateway_instance(gateway_type, channel=GatewayChannel.WEB)
     except ValueError:
         logger.error(f"Gateway '{gateway_type}' not configured")
         raise HTTPException(status_code=503, detail="Payment gateway not available")

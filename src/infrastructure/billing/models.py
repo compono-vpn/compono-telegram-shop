@@ -208,6 +208,7 @@ class BillingPaymentGateway(BaseModel):
     ID: int = 0
     OrderIndex: int = 0
     Type: str = ""
+    Channel: str = "ALL"
     Currency: str = ""
     IsActive: bool = True
     Settings: Optional[Any] = None

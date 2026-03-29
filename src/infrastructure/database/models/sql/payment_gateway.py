@@ -1,9 +1,9 @@
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Enum, Integer
+from sqlalchemy import JSON, Boolean, Enum, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.core.enums import Currency, PaymentGatewayType
+from src.core.enums import Currency, GatewayChannel, PaymentGatewayType
 from src.infrastructure.database.models.dto import AnyGatewaySettingsDto
 
 from .base import BaseSql
@@ -11,6 +11,9 @@ from .base import BaseSql
 
 class PaymentGateway(BaseSql):
     __tablename__ = "payment_gateways"
+    __table_args__ = (
+        UniqueConstraint("type", "channel", name="uq_payment_gateways_type_channel"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -23,7 +26,16 @@ class PaymentGateway(BaseSql):
             validate_strings=True,
         ),
         nullable=False,
-        unique=True,
+    )
+    channel: Mapped[GatewayChannel] = mapped_column(
+        Enum(
+            GatewayChannel,
+            name="gateway_channel",
+            create_constraint=False,
+            native_enum=True,
+        ),
+        nullable=False,
+        server_default="ALL",
     )
     currency: Mapped[Currency] = mapped_column(
         Enum(

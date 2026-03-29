@@ -11,6 +11,7 @@ from src.bot.keyboards import get_user_keyboard
 from src.core.config import AppConfig
 from src.core.enums import (
     Currency,
+    GatewayChannel,
     PaymentGatewayType,
     PurchaseType,
     SystemNotificationType,
@@ -129,6 +130,7 @@ class PaymentGatewayService(BaseService):
                 payment_gateway = PaymentGatewayDto(
                     order_index=order_index,
                     type=gateway_type,
+                    channel=GatewayChannel.ALL,
                     currency=Currency.from_gateway_type(gateway_type),
                     is_active=is_active,
                     settings=settings,
@@ -150,9 +152,13 @@ class PaymentGatewayService(BaseService):
         logger.debug(f"Retrieved payment gateway '{gateway_id}'")
         return PaymentGatewayDto.from_model(db_gateway, decrypt=True)
 
-    async def get_by_type(self, gateway_type: PaymentGatewayType) -> Optional[PaymentGatewayDto]:
+    async def get_by_type(
+        self,
+        gateway_type: PaymentGatewayType,
+        channel: Optional[GatewayChannel] = None,
+    ) -> Optional[PaymentGatewayDto]:
         async with self.uow:
-            db_gateway = await self.uow.repository.gateways.get_by_type(gateway_type)
+            db_gateway = await self.uow.repository.gateways.get_by_type(gateway_type, channel)
 
         if not db_gateway:
             logger.warning(f"Payment gateway of type '{gateway_type}' not found")
@@ -190,9 +196,13 @@ class PaymentGatewayService(BaseService):
 
         return PaymentGatewayDto.from_model(db_updated_gateway, decrypt=True)
 
-    async def filter_active(self, is_active: bool = True) -> list[PaymentGatewayDto]:
+    async def filter_active(
+        self,
+        is_active: bool = True,
+        channel: Optional[GatewayChannel] = None,
+    ) -> list[PaymentGatewayDto]:
         async with self.uow:
-            db_gateways = await self.uow.repository.gateways.filter_active(is_active)
+            db_gateways = await self.uow.repository.gateways.filter_active(is_active, channel)
 
         logger.debug(f"Filtered active gateways: '{is_active}', found '{len(db_gateways)}'")
         return PaymentGatewayDto.from_model_list(db_gateways, decrypt=False)
@@ -236,7 +246,7 @@ class PaymentGatewayService(BaseService):
         purchase_type: PurchaseType,
         gateway_type: PaymentGatewayType,
     ) -> PaymentResult:
-        gateway_instance = await self._get_gateway_instance(gateway_type)
+        gateway_instance = await self._get_gateway_instance(gateway_type, channel=GatewayChannel.BOT)
 
         i18n = self.translator_hub.get_translator_by_locale(locale=user.language)
         key, kw = i18n_format_days(plan.duration)
@@ -426,9 +436,20 @@ class PaymentGatewayService(BaseService):
 
     #
 
-    async def _get_gateway_instance(self, gateway_type: PaymentGatewayType) -> BasePaymentGateway:
-        logger.debug(f"Creating gateway instance for type '{gateway_type}'")
-        gateway = await self.get_by_type(gateway_type)
+    async def list_active_by_type(
+        self, gateway_type: PaymentGatewayType
+    ) -> list[PaymentGatewayDto]:
+        async with self.uow:
+            db_gateways = await self.uow.repository.gateways.list_by_type_active(gateway_type)
+        return PaymentGatewayDto.from_model_list(db_gateways, decrypt=True)
+
+    async def _get_gateway_instance(
+        self,
+        gateway_type: PaymentGatewayType,
+        channel: Optional[GatewayChannel] = None,
+    ) -> BasePaymentGateway:
+        logger.debug(f"Creating gateway instance for type '{gateway_type}' channel='{channel}'")
+        gateway = await self.get_by_type(gateway_type, channel)
 
         if not gateway:
             raise ValueError(f"Payment gateway of type '{gateway_type}' not found")

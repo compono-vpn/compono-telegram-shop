@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, SecretStr
 
-from src.core.enums import Currency, PaymentGatewayType, YookassaVatCode
+from src.core.enums import Currency, GatewayChannel, PaymentGatewayType, YookassaVatCode
 
 from .base import TrackableDto
 
@@ -18,6 +18,7 @@ class PaymentGatewayDto(TrackableDto):
 
     order_index: int
     type: PaymentGatewayType
+    channel: GatewayChannel = GatewayChannel.ALL
     currency: Currency
 
     is_active: bool

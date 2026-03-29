@@ -2,7 +2,7 @@ from typing import Any, Optional
 
 from sqlalchemy import func, select
 
-from src.core.enums import PaymentGatewayType
+from src.core.enums import GatewayChannel, PaymentGatewayType
 from src.infrastructure.database.models.sql import PaymentGateway
 
 from .base import BaseRepository
@@ -15,8 +15,15 @@ class PaymentGatewayRepository(BaseRepository):
     async def get(self, gateway_id: int) -> Optional[PaymentGateway]:
         return await self._get_one(PaymentGateway, PaymentGateway.id == gateway_id)
 
-    async def get_by_type(self, gateway_type: PaymentGatewayType) -> Optional[PaymentGateway]:
-        return await self._get_one(PaymentGateway, PaymentGateway.type == gateway_type)
+    async def get_by_type(
+        self,
+        gateway_type: PaymentGatewayType,
+        channel: Optional[GatewayChannel] = None,
+    ) -> Optional[PaymentGateway]:
+        conditions = [PaymentGateway.type == gateway_type]
+        if channel is not None:
+            conditions.append(PaymentGateway.channel.in_([channel, GatewayChannel.ALL]))
+        return await self._get_one(PaymentGateway, *conditions)
 
     async def get_all(self, sorted: bool = False) -> list[PaymentGateway]:
         if sorted:
@@ -29,10 +36,27 @@ class PaymentGatewayRepository(BaseRepository):
     async def update(self, gateway_id: int, **data: Any) -> Optional[PaymentGateway]:
         return await self._update(PaymentGateway, PaymentGateway.id == gateway_id, **data)
 
-    async def filter_active(self, is_active: bool) -> list[PaymentGateway]:
+    async def filter_active(
+        self,
+        is_active: bool,
+        channel: Optional[GatewayChannel] = None,
+    ) -> list[PaymentGateway]:
+        conditions = [PaymentGateway.is_active == is_active]
+        if channel is not None:
+            conditions.append(PaymentGateway.channel.in_([channel, GatewayChannel.ALL]))
         return await self._get_many(
             PaymentGateway,
-            PaymentGateway.is_active == is_active,
+            *conditions,
+            order_by=PaymentGateway.order_index.asc(),
+        )
+
+    async def list_by_type_active(
+        self, gateway_type: PaymentGatewayType
+    ) -> list[PaymentGateway]:
+        return await self._get_many(
+            PaymentGateway,
+            PaymentGateway.type == gateway_type,
+            PaymentGateway.is_active == True,
             order_by=PaymentGateway.order_index.asc(),
         )
 

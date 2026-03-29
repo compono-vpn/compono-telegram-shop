@@ -22,7 +22,7 @@ async def gateways_getter(
     formatted_gateways = [
         {
             "id": g.ID,
-            "gateway_type": g.Type,
+            "gateway_type": f"{g.Type} [{g.Channel}]" if g.Channel else g.Type,
             "is_active": g.IsActive,
         }
         for g in billing_gateways
@@ -116,7 +116,7 @@ async def placement_getter(
     formatted_gateways = [
         {
             "id": g.ID,
-            "gateway_type": g.Type,
+            "gateway_type": f"{g.Type} [{g.Channel}]" if g.Channel else g.Type,
             "is_active": g.IsActive,
         }
         for g in billing_gateways
