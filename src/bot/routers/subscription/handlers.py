@@ -39,8 +39,9 @@ class CachedPaymentData(TypedDict):
     final_pricing: str
 
 
-def _get_cache_key(duration: int, gateway_type: PaymentGatewayType) -> str:
-    return f"{duration}:{gateway_type.value}"
+def _get_cache_key(duration: int, gateway_type) -> str:
+    gt = gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type)
+    return f"{duration}:{gt}"
 
 
 def _load_payment_data(dialog_manager: DialogManager) -> dict[str, CachedPaymentData]:
@@ -77,14 +78,14 @@ async def _create_payment_and_get_data(
             telegram_id=user.telegram_id,
             plan_id=plan.id,
             duration_days=duration.days,
-            currency=gateway_type.value,  # The billing service resolves currency from gateway type
-            gateway_type=gateway_type.value,
-            purchase_type=purchase_type.value,
+            currency=gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type),
+            gateway_type=gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type),
+            purchase_type=purchase_type.value if hasattr(purchase_type, 'value') else str(purchase_type),
             is_test=user.is_dev,
         )
 
         # Get price details for the pricing data
-        billing_gateway = await billing.get_gateway_by_type(gateway_type.value)
+        billing_gateway = await billing.get_gateway_by_type(gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type))
         if billing_gateway:
             price_details = await billing.calculate_price(
                 telegram_id=user.telegram_id,
@@ -404,7 +405,7 @@ async def on_payment_method_select(
     callback: CallbackQuery,
     widget: Select,
     dialog_manager: DialogManager,
-    selected_payment_method: PaymentGatewayType,
+    selected_payment_method: str,
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
