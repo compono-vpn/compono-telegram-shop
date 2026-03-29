@@ -362,8 +362,16 @@ async def create_purchase(
         )
         return PurchaseResponse(payment_url="", payment_id=str(free_payment_id))
 
-    # Determine gateway from currency
+    # Determine gateway: find active gateway matching the requested currency
     gateway_type = CURRENCY_TO_GATEWAY.get(body.currency)
+
+    # Try to find an active gateway for this currency from DB
+    async with uow:
+        all_gateways = await uow.repository.gateways.get_all()
+        matching = [g for g in all_gateways if g.is_active and g.currency == body.currency]
+        if matching:
+            gateway_type = matching[0].type
+
     if not gateway_type:
         raise HTTPException(status_code=400, detail="Unsupported currency")
 
