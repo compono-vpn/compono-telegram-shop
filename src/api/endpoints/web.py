@@ -390,7 +390,7 @@ async def create_purchase(
 
     default_origin = f"https://{config.hydra_primary_domain}"
     return_url = validate_return_url(
-        body.return_url, f"{default_origin}/{body.lang}/purchase/success"
+        body.return_url, f"{default_origin}/{body.lang}/purchase/status"
     )
     failed_url = validate_return_url(
         body.failed_url, f"{default_origin}/{body.lang}/purchase/failed"
