@@ -5,8 +5,11 @@ from aiokafka import AIOKafkaConsumer
 from dishka import AsyncContainer
 from loguru import logger
 
+from aiogram import Bot
+from aiogram_dialog import BgManagerFactory, ShowMode, StartMode
+
 from src.core.config import AppConfig
-from src.core.enums import SystemNotificationType
+from src.core.enums import PurchaseType, SystemNotificationType
 from src.core.utils.formatters import (
     i18n_format_days,
     i18n_format_device_limit,
@@ -14,6 +17,7 @@ from src.core.utils.formatters import (
 )
 from src.core.utils.message_payload import MessagePayload
 from src.bot.keyboards import get_user_keyboard
+from src.bot.routers.subscription.states import Subscription
 from src.services.notification import NotificationService
 
 
@@ -86,11 +90,19 @@ class UserNotificationConsumer:
             return
 
         msg_type = payload.get("type", "system")
+
+        if msg_type == "system":
+            await self._handle_system_notify(telegram_id, payload)
+        elif msg_type == "redirect":
+            await self._handle_redirect(telegram_id, payload)
+        else:
+            logger.warning(f"Unknown notification type '{msg_type}', skipping")
+
+    async def _handle_system_notify(self, telegram_id: int, payload: dict) -> None:
         ntf_type_str = payload.get("ntf_type", "")
         i18n_key = payload.get("i18n_key", "")
-
         if not i18n_key:
-            logger.warning("Notification event missing i18n_key, skipping")
+            logger.warning("System notification missing i18n_key, skipping")
             return
 
         try:
@@ -114,10 +126,6 @@ class UserNotificationConsumer:
         if reply_markup_user_id:
             reply_markup = get_user_keyboard(int(reply_markup_user_id))
 
-        if msg_type != "system":
-            logger.warning(f"Unknown notification type '{msg_type}', skipping")
-            return
-
         async with self._container() as request_container:
             notification_service = await request_container.get(NotificationService)
             await notification_service.system_notify(
@@ -129,4 +137,33 @@ class UserNotificationConsumer:
                 ),
             )
 
-        logger.info(f"Delivered notification '{i18n_key}' for user {telegram_id}")
+        logger.info(f"Delivered system notification '{i18n_key}' for user {telegram_id}")
+
+    async def _handle_redirect(self, telegram_id: int, payload: dict) -> None:
+        redirect_to = payload.get("redirect_to", "")
+        if redirect_to != "subscription_success":
+            logger.warning(f"Unknown redirect_to '{redirect_to}', skipping")
+            return
+
+        purchase_type_str = payload.get("purchase_type", "NEW")
+        try:
+            purchase_type = PurchaseType(purchase_type_str)
+        except ValueError:
+            purchase_type = PurchaseType.NEW
+
+        async with self._container() as request_container:
+            bot = await request_container.get(Bot)
+            bg_factory = await request_container.get(BgManagerFactory)
+            bg_manager = bg_factory.bg(
+                bot=bot,
+                user_id=telegram_id,
+                chat_id=telegram_id,
+            )
+            await bg_manager.start(
+                state=Subscription.SUCCESS,
+                data={"purchase_type": purchase_type},
+                mode=StartMode.RESET_STACK,
+                show_mode=ShowMode.DELETE_AND_SEND,
+            )
+
+        logger.info(f"Redirected user {telegram_id} to subscription success")
