@@ -17,7 +17,7 @@ from src.core.utils.formatters import (
 )
 from src.core.utils.message_payload import MessagePayload
 from src.bot.keyboards import get_user_keyboard
-from src.bot.routers.subscription.states import Subscription
+from src.bot.states import Subscription
 from src.services.notification import NotificationService
 
 
