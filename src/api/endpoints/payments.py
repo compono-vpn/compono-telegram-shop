@@ -12,6 +12,7 @@ from src.core.constants import API_V1, PAYMENTS_WEBHOOK_PATH
 from src.core.enums import PaymentGatewayType
 from src.core.metrics import PAYMENT_WEBHOOK_ERRORS_TOTAL, PAYMENT_WEBHOOK_PROCESSING_TIME
 from src.core.utils.message_payload import MessagePayload
+from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.sql import WebhookLog
 from src.infrastructure.taskiq.tasks.payments import handle_payment_transaction_task
@@ -33,18 +34,28 @@ async def payments_webhook(
     notification_service: FromDishka[NotificationService],
     uow: FromDishka[UnitOfWork],
     redis_client: FromDishka[Redis],
+    billing_client: FromDishka[BillingClient],
 ) -> Response:
     start = time.monotonic()
     log_id: int | None = None
 
     # Read body early so it's cached for both logging and gateway.handle_webhook
-    await request.body()
+    body = await request.body()
     payload: dict | None = None
     try:
         payload = await request.json()
     except Exception:
         # Body might be empty, form-encoded, or otherwise not JSON — that's fine
         pass
+
+    # Forward webhook to billing (fire-and-forget) so billing can process
+    # payments it created (bot payments go through billing's internal API)
+    try:
+        await billing_client.forward_webhook(
+            gateway_type.upper(), body, dict(request.headers),
+        )
+    except Exception:
+        logger.warning(f"Failed to forward webhook to billing for {gateway_type}")
 
     # Persist the webhook log immediately so it survives crashes
     try:
