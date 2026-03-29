@@ -128,7 +128,7 @@ async def payment_method_getter(
         raise ValueError("PlanDto not found in dialog data")
 
     billing_gateways = await billing.list_active_gateways()
-    gateways = [billing_gateway_to_dto(g) for g in billing_gateways]
+    gateways = [billing_gateway_to_dto(g) for g in billing_gateways if g.Channel in ("BOT", "ALL")]
     selected_duration = dialog_manager.dialog_data["selected_duration"]
     only_single_duration = dialog_manager.dialog_data.get("only_single_duration", False)
     duration = plan.get_duration(selected_duration)
@@ -203,7 +203,7 @@ async def confirm_getter(
     pricing = PriceDetailsDto.model_validate_json(pricing_data)
 
     key, kw = i18n_format_days(duration.days)
-    billing_active_gateways = await billing.list_active_gateways()
+    billing_active_gateways = [g for g in await billing.list_active_gateways() if g.Channel in ("BOT", "ALL")]
 
     return {
         "purchase_type": purchase_type,
