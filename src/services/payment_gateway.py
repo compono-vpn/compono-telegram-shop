@@ -90,8 +90,9 @@ class PaymentGatewayService(BaseService):
         for gateway_type in PaymentGatewayType:
             settings: Optional[AnyGatewaySettingsDto]
 
-            if await self.get_by_type(gateway_type):
-                continue
+            async with self.uow as uow:
+                if await uow.repository.gateways.exists_by_type(gateway_type):
+                    continue
 
             match gateway_type:
                 case PaymentGatewayType.TELEGRAM_STARS:

@@ -25,6 +25,12 @@ class PaymentGatewayRepository(BaseRepository):
             conditions.append(PaymentGateway.channel.in_([channel, GatewayChannel.ALL]))
         return await self._get_one(PaymentGateway, *conditions)
 
+    async def exists_by_type(self, gateway_type: PaymentGatewayType) -> bool:
+        result = await self.session.execute(
+            select(PaymentGateway.id).where(PaymentGateway.type == gateway_type).limit(1)
+        )
+        return result.scalar() is not None
+
     async def get_all(self, sorted: bool = False) -> list[PaymentGateway]:
         if sorted:
             order_by = PaymentGateway.order_index.asc()
