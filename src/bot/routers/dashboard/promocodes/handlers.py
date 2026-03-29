@@ -191,19 +191,19 @@ async def on_confirm(
         raise ValueError("PromocodeDto not found in dialog data")
 
     promo_data = {
-        "code": promocode.code,
-        "is_active": promocode.is_active,
-        "availability": promocode.availability.value if hasattr(promocode.availability, 'value') else str(promocode.availability),
-        "reward_type": promocode.reward_type.value if hasattr(promocode.reward_type, 'value') else str(promocode.reward_type),
-        "reward": promocode.reward,
-        "lifetime": promocode.lifetime,
-        "max_activations": promocode.max_activations,
-        "allowed_telegram_ids": promocode.allowed_telegram_ids,
-        "purchase_discount_max_days": promocode.purchase_discount_max_days,
+        "Code": promocode.code,
+        "IsActive": promocode.is_active,
+        "Availability": promocode.availability.value if hasattr(promocode.availability, 'value') else str(promocode.availability),
+        "RewardType": promocode.reward_type.value if hasattr(promocode.reward_type, 'value') else str(promocode.reward_type),
+        "Reward": promocode.reward,
+        "Lifetime": promocode.lifetime,
+        "MaxActivations": promocode.max_activations,
+        "AllowedTelegramIDs": promocode.allowed_telegram_ids,
+        "PurchaseDiscountMaxDays": promocode.purchase_discount_max_days,
     }
 
     if promocode.plan:
-        promo_data["plan"] = {
+        promo_data["Plan"] = {
             "id": promocode.plan.id,
             "name": promocode.plan.name,
             "type": promocode.plan.type.value if hasattr(promocode.plan.type, 'value') else str(promocode.plan.type),
@@ -213,7 +213,7 @@ async def on_confirm(
         }
 
     if promocode.id is not None:
-        promo_data["id"] = promocode.id
+        promo_data["ID"] = promocode.id
         await billing.update_promocode(promo_data)
         await notification_service.notify_user(
             user=user,
