@@ -8,7 +8,6 @@ from src.core.config import AppConfig
 from src.core.logger import setup_logger
 from src.infrastructure.di import create_container
 from src.infrastructure.kafka.consumer import UserNotificationConsumer
-from src.services.notification import NotificationService
 
 from .broker import broker
 
@@ -30,8 +29,7 @@ def worker() -> RedisStreamBroker:
     @broker.on_event(TaskiqEvents.WORKER_STARTUP)
     async def on_startup(state: TaskiqState) -> None:
         global _notification_consumer  # noqa: PLW0603
-        notification_service = await container.get(NotificationService)
-        _notification_consumer = UserNotificationConsumer(config, notification_service)
+        _notification_consumer = UserNotificationConsumer(config, container)
         await _notification_consumer.start()
 
     @broker.on_event(TaskiqEvents.WORKER_SHUTDOWN)

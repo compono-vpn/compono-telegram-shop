@@ -2,6 +2,7 @@ import asyncio
 import json
 
 from aiokafka import AIOKafkaConsumer
+from dishka import AsyncContainer
 from loguru import logger
 
 from src.core.config import AppConfig
@@ -25,15 +26,11 @@ class UserNotificationConsumer:
     }
     """
 
-    def __init__(
-        self,
-        config: AppConfig,
-        notification_service: NotificationService,
-    ) -> None:
+    def __init__(self, config: AppConfig, container: AsyncContainer) -> None:
         self._brokers = config.kafka_brokers
         self._group_id = config.kafka_group_id
         self._topic = config.kafka_notify_topic
-        self._notification = notification_service
+        self._container = container
         self._consumer: AIOKafkaConsumer | None = None
         self._task: asyncio.Task | None = None
 
@@ -104,8 +101,13 @@ class UserNotificationConsumer:
         if reply_markup_user_id:
             reply_markup = get_user_keyboard(int(reply_markup_user_id))
 
-        if msg_type == "system":
-            await self._notification.system_notify(
+        if msg_type != "system":
+            logger.warning(f"Unknown notification type '{msg_type}', skipping")
+            return
+
+        async with self._container() as request_container:
+            notification_service = await request_container.get(NotificationService)
+            await notification_service.system_notify(
                 ntf_type=ntf_type,
                 payload=MessagePayload.not_deleted(
                     i18n_key=i18n_key,
@@ -113,10 +115,5 @@ class UserNotificationConsumer:
                     reply_markup=reply_markup,
                 ),
             )
-        else:
-            logger.warning(f"Unknown notification type '{msg_type}', skipping")
-            return
 
-        logger.info(
-            f"Delivered notification '{i18n_key}' for user {telegram_id}"
-        )
+        logger.info(f"Delivered notification '{i18n_key}' for user {telegram_id}")
