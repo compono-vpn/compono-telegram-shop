@@ -398,19 +398,12 @@ async def create_purchase(
 
     details = f"Compono VPN — {db_plan.name} ({body.duration_days} days)"
 
-    # Platega supports return_url/failed_url; Cryptomus does not
-    if gateway_type == PaymentGatewayType.PLATEGA:
-        payment = await gateway_instance.handle_create_payment(
-            amount=amount,
-            details=details,
-            return_url=return_url,
-            failed_url=failed_url,
-        )
-    else:
-        payment = await gateway_instance.handle_create_payment(
-            amount=amount,
-            details=details,
-        )
+    payment = await gateway_instance.handle_create_payment(
+        amount=amount,
+        details=details,
+        return_url=return_url,
+        failed_url=failed_url,
+    )
 
     async with uow:
         await uow.repository.web_orders.create(
