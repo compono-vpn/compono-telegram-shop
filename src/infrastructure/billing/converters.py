@@ -213,7 +213,7 @@ def billing_promocode_to_dto(bp: BillingPromocode) -> PromocodeDto:
         lifetime=bp.Lifetime,
         max_activations=bp.MaxActivations,
         allowed_telegram_ids=bp.AllowedTelegramIDs,
-        activations=[billing_promocode_activation_to_dto(a) for a in bp.Activations],
+        activations=[billing_promocode_activation_to_dto(a) for a in (bp.Activations or [])],
         created_at=bp.CreatedAt,
         updated_at=bp.UpdatedAt,
     )

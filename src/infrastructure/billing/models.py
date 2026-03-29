@@ -173,7 +173,7 @@ class BillingPromocode(BaseModel):
     Lifetime: int = -1
     MaxActivations: int = -1
     AllowedTelegramIDs: Optional[list[int]] = None
-    Activations: list[BillingPromocodeActivation] = Field(default_factory=list)
+    Activations: Optional[list[BillingPromocodeActivation]] = Field(default_factory=list)
     CreatedAt: Optional[datetime] = None
     UpdatedAt: Optional[datetime] = None
 
