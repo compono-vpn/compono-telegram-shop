@@ -23,11 +23,12 @@ from .base import BasePaymentGateway
 class PlategaGateway(BasePaymentGateway):
     _client: AsyncClient
 
-    API_BASE = "https://app.platega.io"
+    API_BASE: str = ""
     CURRENCY = Currency.RUB
 
     def __init__(self, gateway: PaymentGatewayDto, bot: Bot, config: AppConfig) -> None:
         super().__init__(gateway, bot, config)
+        self.API_BASE = config.platega_api_base
 
         if not isinstance(self.data.settings, PlategaGatewaySettingsDto):
             raise TypeError(

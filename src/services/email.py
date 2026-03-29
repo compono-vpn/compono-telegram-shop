@@ -8,6 +8,10 @@ class EmailService:
     def __init__(self, config: AppConfig) -> None:
         self.api_key = config.resend_api_key
         self.from_email = config.resend_from_email
+        self.resend_api_base = config.resend_api_base
+        self.ios_download_url = config.ios_download_url
+        self.android_download_url = config.android_download_url
+        self.desktop_download_url = config.desktop_download_url
 
     async def send_otp_code(self, to_email: str, code: str) -> None:
         if not self.api_key:
@@ -32,7 +36,7 @@ class EmailService:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
-                    "https://api.resend.com/emails",
+                    f"{self.resend_api_base}/emails",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     json={
                         "from": self.from_email,
@@ -75,7 +79,7 @@ class EmailService:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
-                    "https://api.resend.com/emails",
+                    f"{self.resend_api_base}/emails",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     json={
                         "from": self.from_email,
@@ -129,13 +133,13 @@ class EmailService:
     <p style="margin-top: 16px;"><strong>Скачать клиент:</strong></p>
     <ul style="list-style: none; padding: 0;">
         <li style="margin: 8px 0;">
-            <a href="https://apps.apple.com/app/streisand/id6450534064">iOS — Streisand</a>
+            <a href="{self.ios_download_url}">iOS — Streisand</a>
         </li>
         <li style="margin: 8px 0;">
-            <a href="https://play.google.com/store/apps/details?id=com.v2ray.ang">Android — v2rayNG</a>
+            <a href="{self.android_download_url}">Android — v2rayNG</a>
         </li>
         <li style="margin: 8px 0;">
-            <a href="https://github.com/hiddify/hiddify-app/releases">Windows / macOS — Hiddify</a>
+            <a href="{self.desktop_download_url}">Windows / macOS — Hiddify</a>
         </li>
     </ul>
     {bot_section}
@@ -146,7 +150,7 @@ class EmailService:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
-                    "https://api.resend.com/emails",
+                    f"{self.resend_api_base}/emails",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     json={
                         "from": self.from_email,

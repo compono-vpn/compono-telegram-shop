@@ -49,6 +49,23 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     billing_api_url: str = ""
     billing_internal_secret: SecretStr = SecretStr("")
 
+    # External service base URLs (overridable, non-secret)
+    resend_api_base: str = "https://api.resend.com"
+    yookassa_api_base: str = "https://api.yookassa.ru"
+    yoomoney_api_base: str = "https://yoomoney.ru"
+    cryptomus_api_base: str = "https://api.cryptomus.com"
+    heleket_api_base: str = "https://api.heleket.com"
+    platega_api_base: str = "https://app.platega.io"
+
+    # App URLs (overridable for staging/mirrors)
+    trial_return_url: str = "https://componovps.com/trial/success"
+    trial_failed_url: str = "https://componovps.com/trial/failed"
+    yookassa_receipt_url: str = "https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l"
+    portal_url: str = "https://componovpn.org/portal"
+    ios_download_url: str = "https://apps.apple.com/app/streisand/id6450534064"
+    android_download_url: str = "https://play.google.com/store/apps/details?id=com.v2ray.ang"
+    desktop_download_url: str = "https://github.com/hiddify/hiddify-app/releases"
+
     @property
     def hydra_primary_domain(self) -> str:
         """First domain in HYDRA_DOMAINS list, used as default for fallback URLs."""

@@ -28,13 +28,14 @@ from .base import BasePaymentGateway
 class CryptomusGateway(BasePaymentGateway):
     _client: AsyncClient
 
-    API_BASE = "https://api.cryptomus.com"
+    API_BASE: str = ""
     CURRENCY = Currency.USD
 
     NETWORKS = ["91.227.144.54"]
 
     def __init__(self, gateway: PaymentGatewayDto, bot: Bot, config: AppConfig) -> None:
         super().__init__(gateway, bot, config)
+        self.API_BASE = config.cryptomus_api_base
 
         if not isinstance(
             self.data.settings, (CryptomusGatewaySettingsDto, HeleketGatewaySettingsDto)

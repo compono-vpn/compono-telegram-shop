@@ -23,7 +23,7 @@ from .base import BasePaymentGateway
 class YookassaGateway(BasePaymentGateway):
     _client: AsyncClient
 
-    API_BASE: Final[str] = "https://api.yookassa.ru"
+    API_BASE: str = ""  # set from config in __init__
     PAYMENT_SUBJECT: Final[str] = "service"
     PAYMENT_MODE: Final[str] = "full_payment"
 
@@ -42,6 +42,7 @@ class YookassaGateway(BasePaymentGateway):
 
     def __init__(self, gateway: PaymentGatewayDto, bot: Bot, config: AppConfig) -> None:
         super().__init__(gateway, bot, config)
+        self.API_BASE = config.yookassa_api_base
 
         if not isinstance(self.data.settings, YookassaGatewaySettingsDto):
             raise TypeError(

@@ -31,8 +31,6 @@ router = APIRouter(prefix=API_V1 + "/web")
 
 TRIAL_AMOUNT = Decimal("5")
 TRIAL_DURATION_DAYS = 3
-TRIAL_RETURN_URL = "https://componovps.com/trial/success"
-TRIAL_FAILED_URL = "https://componovps.com/trial/failed"
 
 CURRENCY_TO_GATEWAY = {
     Currency.RUB: PaymentGatewayType.PLATEGA,
@@ -500,8 +498,8 @@ async def create_trial(
     payment = await gateway_instance.handle_create_payment(
         amount=TRIAL_AMOUNT,
         details="Compono VPS — пробный период 3 дня",
-        return_url=TRIAL_RETURN_URL,
-        failed_url=TRIAL_FAILED_URL,
+        return_url=config.trial_return_url,
+        failed_url=config.trial_failed_url,
     )
 
     timing["platega_api_ms"] = round((time.monotonic() - t1) * 1000, 1)
@@ -828,7 +826,7 @@ a.card:hover .card-domain {{ color: var(--accent-hover) }}
     <div class="domains">{blocked_domains}</div>
   </div>
 
-  <a class="cta" href="https://componovpn.org/portal">
+  <a class="cta" href="{portal_url}">
     Найти подписку по email
   </a>
 
@@ -871,6 +869,7 @@ async def mirrors_page(
     html = MIRRORS_HTML_TEMPLATE.format(
         active_domains=active_html,
         blocked_domains=blocked_html,
+        portal_url=config.portal_url,
     )
 
     return HTMLResponse(content=html)

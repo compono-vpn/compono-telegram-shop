@@ -139,7 +139,10 @@ def get_contact_support_keyboard(username: str, text: str) -> InlineKeyboardMark
     return builder.as_markup()
 
 
-def get_remnashop_keyboard() -> InlineKeyboardMarkup:
+def get_remnashop_keyboard(donate_url: str = "") -> InlineKeyboardMarkup:
+    import os
+    _donate_url = donate_url or os.getenv("APP_YOOKASSA_RECEIPT_URL", "https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l")
+
     builder = InlineKeyboardBuilder()
 
     builder.row(
@@ -151,16 +154,12 @@ def get_remnashop_keyboard() -> InlineKeyboardMarkup:
             text="btn-remnashop-telegram",
             url=f"{T_ME}remna_shop",
         ),
-        # InlineKeyboardButton(
-        #     text="btn-remnashop-guide",
-        #     url=f"{T_ME}remna_shop",
-        # ),
     )
 
     builder.row(
         InlineKeyboardButton(
             text="btn-remnashop-donate",
-            url="https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l",
+            url=_donate_url,
         )
     )
 
