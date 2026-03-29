@@ -7,6 +7,11 @@ from loguru import logger
 
 from src.core.config import AppConfig
 from src.core.enums import SystemNotificationType
+from src.core.utils.formatters import (
+    i18n_format_days,
+    i18n_format_device_limit,
+    i18n_format_traffic_limit,
+)
 from src.core.utils.message_payload import MessagePayload
 from src.bot.keyboards import get_user_keyboard
 from src.services.notification import NotificationService
@@ -95,6 +100,14 @@ class UserNotificationConsumer:
             return
 
         i18n_kwargs = payload.get("i18n_kwargs", {})
+
+        # Apply Fluent-compatible formatters for known plan fields
+        if "plan_traffic_limit" in i18n_kwargs and isinstance(i18n_kwargs["plan_traffic_limit"], int):
+            i18n_kwargs["plan_traffic_limit"] = i18n_format_traffic_limit(i18n_kwargs["plan_traffic_limit"])
+        if "plan_device_limit" in i18n_kwargs and isinstance(i18n_kwargs["plan_device_limit"], int):
+            i18n_kwargs["plan_device_limit"] = i18n_format_device_limit(i18n_kwargs["plan_device_limit"])
+        if "plan_duration" in i18n_kwargs and isinstance(i18n_kwargs["plan_duration"], int):
+            i18n_kwargs["plan_duration"] = i18n_format_days(i18n_kwargs["plan_duration"])
 
         reply_markup = None
         reply_markup_user_id = payload.get("reply_markup_user_id")
