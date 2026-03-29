@@ -30,4 +30,5 @@ _build/
 dist/
 site/
 *.egg-info/
-*.egg.claude/worktrees/
+*.egg
+.claude/worktrees/
