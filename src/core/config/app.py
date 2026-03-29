@@ -49,6 +49,14 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     billing_api_url: str = ""
     billing_internal_secret: SecretStr = SecretStr("")
 
+    kafka_brokers: str = "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+    kafka_topic_env: str = "stage"
+    kafka_group_id: str = "compono-shop"
+
+    @property
+    def kafka_notify_topic(self) -> str:
+        return f"{self.kafka_topic_env}.compono.notify.user.v1"
+
     # External service base URLs (overridable, non-secret)
     resend_api_base: str = "https://api.resend.com"
     yookassa_api_base: str = "https://api.yookassa.ru"

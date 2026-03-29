@@ -6,8 +6,12 @@ from src.bot.dispatcher import create_bg_manager_factory, create_dispatcher, set
 from src.core.config import AppConfig
 from src.core.logger import setup_logger
 from src.infrastructure.di import create_container
+from src.infrastructure.kafka.consumer import UserNotificationConsumer
+from src.services.notification import NotificationService
 
 from .broker import broker
+
+_notification_consumer: UserNotificationConsumer | None = None
 
 
 def worker() -> RedisStreamBroker:
@@ -21,5 +25,17 @@ def worker() -> RedisStreamBroker:
 
     setup_taskiq_dishka(container=container, broker=broker)
     setup_aiogram_dishka(container=container, router=dispatcher, auto_inject=True)
+
+    @broker.on_event("startup")
+    async def on_startup() -> None:
+        global _notification_consumer  # noqa: PLW0603
+        notification_service = await container.get(NotificationService)
+        _notification_consumer = UserNotificationConsumer(config, notification_service)
+        await _notification_consumer.start()
+
+    @broker.on_event("shutdown")
+    async def on_shutdown() -> None:
+        if _notification_consumer:
+            await _notification_consumer.stop()
 
     return broker
