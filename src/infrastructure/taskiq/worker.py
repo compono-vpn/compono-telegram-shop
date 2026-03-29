@@ -1,5 +1,6 @@
 from dishka.integrations.aiogram import setup_dishka as setup_aiogram_dishka
 from dishka.integrations.taskiq import setup_dishka as setup_taskiq_dishka
+from taskiq import TaskiqEvents, TaskiqState
 from taskiq_redis import RedisStreamBroker
 
 from src.bot.dispatcher import create_bg_manager_factory, create_dispatcher, setup_dispatcher
@@ -26,15 +27,15 @@ def worker() -> RedisStreamBroker:
     setup_taskiq_dishka(container=container, broker=broker)
     setup_aiogram_dishka(container=container, router=dispatcher, auto_inject=True)
 
-    @broker.on_event("startup")
-    async def on_startup() -> None:
+    @broker.on_event(TaskiqEvents.WORKER_STARTUP)
+    async def on_startup(state: TaskiqState) -> None:
         global _notification_consumer  # noqa: PLW0603
         notification_service = await container.get(NotificationService)
         _notification_consumer = UserNotificationConsumer(config, notification_service)
         await _notification_consumer.start()
 
-    @broker.on_event("shutdown")
-    async def on_shutdown() -> None:
+    @broker.on_event(TaskiqEvents.WORKER_SHUTDOWN)
+    async def on_shutdown(state: TaskiqState) -> None:
         if _notification_consumer:
             await _notification_consumer.stop()
 
