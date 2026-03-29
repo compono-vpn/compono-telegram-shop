@@ -72,20 +72,24 @@ async def _create_payment_and_get_data(
         logger.error(f"{log(user)} Failed to find duration for payment creation")
         return None
 
+    gt_str = gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type)
+    pt_str = purchase_type.value if hasattr(purchase_type, 'value') else str(purchase_type)
+
     try:
+        # Look up gateway currency from billing service
+        billing_gateway = await billing.get_gateway_by_type(gt_str)
+        currency = billing_gateway.Currency if billing_gateway else gt_str
+
         # Use BillingClient to create payment via the Go billing service
         result = await billing.create_payment(
             telegram_id=user.telegram_id,
             plan_id=plan.id,
             duration_days=duration.days,
-            currency=gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type),
-            gateway_type=gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type),
-            purchase_type=purchase_type.value if hasattr(purchase_type, 'value') else str(purchase_type),
+            currency=currency,
+            gateway_type=gt_str,
+            purchase_type=pt_str,
             is_test=user.is_dev,
         )
-
-        # Get price details for the pricing data
-        billing_gateway = await billing.get_gateway_by_type(gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type))
         if billing_gateway:
             price_details = await billing.calculate_price(
                 telegram_id=user.telegram_id,
