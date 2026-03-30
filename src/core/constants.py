@@ -40,6 +40,7 @@ IS_SUPER_DEV_KEY: Final[str] = "is_super_dev"
 TIME_1M: Final[int] = 60
 TIME_5M: Final[int] = TIME_1M * 5
 TIME_10M: Final[int] = TIME_1M * 10
+TIME_24H: Final[int] = 60 * 60 * 24
 
 RECENT_REGISTERED_MAX_COUNT: Final[int] = 25
 RECENT_ACTIVITY_MAX_COUNT: Final[int] = 25

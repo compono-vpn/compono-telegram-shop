@@ -20,7 +20,7 @@ from src.__version__ import __version__
 from src.bot.keyboards import get_remnashop_keyboard
 from src.bot.states import Notification
 from src.core.config import AppConfig
-from src.core.constants import REPOSITORY
+from src.core.constants import REPOSITORY, TIME_24H
 from src.core.enums import (
     Locale,
     MediaType,
@@ -31,6 +31,7 @@ from src.core.enums import (
 )
 from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import i18n_postprocess_text
+from src.core.storage.keys import NotificationDedupKey
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.types import AnyKeyboard
 from src.infrastructure.database.models.dto import UserDto
@@ -78,11 +79,23 @@ class NotificationService(BaseService):
             )
             return None
 
+        if ntf_type and await self._is_duplicate(user.telegram_id, ntf_type):
+            logger.debug(
+                f"Skipping duplicate notification '{ntf_type.value}' "
+                f"for '{user.telegram_id}'"
+            )
+            return None
+
         logger.debug(
             f"Attempting to send user notification '{payload.i18n_key}' to '{user.telegram_id}'"
         )
 
-        return await self._send_message(user, payload)
+        result = await self._send_message(user, payload)
+
+        if result and ntf_type:
+            await self._mark_sent(user.telegram_id, ntf_type)
+
+        return result
 
     async def system_notify(
         self,
@@ -148,6 +161,14 @@ class NotificationService(BaseService):
         payload.media_type = MediaType.DOCUMENT
         payload.i18n_kwargs.update(self.config.build.data)
         await self.notify_super_dev(payload=payload)
+
+    async def _is_duplicate(self, telegram_id: int, ntf_type: UserNotificationType) -> bool:
+        key = NotificationDedupKey(telegram_id=telegram_id, ntf_type=ntf_type.value)
+        return await self.redis_repository.exists(key)
+
+    async def _mark_sent(self, telegram_id: int, ntf_type: UserNotificationType) -> None:
+        key = NotificationDedupKey(telegram_id=telegram_id, ntf_type=ntf_type.value)
+        await self.redis_repository.set(key, value=None, ex=TIME_24H)
 
     #
 

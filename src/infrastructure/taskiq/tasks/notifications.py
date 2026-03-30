@@ -1,21 +1,28 @@
 import asyncio
+import time
 from typing import Any, Union, cast
 
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
 
+from redis.asyncio import Redis
+
 from src.bot.keyboards import get_buy_keyboard, get_connect_keyboard, get_renew_keyboard
 from src.core.constants import BATCH_DELAY, BATCH_SIZE
 from src.core.enums import UserNotificationType
+from src.core.storage.keys import PendingNotConnectedRemindersKey
 from src.core.utils.iterables import chunked
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.types import RemnaUserDto
+from src.infrastructure.database import UnitOfWork
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
 from src.services.user import UserService
 
 NOT_CONNECTED_REMINDER_DELAY = 2 * 60 * 60  # 2 hours
+NOT_CONNECTED_NOTIFICATION_KEY = "not_connected_reminder"
+_PENDING_KEY = PendingNotConnectedRemindersKey()
 
 
 @broker.task
@@ -144,39 +151,80 @@ async def send_subscription_limited_notification_task(
     )
 
 
-@broker.task
-@inject
-async def send_not_connected_reminder_task(
+async def schedule_not_connected_reminder(
+    redis_client: Redis,
     user_telegram_id: int,
     connect_url: str,
+) -> None:
+    """Store a pending reminder in Redis sorted set. No long-running task needed."""
+    send_at = time.time() + NOT_CONNECTED_REMINDER_DELAY
+    member = f"{user_telegram_id}:{connect_url}"
+    await redis_client.zadd(_PENDING_KEY.pack(), {member: send_at}, nx=True)
+    logger.debug(f"Scheduled not-connected reminder for '{user_telegram_id}' at {send_at}")
+
+
+@broker.task(schedule=[{"cron": "*/5 * * * *"}], retry_on_error=False)
+@inject
+async def process_pending_not_connected_reminders_task(
     user_service: FromDishka[UserService],
     remnawave_service: FromDishka[RemnawaveService],
     notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
+    uow: FromDishka[UnitOfWork],
 ) -> None:
-    await asyncio.sleep(NOT_CONNECTED_REMINDER_DELAY)
+    """Cron task: every 5 min, process reminders whose delay has elapsed."""
+    now = time.time()
+    key = _PENDING_KEY.pack()
 
-    user = await user_service.get(user_telegram_id)
-    if not user or not user.current_subscription:
-        logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': no user/subscription")
+    due_items: list[bytes] = await redis_client.zrangebyscore(key, "-inf", now)
+    if not due_items:
         return
 
-    if not user.current_subscription.is_active:
-        logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': subscription inactive")
-        return
+    logger.info(f"Processing {len(due_items)} pending not-connected reminders")
 
-    devices = await remnawave_service.get_devices_user(user)
-    if devices:
-        logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already connected")
-        return
+    for raw_member in due_items:
+        member = raw_member.decode() if isinstance(raw_member, bytes) else raw_member
+        await redis_client.zrem(key, member)
 
-    logger.info(f"Sending not-connected reminder to '{user_telegram_id}'")
-    await notification_service.notify_user(
-        user=user,
-        payload=MessagePayload(
-            i18n_key="ntf-event-user-not-connected",
-            reply_markup=get_connect_keyboard(connect_url),
-            auto_delete_after=None,
-            add_close_button=True,
-        ),
-        ntf_type=UserNotificationType.NOT_CONNECTED,
-    )
+        sep = member.index(":")
+        user_telegram_id = int(member[:sep])
+        connect_url = member[sep + 1 :]
+
+        async with uow:
+            already_sent = await uow.repository.sent_notifications.exists(
+                user_telegram_id, NOT_CONNECTED_NOTIFICATION_KEY,
+            )
+        if already_sent:
+            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already sent (DB)")
+            continue
+
+        user = await user_service.get(user_telegram_id)
+        if not user or not user.current_subscription:
+            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': no user/subscription")
+            continue
+
+        if not user.current_subscription.is_active:
+            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': subscription inactive")
+            continue
+
+        devices = await remnawave_service.get_devices_user(user)
+        if devices:
+            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already connected")
+            continue
+
+        logger.info(f"Sending not-connected reminder to '{user_telegram_id}'")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(
+                i18n_key="ntf-event-user-not-connected",
+                reply_markup=get_connect_keyboard(connect_url),
+                auto_delete_after=None,
+                add_close_button=True,
+            ),
+            ntf_type=UserNotificationType.NOT_CONNECTED,
+        )
+
+        async with uow:
+            await uow.repository.sent_notifications.mark_sent(
+                user_telegram_id, NOT_CONNECTED_NOTIFICATION_KEY,
+            )

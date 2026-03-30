@@ -5,6 +5,7 @@ from typing import Optional, cast
 from aiogram.utils.formatting import Text
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
+from redis.asyncio import Redis
 from remnapy.exceptions import ConflictError
 
 from src.bot.keyboards import get_connect_keyboard, get_user_keyboard
@@ -38,7 +39,7 @@ from src.services.subscription import SubscriptionService
 from src.services.transaction import TransactionService
 from src.services.user import UserService
 
-from .notifications import send_not_connected_reminder_task
+from .notifications import schedule_not_connected_reminder
 from .redirects import (
     redirect_to_failed_subscription_task,
     redirect_to_successed_payment_task,
@@ -74,6 +75,7 @@ async def trial_subscription_task(
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
 ) -> None:
     logger.info(f"Started trial for user '{user.telegram_id}'")
 
@@ -135,7 +137,7 @@ async def trial_subscription_task(
         connect_url = SubscriptionService.build_connect_url(
             created_user.subscription_url, config.remnawave.sub_public_domain
         )
-        await send_not_connected_reminder_task.kiq(user.telegram_id, connect_url)
+        await schedule_not_connected_reminder(redis_client, user.telegram_id, connect_url)
 
         if skip_redirect:
             await notification_service.notify_user(
@@ -196,6 +198,7 @@ async def purchase_subscription_task(
     subscription_service: FromDishka[SubscriptionService],
     transaction_service: FromDishka[TransactionService],
     notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
 ) -> None:
     purchase_type = transaction.purchase_type
     user = cast(UserDto, transaction.user)
@@ -324,7 +327,7 @@ async def purchase_subscription_task(
             sub = await subscription_service.get_current(user.telegram_id)
             if sub:
                 connect_url = SubscriptionService.build_connect_url(sub.url, config.remnawave.sub_public_domain)
-                await send_not_connected_reminder_task.kiq(user.telegram_id, connect_url)
+                await schedule_not_connected_reminder(redis_client, user.telegram_id, connect_url)
 
         await redirect_to_successed_payment_task.kiq(user, purchase_type)
         logger.info(f"Purchase subscription task completed for user '{user.telegram_id}'")

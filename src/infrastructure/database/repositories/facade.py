@@ -6,6 +6,7 @@ from .payment_gateway import PaymentGatewayRepository
 from .plan import PlanRepository
 from .promocode import PromocodeRepository
 from .referral import ReferralRepository
+from .sent_notification import SentNotificationRepository
 from .settings import SettingsRepository
 from .subscription import SubscriptionRepository
 from .transaction import TransactionRepository
@@ -21,6 +22,7 @@ class RepositoriesFacade:
     gateways: PaymentGatewayRepository
     plans: PlanRepository
     promocodes: PromocodeRepository
+    sent_notifications: SentNotificationRepository
     subscriptions: SubscriptionRepository
     transactions: TransactionRepository
     users: UserRepository
@@ -37,6 +39,7 @@ class RepositoriesFacade:
         self.gateways = PaymentGatewayRepository(session)
         self.plans = PlanRepository(session)
         self.promocodes = PromocodeRepository(session)
+        self.sent_notifications = SentNotificationRepository(session)
         self.subscriptions = SubscriptionRepository(session)
         self.transactions = TransactionRepository(session)
         self.users = UserRepository(session)

@@ -5,6 +5,7 @@ from .payment_gateway import PaymentGateway
 from .plan import Plan, PlanDuration, PlanPrice
 from .promocode import Promocode, PromocodeActivation
 from .referral import Referral, ReferralReward
+from .sent_notification import SentNotification
 from .settings import Settings
 from .subscription import Subscription
 from .transaction import Transaction
@@ -25,6 +26,7 @@ __all__ = [
     "PromocodeActivation",
     "Referral",
     "ReferralReward",
+    "SentNotification",
     "Settings",
     "Subscription",
     "Transaction",
