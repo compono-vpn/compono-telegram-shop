@@ -20,7 +20,7 @@ from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import MIDDLEWARE_DATA_KEY, PURCHASE_PREFIX, USER_KEY
 from src.core.enums import BannerName
 
-from .getters import devices_getter, info_getter, invite_about_getter, invite_getter, menu_getter
+from .getters import devices_getter, info_getter, invite_about_getter, invite_getter, menu_getter, tg_proxy_getter
 from .handlers import (
     on_device_delete,
     on_get_trial,
@@ -84,6 +84,14 @@ menu = Window(
             text=I18nFormat("btn-menu-support"),
             id="support",
             url=Format("{support}"),
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-menu-tg-proxy"),
+            id="tg_proxy",
+            state=MainMenu.TG_PROXY,
+            when=F["tg_proxy_available"],
         ),
     ),
     Row(
@@ -248,10 +256,38 @@ info = Window(
     getter=info_getter,
 )
 
+tg_proxy = Window(
+    Banner(BannerName.MENU),
+    I18nFormat("msg-menu-tg-proxy"),
+    ListGroup(
+        Row(
+            Url(
+                text=Format("🔗 {item[server]}:{item[port]}"),
+                id="connect",
+                url=Format("{item[link]}"),
+            ),
+        ),
+        id="proxy_list",
+        item_id_getter=lambda item: item["id"],
+        items="proxies",
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id="back",
+            state=MainMenu.MAIN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=MainMenu.TG_PROXY,
+    getter=tg_proxy_getter,
+)
+
 router = Dialog(
     menu,
     devices,
     invite,
     invite_about,
     info,
+    tg_proxy,
 )

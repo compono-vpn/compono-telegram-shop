@@ -19,6 +19,7 @@ from .models import (
     BillingSettings,
     BillingStatistics,
     BillingSubscription,
+    BillingTGProxy,
     BillingTransaction,
     BillingUser,
     BillingWebOrderResult,
@@ -430,3 +431,11 @@ class BillingClient:
     async def get_referral_info(self, telegram_id: int) -> dict[str, Any]:
         data = await self._get(f"/referral/{telegram_id}")
         return data if data else {}
+
+    # ------------------------------------------------------------------ #
+    # TG Proxies
+    # ------------------------------------------------------------------ #
+
+    async def get_tg_proxies(self) -> list[BillingTGProxy]:
+        data = await self._get("/tg-proxies")
+        return [BillingTGProxy.model_validate(p) for p in (data or [])]

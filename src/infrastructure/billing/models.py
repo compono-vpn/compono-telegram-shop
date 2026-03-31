@@ -254,3 +254,16 @@ class BillingWebOrderResult(BaseModel):
     """Maps the web order claim response."""
 
     status: str = ""
+
+
+# --- TG Proxies ---
+
+
+class BillingTGProxy(BaseModel):
+    """Maps domain.TGProxy from billing API."""
+
+    ID: int = 0
+    Server: str = ""
+    Port: int = 0
+    Secret: str = ""
+    Link: str = ""

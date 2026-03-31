@@ -50,6 +50,8 @@ btn-menu-support = 🆘 Поддержка
 btn-menu-info = ℹ️ Информация
 btn-menu-info-privacy = 🔒 Политика конфиденциальности
 btn-menu-info-terms = 📄 Условия использования
+btn-menu-tg-proxy = 📡 Telegram Proxy
+btn-menu-tg-proxy-connect = Подключить прокси
 btn-menu-dashboard = 🛠 Панель управления
 
 

@@ -9,6 +9,7 @@ class MainMenu(StatesGroup):
     INVITE = State()
     INVITE_ABOUT = State()
     INFO = State()
+    TG_PROXY = State()
 
 
 class Notification(StatesGroup):

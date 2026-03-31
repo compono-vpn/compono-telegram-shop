@@ -64,9 +64,14 @@ async def menu_getter(
                     "trial_available": not has_used_trial and trial_plan,
                     "has_device_limit": False,
                     "connectable": False,
+                    "tg_proxy_available": False,
                 }
             )
             return base_data
+
+        tg_proxy_available = bool(
+            subscription.is_active and subscription.plan and subscription.plan.id in {2, 3}
+        )
 
         base_data.update(
             {
@@ -84,6 +89,7 @@ async def menu_getter(
                 "connectable": subscription.is_active,
                 "is_app": False,
                 "url": SubscriptionService.build_connect_url(subscription.url, config.remnawave.sub_public_domain),
+                "tg_proxy_available": tg_proxy_available,
             }
         )
 
@@ -178,6 +184,22 @@ async def info_getter(app_config: FromDishka[AppConfig], **kwargs: Any) -> dict[
     return {
         "privacy_url": f"https://{domain}/ru/privacy/",
         "terms_url": f"https://{domain}/ru/terms/",
+    }
+
+
+@inject
+async def tg_proxy_getter(
+    dialog_manager: DialogManager,
+    billing: FromDishka[BillingClient],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    proxies = await billing.get_tg_proxies()
+    return {
+        "proxies": [
+            {"id": str(p.ID), "server": p.Server, "port": p.Port, "link": p.Link}
+            for p in proxies
+        ],
+        "has_proxies": len(proxies) > 0,
     }
 
 
