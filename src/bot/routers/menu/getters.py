@@ -70,7 +70,11 @@ async def menu_getter(
             return base_data
 
         plan_id = subscription.plan.id if subscription.plan else 0
-        tg_proxies = await billing.get_tg_proxies(plan_id) if subscription.is_active and plan_id else []
+        try:
+            tg_proxies = await billing.get_tg_proxies(plan_id) if subscription.is_active and plan_id else []
+        except Exception:
+            logger.opt(exception=True).warning("Failed to fetch TG proxies, hiding button")
+            tg_proxies = []
 
         base_data.update(
             {
@@ -194,7 +198,11 @@ async def tg_proxy_getter(
     **kwargs: Any,
 ) -> dict[str, Any]:
     plan_id = user.current_subscription.plan.id if user.current_subscription and user.current_subscription.plan else 0
-    proxies = await billing.get_tg_proxies(plan_id)
+    try:
+        proxies = await billing.get_tg_proxies(plan_id)
+    except Exception:
+        logger.opt(exception=True).warning("Failed to fetch TG proxies")
+        proxies = []
     return {
         "proxies": [
             {"id": str(p.ID), "server": p.Server, "port": p.Port, "link": p.Link}
