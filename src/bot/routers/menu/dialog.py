@@ -44,6 +44,14 @@ menu = Window(
         when=F["has_subscription"],
     ),
     Row(
+        SwitchTo(
+            text=I18nFormat("btn-menu-tg-proxy"),
+            id="tg_proxy",
+            state=MainMenu.TG_PROXY,
+            when=F["tg_proxy_available"],
+        ),
+    ),
+    Row(
         Button(
             text=I18nFormat("btn-menu-trial"),
             id="trial",
@@ -84,14 +92,6 @@ menu = Window(
             text=I18nFormat("btn-menu-support"),
             id="support",
             url=Format("{support}"),
-        ),
-    ),
-    Row(
-        SwitchTo(
-            text=I18nFormat("btn-menu-tg-proxy"),
-            id="tg_proxy",
-            state=MainMenu.TG_PROXY,
-            when=F["tg_proxy_available"],
         ),
     ),
     Row(
