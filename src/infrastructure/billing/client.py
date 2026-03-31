@@ -115,7 +115,11 @@ class BillingClient:
         client = await self._get_client()
         url = f"{self.base_url}/api/v1/payments/webhook/{gateway_type}"
         try:
-            resp = await client.post(url, content=body, headers={"Content-Type": headers.get("content-type", "application/json")})
+            fwd_headers = {"Content-Type": headers.get("content-type", "application/json")}
+            for key in ("x-merchantid", "x-secret"):
+                if key in headers:
+                    fwd_headers[key] = headers[key]
+            resp = await client.post(url, content=body, headers=fwd_headers)
             logger.debug(f"Forwarded webhook to billing: {gateway_type} -> {resp.status_code}")
         except Exception as e:
             logger.error(f"Failed to forward webhook to billing: {e}")
