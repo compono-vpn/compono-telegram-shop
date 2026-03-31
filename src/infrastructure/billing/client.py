@@ -436,6 +436,6 @@ class BillingClient:
     # TG Proxies
     # ------------------------------------------------------------------ #
 
-    async def get_tg_proxies(self) -> list[BillingTGProxy]:
-        data = await self._get("/tg-proxies")
+    async def get_tg_proxies(self, plan_id: int) -> list[BillingTGProxy]:
+        data = await self._get("/tg-proxies", params={"plan_id": plan_id})
         return [BillingTGProxy.model_validate(p) for p in (data or [])]
