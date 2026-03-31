@@ -258,13 +258,12 @@ info = Window(
 
 tg_proxy = Window(
     Banner(BannerName.MENU),
-    I18nFormat("msg-menu-tg-proxy"),
+    Format("{proxy_message}"),
     ListGroup(
         Row(
-            Url(
-                text=Format("🔗 {item[server]}:{item[port]}"),
-                id="connect",
-                url=Format("{item[link]}"),
+            CopyText(
+                text=I18nFormat("btn-menu-tg-proxy-connect"),
+                copy_text=Format("{item[link]}"),
             ),
         ),
         id="proxy_list",

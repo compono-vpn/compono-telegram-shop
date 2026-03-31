@@ -5,8 +5,8 @@ Verifies button ordering and i18n key usage in the main menu.
 
 from __future__ import annotations
 
-from aiogram_dialog.widgets.kbd import Row, SwitchTo
-from src.bot.routers.menu.dialog import menu
+from aiogram_dialog.widgets.kbd import Row, SwitchTo, Url, ListGroup
+from src.bot.routers.menu.dialog import menu, tg_proxy
 
 
 def _get_rows(window):
@@ -59,6 +59,22 @@ class TestMenuButtonOrder:
         assert proxy_row_idx < trial_row_idx, (
             f"TG proxy (index {proxy_row_idx}) should be before trial (index {trial_row_idx})"
         )
+
+
+class TestTGProxyWindow:
+    """The TG proxy window must not use Url buttons (tg:// is rejected by Telegram inline keyboards)."""
+
+    def test_no_url_buttons_in_proxy_window(self):
+        """tg:// links don't work as inline keyboard Url buttons — Telegram rejects them."""
+        for widget in tg_proxy.keyboard.buttons:
+            if isinstance(widget, ListGroup):
+                for row in widget.buttons:
+                    if isinstance(row, Row):
+                        for btn in row.buttons:
+                            assert not isinstance(btn, Url), (
+                                "TG proxy window must not use Url buttons — "
+                                "tg:// scheme is rejected by Telegram inline keyboards"
+                            )
 
 
 class TestMenuI18nKeys:
