@@ -55,7 +55,7 @@ class TestTGProxyVisibility:
 
     @pytest.mark.asyncio
     async def test_pro_plan_with_proxies_shows_button(self):
-        proxies = [BillingTGProxy(ID=1, Server="1.2.3.4", Port=443, Secret="abc", Link="tg://proxy?server=1.2.3.4&port=443&secret=abc")]
+        proxies = [BillingTGProxy(id=1, server="1.2.3.4", port=443, secret="abc", link="tg://proxy?server=1.2.3.4&port=443&secret=abc")]
         user = make_user(subscription=make_subscription(plan_id=2))
         billing = make_billing_client(tg_proxies=proxies)
 
@@ -65,7 +65,7 @@ class TestTGProxyVisibility:
 
     @pytest.mark.asyncio
     async def test_max_plan_with_proxies_shows_button(self):
-        proxies = [BillingTGProxy(ID=1, Server="1.2.3.4", Port=443, Secret="abc", Link="tg://proxy?server=1.2.3.4&port=443&secret=abc")]
+        proxies = [BillingTGProxy(id=1, server="1.2.3.4", port=443, secret="abc", link="tg://proxy?server=1.2.3.4&port=443&secret=abc")]
         user = make_user(subscription=make_subscription(plan_id=3, plan_name="💎 Макс"))
         billing = make_billing_client(tg_proxies=proxies)
 

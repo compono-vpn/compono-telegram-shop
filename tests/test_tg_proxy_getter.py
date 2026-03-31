@@ -31,8 +31,8 @@ class TestTGProxyGetter:
     @pytest.mark.asyncio
     async def test_returns_proxies_for_eligible_user(self):
         proxies = [
-            BillingTGProxy(ID=1, Server="1.2.3.4", Port=443, Secret="abc", Link="tg://proxy?server=1.2.3.4&port=443&secret=abc"),
-            BillingTGProxy(ID=2, Server="5.6.7.8", Port=443, Secret="def", Link="tg://proxy?server=5.6.7.8&port=443&secret=def"),
+            BillingTGProxy(id=1, server="1.2.3.4", port=443, secret="abc", link="tg://proxy?server=1.2.3.4&port=443&secret=abc"),
+            BillingTGProxy(id=2, server="5.6.7.8", port=443, secret="def", link="tg://proxy?server=5.6.7.8&port=443&secret=def"),
         ]
         billing = make_billing_client(tg_proxies=proxies)
         user = make_user(subscription=make_subscription(plan_id=2))

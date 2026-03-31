@@ -204,7 +204,7 @@ async def tg_proxy_getter(
         logger.opt(exception=True).warning("Failed to fetch TG proxies")
         proxies = []
     proxy_list = [
-        {"id": str(p.ID), "server": p.Server, "port": p.Port, "link": p.Link}
+        {"id": str(p.id), "server": p.server, "port": p.port, "link": p.link}
         for p in proxies
     ]
 
@@ -213,7 +213,7 @@ async def tg_proxy_getter(
         lines.append("Бесплатный прокси для Telegram доступен в рамках вашего тарифа.\n")
         for p in proxy_list:
             lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
-        lines.append("\nНажмите на ссылку выше или скопируйте её кнопкой ниже.")
+        lines.append("\nНажмите на ссылку выше, чтобы подключить прокси.")
     else:
         lines.append("Нет доступных прокси.")
 

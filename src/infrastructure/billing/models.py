@@ -8,7 +8,7 @@ responses so the Python bot can consume them.
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # --- Plans ---
@@ -260,10 +260,12 @@ class BillingWebOrderResult(BaseModel):
 
 
 class BillingTGProxy(BaseModel):
-    """Maps domain.TGProxy from billing API."""
+    """Maps domain.TGProxy from billing API (lowercase JSON keys)."""
 
-    ID: int = 0
-    Server: str = ""
-    Port: int = 0
-    Secret: str = ""
-    Link: str = ""
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: int = Field(0, alias="id")
+    server: str = Field("", alias="server")
+    port: int = Field(0, alias="port")
+    secret: str = Field("", alias="secret")
+    link: str = Field("", alias="link")
