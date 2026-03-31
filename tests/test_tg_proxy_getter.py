@@ -45,6 +45,22 @@ class TestTGProxyGetter:
         assert result["proxies"][1]["server"] == "5.6.7.8"
 
     @pytest.mark.asyncio
+    async def test_proxy_message_explains_purpose_and_vpn_off(self):
+        proxies = [
+            BillingTGProxy(id=1, server="1.2.3.4", port=443, secret="abc", link="tg://proxy?server=1.2.3.4&port=443&secret=abc"),
+        ]
+        billing = make_billing_client(tg_proxies=proxies)
+        user = make_user(subscription=make_subscription(plan_id=2))
+
+        result = await _call_tg_proxy_getter(user=user, billing=billing)
+        msg = result["proxy_message"]
+
+        assert "без включённого VPN" in msg, "message should explain proxy works without VPN"
+        assert "выключенным VPN" in msg, "message should warn to turn VPN off"
+        assert "1.2.3.4:443" in msg, "message should contain server:port"
+        assert "tg://proxy" in msg, "message should contain clickable tg:// link"
+
+    @pytest.mark.asyncio
     async def test_returns_empty_when_no_proxies(self):
         billing = make_billing_client(tg_proxies=[])
 
