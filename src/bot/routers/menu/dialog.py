@@ -259,17 +259,6 @@ info = Window(
 tg_proxy = Window(
     Banner(BannerName.MENU),
     Format("{proxy_message}"),
-    ListGroup(
-        Row(
-            CopyText(
-                text=I18nFormat("btn-menu-tg-proxy-connect"),
-                copy_text=Format("{item[link]}"),
-            ),
-        ),
-        id="proxy_list",
-        item_id_getter=lambda item: item["id"],
-        items="proxies",
-    ),
     Row(
         SwitchTo(
             text=I18nFormat("btn-back"),
