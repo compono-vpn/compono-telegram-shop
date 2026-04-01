@@ -15,7 +15,6 @@ from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.database.models.dto import UserDto
 from src.services.notification import NotificationService
-from src.services.payment_gateway import PaymentGatewayService
 
 
 @inject
@@ -23,20 +22,19 @@ async def on_gateway_select(
     callback: CallbackQuery,
     widget: Button,
     sub_manager: SubManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = sub_manager.middleware_data[USER_KEY]
     gateway_id = int(sub_manager.item_id)
-    # Use local service for gateway detail (needs settings/secrets)
-    gateway = await payment_gateway_service.get(gateway_id)
+    gateway = await billing.get_gateway(gateway_id)
 
     if not gateway:
         raise ValueError(f"Attempted to select non-existent gateway '{gateway_id}'")
 
     logger.info(f"{log(user)} Gateway '{gateway_id}' selected")
 
-    if not gateway.settings:
+    if not gateway.Settings:
         await notification_service.notify_user(
             user=user,
             payload=MessagePayload(i18n_key="ntf-gateway-not-configurable"),
@@ -53,29 +51,19 @@ async def on_gateway_test(
     widget: Button,
     sub_manager: SubManager,
     billing: FromDishka[BillingClient],
-    payment_gateway_service: FromDishka[PaymentGatewayService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = sub_manager.middleware_data[USER_KEY]
     gateway_id = int(sub_manager.item_id)
-    # Need local service for settings check
-    gateway = await payment_gateway_service.get(gateway_id)
+    gateway = await billing.get_gateway(gateway_id)
 
     if not gateway:
         raise ValueError(f"Attempted to test non-existent gateway '{gateway_id}'")
 
-    if gateway.settings and not gateway.settings.is_configure:
-        logger.warning(f"{log(user)} Gateway '{gateway_id}' is not configured")
-        await notification_service.notify_user(
-            user=user,
-            payload=MessagePayload(i18n_key="ntf-gateway-not-configured"),
-        )
-        return
-
     logger.info(f"{log(user)} Testing gateway '{gateway_id}'")
 
     try:
-        payment = await billing.create_test_payment(user.telegram_id, gateway.type.value)
+        payment = await billing.create_test_payment(user.telegram_id, gateway.Type)
         logger.info(f"{log(user)} Test payment successful for gateway '{gateway_id}'")
         await notification_service.notify_user(
             user=user,
@@ -101,28 +89,20 @@ async def on_active_toggle(
     callback: CallbackQuery,
     widget: Button,
     sub_manager: SubManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     await sub_manager.load_data()
     user: UserDto = sub_manager.middleware_data[USER_KEY]
     gateway_id = int(sub_manager.item_id)
-    gateway = await payment_gateway_service.get(gateway_id)
+    gateway = await billing.get_gateway(gateway_id)
 
     if not gateway:
         raise ValueError(f"Attempted to toggle non-existent gateway '{gateway_id}'")
 
-    if gateway.settings and not gateway.settings.is_configure:
-        logger.warning(f"{log(user)} Gateway '{gateway_id}' is not configured")
-        await notification_service.notify_user(
-            user=user,
-            payload=MessagePayload(i18n_key="ntf-gateway-not-configured"),
-        )
-        return
-
-    gateway.is_active = not gateway.is_active
-    logger.info(f"{log(user)} Toggled active state for gateway '{gateway_id}'")
-    await payment_gateway_service.update(gateway)
+    new_active = not gateway.IsActive
+    logger.info(f"{log(user)} Toggled active state for gateway '{gateway_id}' to {new_active}")
+    await billing.update_gateway({"ID": gateway_id, "IsActive": new_active})
 
 
 async def on_field_select(
@@ -142,7 +122,7 @@ async def on_field_input(
     message: Message,
     widget: MessageInput,
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     dialog_manager.show_mode = ShowMode.EDIT
@@ -158,27 +138,18 @@ async def on_field_input(
         )
         return
 
-    gateway = await payment_gateway_service.get(gateway_id)
+    gateway = await billing.get_gateway(gateway_id)
 
-    if not gateway or not gateway.settings:
+    if not gateway or not gateway.Settings:
         await dialog_manager.switch_to(state=RemnashopGateways.MAIN)
         raise ValueError(f"Attempted update of non-existent gateway '{gateway_id}'")
 
-    input_value = message.text
+    # Update the settings field via billing API
+    settings = gateway.Settings
+    if isinstance(settings, dict):
+        settings[selected_field] = message.text
+    await billing.update_gateway({"ID": gateway_id, "Settings": settings})
 
-    if selected_field in ["api_key", "secret_key"]:
-        input_value = SecretStr(input_value)  # type: ignore[assignment]
-
-    try:
-        setattr(gateway.settings, selected_field, input_value)
-    except ValueError:
-        await notification_service.notify_user(
-            user=user,
-            payload=MessagePayload(i18n_key="ntf-gateway-field-wrong-value"),
-        )
-        return
-
-    await payment_gateway_service.update(gateway)
     logger.info(f"{log(user)} Updated '{selected_field}' for gateway '{gateway_id}'")
     await dialog_manager.switch_to(state=RemnashopGateways.SETTINGS)
 

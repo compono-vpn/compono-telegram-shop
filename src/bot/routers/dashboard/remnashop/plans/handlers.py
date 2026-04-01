@@ -22,7 +22,6 @@ from src.core.utils.validators import is_double_click, parse_int
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
 from src.infrastructure.database.models.dto import PlanDto, PlanDurationDto, PlanPriceDto, UserDto
 from src.services.notification import NotificationService
-from src.services.pricing import PricingService
 
 
 @inject
@@ -519,7 +518,6 @@ async def on_price_input(
     widget: MessageInput,
     dialog_manager: DialogManager,
     notification_service: FromDishka[NotificationService],
-    pricing_service: FromDishka[PricingService],
 ) -> None:
     dialog_manager.show_mode = ShowMode.EDIT
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -540,8 +538,11 @@ async def on_price_input(
         raise ValueError("Missing duration or currency selection for price input")
 
     try:
-        new_price = pricing_service.parse_price(message.text, selected_currency)
-    except ValueError:
+        from decimal import Decimal, InvalidOperation
+        new_price = Decimal(message.text.strip())
+        if new_price < 0:
+            raise ValueError("negative price")
+    except (ValueError, InvalidOperation):
         logger.warning(f"{log(user)} Provided invalid price input: '{message.text}'")
         await notification_service.notify_user(
             user=user,

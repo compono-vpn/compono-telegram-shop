@@ -17,7 +17,6 @@ from src.core.metrics import BOT_INFO
 from src.core.utils.message_payload import MessagePayload
 from src.services.command import CommandService
 from src.services.notification import NotificationService
-from src.services.payment_gateway import PaymentGatewayService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
 from src.services.webhook import WebhookService
@@ -35,11 +34,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         webhook_service: WebhookService = await startup_container.get(WebhookService)
         command_service: CommandService = await startup_container.get(CommandService)
         settings_service: SettingsService = await startup_container.get(SettingsService)
-        gateway_service: PaymentGatewayService = await startup_container.get(PaymentGatewayService)
         remnawave_service: RemnawaveService = await startup_container.get(RemnawaveService)
         notification_service: NotificationService = await startup_container.get(NotificationService)
 
-        await gateway_service.create_default()
         settings = await settings_service.get()
 
     await startup_container.close()

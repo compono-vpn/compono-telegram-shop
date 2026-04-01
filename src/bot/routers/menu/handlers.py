@@ -475,9 +475,7 @@ async def on_get_trial(
         )
         raise ValueError("Trial plan not exist")
 
-    plan = billing_plan_to_dto(billing_plan)
-    trial = PlanSnapshotDto.from_plan(plan, plan.durations[0].days)
-    await trial_subscription_task.kiq(user, trial, False)
+    await billing.create_trial_subscription(user.telegram_id, billing_plan.id)
 
 
 @inject

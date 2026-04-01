@@ -17,51 +17,7 @@ from src.infrastructure.database.models.sql.customer import Customer
 from src.infrastructure.taskiq.broker import broker
 from src.services.email import EmailService
 from src.services.notification import NotificationService
-from src.services.payment_gateway import PaymentGatewayService
 from src.services.remnawave import RemnawaveService
-from src.services.transaction import TransactionService
-
-
-@broker.task()
-@inject
-async def handle_payment_transaction_task(
-    payment_id: UUID,
-    payment_status: TransactionStatus,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
-    transaction_service: FromDishka[TransactionService],
-) -> None:
-    # First check if this is a regular bot transaction
-    transaction = await transaction_service.get(payment_id)
-
-    if transaction:
-        match payment_status:
-            case TransactionStatus.COMPLETED:
-                await payment_gateway_service.handle_payment_succeeded(payment_id)
-            case TransactionStatus.CANCELED:
-                await payment_gateway_service.handle_payment_canceled(payment_id)
-        return
-
-    # Fall back to web order processing
-    logger.info(f"No transaction found for '{payment_id}', trying web order")
-    await handle_web_order_task.kiq(payment_id, payment_status)
-
-
-@broker.task(schedule=[{"cron": "*/30 * * * *"}])
-@inject
-async def cancel_transaction_task(transaction_service: FromDishka[TransactionService]) -> None:
-    transactions = await transaction_service.get_by_status(TransactionStatus.PENDING)
-
-    if not transactions:
-        logger.debug("No pending transactions found")
-        return
-
-    old_transactions = [tx for tx in transactions if tx.has_old]
-    logger.debug(f"Found '{len(old_transactions)}' old transactions to cancel")
-
-    for transaction in old_transactions:
-        transaction.status = TransactionStatus.CANCELED
-        await transaction_service.update(transaction)
-        logger.debug(f"Transaction '{transaction.id}' canceled")
 
 
 @broker.task()

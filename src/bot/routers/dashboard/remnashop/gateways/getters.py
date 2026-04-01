@@ -6,9 +6,7 @@ from dishka.integrations.aiogram_dialog import inject
 
 from src.core.config import AppConfig
 from src.core.enums import Currency
-from src.infrastructure.billing import BillingClient, billing_gateway_to_dto
-from src.infrastructure.database.models.dto import PaymentGatewayDto
-from src.services.payment_gateway import PaymentGatewayService
+from src.infrastructure.billing import BillingClient
 
 
 @inject
@@ -33,54 +31,58 @@ async def gateways_getter(
     }
 
 
+def _settings_to_list(settings: Any) -> list[dict[str, str]]:
+    """Convert raw settings dict to list of {field, value} for display."""
+    if not settings or not isinstance(settings, dict):
+        return []
+    return [
+        {"field": k, "value": "***" if "key" in k.lower() or "secret" in k.lower() else str(v)}
+        for k, v in settings.items()
+        if k != "type"
+    ]
+
+
 @inject
 async def gateway_getter(
     dialog_manager: DialogManager,
     config: AppConfig,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     gateway_id = dialog_manager.dialog_data["gateway_id"]
-    # Gateway settings (secrets) are not exposed via billing API,
-    # so we still use PaymentGatewayService for detail view with settings.
-    gateway = await payment_gateway_service.get(gateway_id=gateway_id)
+    gateway = await billing.get_gateway(gateway_id=gateway_id)
 
     if not gateway:
         raise ValueError(f"Gateway '{gateway_id}' not found")
 
-    if not gateway.settings:
-        raise ValueError(f"Gateway '{gateway_id}' has not settings")
+    webhook_url = f"https://{config.domain.get_secret_value()}/api/v1/payments/webhook/{gateway.Type.lower()}"
 
     return {
-        "id": gateway.id,
-        "gateway_type": gateway.type,
-        "is_active": gateway.is_active,
-        "settings": gateway.settings.get_settings_as_list_data,
-        "webhook": config.get_webhook(gateway.type),
-        "requires_webhook": gateway.requires_webhook,
+        "id": gateway.ID,
+        "gateway_type": gateway.Type,
+        "is_active": gateway.IsActive,
+        "settings": _settings_to_list(gateway.Settings),
+        "webhook": webhook_url,
+        "requires_webhook": gateway.Type in ("PLATEGA", "YOOKASSA"),
     }
 
 
 @inject
 async def field_getter(
     dialog_manager: DialogManager,
-    payment_gateway_service: FromDishka[PaymentGatewayService],
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     gateway_id = dialog_manager.dialog_data["gateway_id"]
     selected_field = dialog_manager.dialog_data["selected_field"]
 
-    # Gateway settings need local service for secret field display
-    gateway = await payment_gateway_service.get(gateway_id=gateway_id)
+    gateway = await billing.get_gateway(gateway_id=gateway_id)
 
     if not gateway:
         raise ValueError(f"Gateway '{gateway_id}' not found")
 
-    if not gateway.settings:
-        raise ValueError(f"Gateway '{gateway_id}' has not settings")
-
     return {
-        "gateway_type": gateway.type,
+        "gateway_type": gateway.Type,
         "field": selected_field,
     }
 

@@ -177,6 +177,18 @@ class BillingClient:
             "subscription_token": subscription_token,
         })
 
+    async def create_trial_subscription(self, telegram_id: int, plan_id: int) -> None:
+        await self._post("/subscription/create-trial", json={
+            "telegram_id": telegram_id,
+            "plan_id": plan_id,
+        })
+
+    async def delete_subscription(self, telegram_id: int, subscription_id: int) -> None:
+        await self._post("/subscription/delete", json={
+            "telegram_id": telegram_id,
+            "subscription_id": subscription_id,
+        })
+
     # ------------------------------------------------------------------ #
     # Transactions
     # ------------------------------------------------------------------ #
