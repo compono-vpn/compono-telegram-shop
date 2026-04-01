@@ -2,6 +2,8 @@ from dishka import Provider, Scope, provide
 
 from src.services.access import AccessService
 from src.services.email import EmailService
+from src.services.payment_gateway import PaymentGatewayService
+from src.services.transaction import TransactionService
 from src.services.broadcast import BroadcastService
 from src.services.command import CommandService
 from src.services.importer import ImporterService
@@ -30,6 +32,8 @@ class ServicesProvider(Provider):
     webhook_service = provide(source=WebhookService)
     settings_service = provide(source=SettingsService, scope=Scope.REQUEST)
     broadcast_service = provide(source=BroadcastService, scope=Scope.REQUEST)
+    payment_gateway_service = provide(source=PaymentGatewayService, scope=Scope.REQUEST)
+    transaction_service = provide(source=TransactionService, scope=Scope.REQUEST)
     # PricingService removed — billing owns pricing via calculate_price API
     importer_service = provide(source=ImporterService)
     referral_service = provide(source=ReferralService, scope=Scope.REQUEST)
