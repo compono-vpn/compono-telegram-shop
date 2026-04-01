@@ -260,14 +260,23 @@ async def getter_connect(
     dialog_manager: DialogManager,
     config: AppConfig,
     user: UserDto,
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    if not user.current_subscription:
-        raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
+    subscription = user.current_subscription
+    if not subscription:
+        # Race condition: notification arrived before subscription was committed.
+        # Fall back to billing API.
+        billing_sub = await billing.get_current_subscription(user.telegram_id)
+        if not billing_sub:
+            raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
+        url = billing_sub.URL
+    else:
+        url = subscription.url
 
     return {
         "is_app": False,
-        "url": SubscriptionService.build_connect_url(user.current_subscription.url, config.remnawave.sub_public_domain),
+        "url": SubscriptionService.build_connect_url(url, config.remnawave.sub_public_domain),
         "connectable": True,
     }
 
@@ -277,6 +286,7 @@ async def success_payment_getter(
     dialog_manager: DialogManager,
     config: AppConfig,
     user: UserDto,
+    billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
     start_data = cast(dict[str, Any], dialog_manager.start_data)
@@ -284,7 +294,14 @@ async def success_payment_getter(
     subscription = user.current_subscription
 
     if not subscription:
-        raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
+        # Race condition: notification arrived before subscription was committed.
+        # Fall back to billing API.
+        from src.infrastructure.billing.converters import billing_subscription_to_dto
+        billing_sub = await billing.get_current_subscription(user.telegram_id)
+        if billing_sub:
+            subscription = billing_subscription_to_dto(billing_sub)
+        else:
+            raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
 
     return {
         "purchase_type": purchase_type,
