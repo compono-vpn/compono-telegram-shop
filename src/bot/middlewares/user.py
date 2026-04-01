@@ -14,6 +14,8 @@ from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.database.models.dto import UserDto
 from src.infrastructure.taskiq.tasks.subscriptions import auto_assign_trial_task
+from src.infrastructure.billing import BillingClient
+from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.user import UserService
@@ -101,6 +103,18 @@ class UserMiddleware(EventTypedMiddleware):
             await user_service.compare_and_update(user, aiogram_user)
 
         await user_service.update_recent_activity(telegram_id=user.telegram_id)
+
+        # Replace ORM-loaded subscription with billing API version (has derived expiry)
+        try:
+            billing: BillingClient = await container.get(BillingClient)
+            billing_sub = await billing.get_current_subscription(user.telegram_id)
+            if billing_sub:
+                user.current_subscription = billing_subscription_to_dto(billing_sub)
+            else:
+                user.current_subscription = None
+        except Exception:
+            logger.opt(exception=True).warning("Failed to fetch subscription from billing API, using ORM value")
+
         data[USER_KEY] = user
         data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
 

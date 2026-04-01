@@ -54,13 +54,7 @@ async def menu_getter(
             "is_referral_enable": is_referral_enable,
         }
 
-        # Fetch subscription from billing API to get derived expiry (calculated from transactions)
-        billing_sub = await billing.get_current_subscription(user.telegram_id)
-        if billing_sub:
-            from src.infrastructure.billing.converters import billing_subscription_to_dto
-            subscription = billing_subscription_to_dto(billing_sub)
-        else:
-            subscription = None
+        subscription = user.current_subscription
 
         if not subscription:
             base_data.update(
