@@ -86,17 +86,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         <yellow>Registration allowed: '{settings.registration_allowed}'</>
         """  # noqa: W605
     )
-    await notification_service.system_notify(
-        ntf_type=SystemNotificationType.BOT_LIFETIME,
-        payload=MessagePayload.not_deleted(
-            i18n_key="ntf-event-bot-startup",
-            i18n_kwargs={
-                "access_mode": settings.access_mode,
+    try:
+        await notification_service.system_notify(
+            ntf_type=SystemNotificationType.BOT_LIFETIME,
+            payload=MessagePayload.not_deleted(
+                i18n_key="ntf-event-bot-startup",
+                i18n_kwargs={
+                    "access_mode": settings.access_mode,
                 "purchases_allowed": settings.purchases_allowed,
                 "registration_allowed": settings.registration_allowed,
             },
         ),
     )
+    except Exception:
+        logger.opt(exception=True).warning("Failed to send startup notification")
 
     try:
         await remnawave_service.try_connection()
