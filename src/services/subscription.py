@@ -7,14 +7,13 @@ from fluentogram import TranslatorHub
 from loguru import logger
 from redis.asyncio import Redis
 from remnapy.enums.users import TrafficLimitStrategy
-from sqlalchemy import and_
 
 from src.core.config import AppConfig
 from src.core.constants import TIME_1M, TIME_5M, TIME_10M, TIMEZONE
 from src.core.enums import SubscriptionStatus
 from src.core.storage.key_builder import build_key
 from src.core.utils.time import datetime_now
-from src.infrastructure.database import UnitOfWork
+from src.infrastructure.billing import BillingClient, billing_subscription_to_dto
 from src.infrastructure.database.models.dto import (
     PlanDto,
     PlanSnapshotDto,
@@ -22,10 +21,8 @@ from src.infrastructure.database.models.dto import (
     SubscriptionDto,
     UserDto,
 )
-from src.infrastructure.database.models.sql import Subscription
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
-from src.services.user import UserService
 
 from .base import BaseService
 
@@ -33,8 +30,7 @@ T = TypeVar("T", SubscriptionDto, RemnaSubscriptionDto)
 
 
 class SubscriptionService(BaseService):
-    uow: UnitOfWork
-    user_service: UserService
+    billing: BillingClient
 
     def __init__(
         self,
@@ -44,12 +40,10 @@ class SubscriptionService(BaseService):
         redis_repository: RedisRepository,
         translator_hub: TranslatorHub,
         #
-        uow: UnitOfWork,
-        user_service: UserService,
+        billing: BillingClient,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
-        self.uow = uow
-        self.user_service = user_service
+        self.billing = billing
 
     def _rewrite_sub_url(self, subscription: Optional[SubscriptionDto]) -> Optional[SubscriptionDto]:
         if not subscription:
@@ -68,118 +62,23 @@ class SubscriptionService(BaseService):
         netloc = public_domain or parsed.netloc
         return f"{parsed.scheme}://{netloc}/connect/{token}"
 
-    async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
-        data = subscription.model_dump(exclude={"user"})
-        data["plan"] = subscription.plan.model_dump(mode="json")
-
-        db_subscription = Subscription(**data, user_telegram_id=user.telegram_id)
-
-        async with self.uow:
-            db_created_subscription = await self.uow.repository.subscriptions.create(
-                db_subscription
-            )
-
-        await self.user_service.set_current_subscription(
-            telegram_id=user.telegram_id,
-            subscription_id=db_created_subscription.id,
-        )
-
-        await self.clear_subscription_cache(db_subscription.id, db_subscription.user_telegram_id)
-        logger.info(f"Created subscription '{db_subscription.id}' for user '{user.telegram_id}'")
-        return SubscriptionDto.from_model(db_created_subscription)  # type: ignore[return-value]
-
-    @redis_cache(prefix="get_subscription", ttl=TIME_5M)
-    async def get(self, subscription_id: int) -> Optional[SubscriptionDto]:
-        async with self.uow:
-            db_subscription = await self.uow.repository.subscriptions.get(subscription_id)
-
-        if db_subscription:
-            logger.debug(f"Retrieved subscription '{subscription_id}'")
-        else:
-            logger.warning(f"Subscription '{subscription_id}' not found")
-
-        return self._rewrite_sub_url(SubscriptionDto.from_model(db_subscription))
-
     @redis_cache(prefix="get_current_subscription", ttl=TIME_1M)
     async def get_current(self, telegram_id: int) -> Optional[SubscriptionDto]:
-        async with self.uow:
-            db_user = await self.uow.repository.users.get(telegram_id)
-
-            if not db_user or not db_user.current_subscription_id:
-                logger.debug(
-                    f"Current subscription check: User '{telegram_id}' has no active subscription"
-                )
-                return None
-
-            subscription_id = db_user.current_subscription_id
-            db_active_subscription = await self.uow.repository.subscriptions.get(subscription_id)
-
-        if db_active_subscription:
-            logger.debug(
-                f"Current subscription check: Subscription '{subscription_id}' "
-                f"retrieved for user '{telegram_id}'"
-            )
-        else:
-            logger.warning(
-                f"User '{telegram_id}' linked to subscription ID '{subscription_id}', "
-                f"but subscription object was not found"
-            )
-
-        return self._rewrite_sub_url(SubscriptionDto.from_model(db_active_subscription))
+        billing_sub = await self.billing.get_current_subscription(telegram_id)
+        if not billing_sub:
+            logger.debug(f"No active subscription for user '{telegram_id}'")
+            return None
+        dto = billing_subscription_to_dto(billing_sub)
+        return self._rewrite_sub_url(dto)
 
     async def get_all_by_user(self, telegram_id: int) -> list[SubscriptionDto]:
-        async with self.uow:
-            db_subscriptions = await self.uow.repository.subscriptions.get_all_by_user(telegram_id)
-
-        logger.debug(f"Retrieved '{len(db_subscriptions)}' subscriptions for user '{telegram_id}'")
-        return SubscriptionDto.from_model_list(db_subscriptions)
-
-    async def get_all(self) -> list[SubscriptionDto]:
-        async with self.uow:
-            db_subscriptions = await self.uow.repository.subscriptions.get_all()
-
-        logger.debug(f"Retrieved '{len(db_subscriptions)}' total subscriptions")
-        return SubscriptionDto.from_model_list(db_subscriptions)
-
-    async def update(self, subscription: SubscriptionDto) -> Optional[SubscriptionDto]:
-        data = subscription.changed_data.copy()
-
-        if subscription.plan.changed_data or "plan" in data:
-            data["plan"] = subscription.plan.model_dump(mode="json")
-
-        async with self.uow:
-            db_updated_subscription = await self.uow.repository.subscriptions.update(
-                subscription_id=subscription.id,  # type: ignore[arg-type]
-                **data,
-            )
-
-        if db_updated_subscription:
-            await self.clear_subscription_cache(
-                db_updated_subscription.id,
-                db_updated_subscription.user_telegram_id,
-            )
-            await self.user_service.clear_user_cache(db_updated_subscription.user_telegram_id)
-            logger.info(f"Updated subscription '{subscription.id}' successfully")
-        else:
-            logger.warning(
-                f"Attempted to update subscription '{subscription.id}', "
-                "but subscription was not found or update failed"
-            )
-
-        return SubscriptionDto.from_model(db_updated_subscription)
+        billing_subs = await self.billing.list_subscriptions_by_user(telegram_id)
+        logger.debug(f"Retrieved '{len(billing_subs)}' subscriptions for user '{telegram_id}'")
+        return [billing_subscription_to_dto(s) for s in billing_subs]
 
     @redis_cache(prefix="has_used_trial", ttl=TIME_10M)
     async def has_used_trial(self, user_telegram_id: int) -> bool:
-        conditions = and_(
-            Subscription.user_telegram_id == user_telegram_id,
-            Subscription.is_trial.is_(True),
-            Subscription.status != SubscriptionStatus.DELETED,
-        )
-
-        async with self.uow:
-            count = await self.uow.repository.subscriptions._count(Subscription, conditions)
-
-        return count > 0
+        return await self.billing.has_used_trial(user_telegram_id)
 
     async def clear_subscription_cache(self, subscription_id: int, user_telegram_id: int) -> None:
         list_cache_keys_to_invalidate = [
@@ -187,9 +86,7 @@ class SubscriptionService(BaseService):
             build_key("cache", "get_current_subscription", user_telegram_id),
             build_key("cache", "has_used_trial", user_telegram_id),
         ]
-
         await self.redis_client.delete(*list_cache_keys_to_invalidate)
-        logger.debug(f"Cache for subscription '{subscription_id}' invalidated")
 
     @staticmethod
     def subscriptions_match(
@@ -198,7 +95,6 @@ class SubscriptionService(BaseService):
     ) -> bool:
         if not bot_subscription or not remna_subscription:
             return False
-
         return (
             bot_subscription.user_remna_id == remna_subscription.uuid
             and bot_subscription.status == remna_subscription.status
@@ -217,7 +113,6 @@ class SubscriptionService(BaseService):
     def plan_match(plan_a: PlanSnapshotDto, plan_b: PlanDto) -> bool:
         if not plan_a or not plan_b:
             return False
-
         return (
             plan_a.id == plan_b.id
             and plan_a.tag == plan_b.tag
@@ -241,42 +136,30 @@ class SubscriptionService(BaseService):
     def apply_sync(target: T, source: Union[SubscriptionDto, RemnaSubscriptionDto]) -> T:
         target_fields = set(type(target).model_fields)
         source_fields = set(type(source).model_fields)
-
         field_map = {"user_remna_id": "uuid"}
-
         for target_field, source_field in field_map.items():
             if target_field in target_fields and hasattr(source, source_field):
                 old_value = getattr(target, target_field)
                 new_value = getattr(source, source_field)
                 if old_value != new_value:
-                    logger.debug(
-                        f"Field '{target_field}' changed from '{old_value}' to '{new_value}'"
-                    )
                     setattr(target, target_field, new_value)
-
         common_fields = target_fields & source_fields
-
         for field in common_fields:
             old_value = getattr(target, field)
             new_value = getattr(source, field)
             if old_value != new_value:
-                logger.debug(f"Field '{field}' changed from '{old_value}' to '{new_value}'")
                 setattr(target, field, new_value)
-
         return target
 
     @staticmethod
     def get_traffic_reset_delta(strategy: TrafficLimitStrategy) -> Optional[timedelta]:
         now = datetime_now()
-
         if strategy == TrafficLimitStrategy.NO_RESET:
             return None
-
         if strategy == TrafficLimitStrategy.DAY:
             next_day = now.date() + timedelta(days=1)
             reset_at = datetime.combine(next_day, datetime.min.time(), tzinfo=TIMEZONE)
             return reset_at - now
-
         if strategy == TrafficLimitStrategy.WEEK:
             weekday = now.weekday()
             days_until = (7 - weekday) % 7 or 7
@@ -285,7 +168,6 @@ class SubscriptionService(BaseService):
                 date_target.year, date_target.month, date_target.day, 0, 5, 0, tzinfo=TIMEZONE
             )
             return reset_at - now
-
         if strategy == TrafficLimitStrategy.MONTH:
             year = now.year
             month = now.month + 1
@@ -294,5 +176,4 @@ class SubscriptionService(BaseService):
                 month = 1
             reset_at = datetime(year, month, 1, 0, 10, 0, tzinfo=TIMEZONE)
             return reset_at - now
-
         raise ValueError("Unsupported strategy")
