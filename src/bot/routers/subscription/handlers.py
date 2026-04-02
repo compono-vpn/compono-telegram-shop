@@ -24,6 +24,7 @@ from src.infrastructure.billing import (
     billing_price_details_to_dto,
     billing_promocode_to_dto,
 )
+from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.database.models.dto import PlanDto, PlanSnapshotDto, UserDto
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
@@ -516,6 +517,18 @@ async def on_promocode_input(
         dialog_manager.dialog_data["promocode_code"] = code.upper()
         await dialog_manager.switch_to(state=Subscription.PROMOCODE_SUCCESS)
 
+    except BillingClientError as e:
+        logger.warning(f"{log(user)} Promocode activation failed: {e}")
+        if e.status_code == 404:
+            i18n_key = "ntf-promocode-not-found"
+        elif e.status_code == 409:
+            i18n_key = "ntf-promocode-already-activated"
+        else:
+            i18n_key = "ntf-promocode-activation-failed"
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key=i18n_key),
+        )
     except Exception as e:
         logger.warning(f"{log(user)} Promocode activation failed: {e}")
         await notification_service.notify_user(
