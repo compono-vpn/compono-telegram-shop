@@ -500,6 +500,7 @@ ntf-promocode-invalid-max-activations = <i>❌ Некорректное знач
 ntf-promocode-invalid-max-days = <i>❌ Некорректное значение. Введите -1 (без ограничения) или число дней (1-3650).</i>
 ntf-promocode-invalid-allowed = <i>❌ Некорректные ID пользователей. Введите Telegram ID через запятую.</i>
 ntf-promocode-already-has-subscription = <i>❌ У вас уже есть активная подписка.</i>
+ntf-promocode-activation-failed = <i>❌ Не удалось активировать промокод. Попробуйте позже.</i>
 
 ntf-event-promocode-activated =
     #EventPromocodeActivated
