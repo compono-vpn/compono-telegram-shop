@@ -510,7 +510,7 @@ async def on_promocode_input(
 
         await notification_service.notify_user(
             user=user,
-            payload=MessagePayload(i18n_key="ntf-promocode-activated-success"),
+            payload=MessagePayload(i18n_key="ntf-promocode-activated", i18n_kwargs={"code": code.upper()}),
         )
 
         dialog_manager.dialog_data["promocode_reward_type"] = reward_type.value if reward_type else None
