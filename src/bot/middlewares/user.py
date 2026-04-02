@@ -52,10 +52,23 @@ class UserMiddleware(EventTypedMiddleware):
         referral_service: ReferralService = await container.get(ReferralService)
         user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
 
+        billing: BillingClient = await container.get(BillingClient)
+
         if user is None:
             NEW_USERS_TOTAL.inc()
             source = self._parse_source(event)
             user = await user_service.create(aiogram_user, source=source)
+
+            # Sync user to billing so pricing/promocodes work
+            try:
+                await billing.create_user({
+                    "telegram_id": user.telegram_id,
+                    "username": user.username,
+                    "name": user.name,
+                    "source": source,
+                })
+            except Exception:
+                logger.opt(exception=True).warning("Failed to sync new user to billing")
             referrer = await referral_service.get_referrer_by_event(event, user.telegram_id)
 
             base_i18n_kwargs = {
@@ -106,7 +119,6 @@ class UserMiddleware(EventTypedMiddleware):
 
         # Replace ORM-loaded subscription with billing API version (has derived expiry)
         try:
-            billing: BillingClient = await container.get(BillingClient)
             billing_sub = await billing.get_current_subscription(user.telegram_id)
             if billing_sub:
                 user.current_subscription = billing_subscription_to_dto(billing_sub)
