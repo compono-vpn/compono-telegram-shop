@@ -38,7 +38,6 @@ from src.infrastructure.database.models.dto import (
     PromocodeDto,
     SettingsDto,
     ReferralSettingsDto,
-    ReferralRewardSettingsDto,
     SystemNotificationDto,
     UserNotificationDto,
     SubscriptionDto,
@@ -46,6 +45,7 @@ from src.infrastructure.database.models.dto import (
     PaymentGatewayDto,
     BaseTransactionDto,
 )
+from src.infrastructure.database.models.dto.settings import ReferralRewardSettingsDto
 
 from src.infrastructure.database.models.dto.user import UserDto
 from src.core.enums import UserRole, Locale
