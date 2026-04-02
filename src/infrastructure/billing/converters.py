@@ -271,7 +271,7 @@ def billing_user_to_dto(bu: BillingUser) -> UserDto:
         referral_code=bu.ReferralCode,
         name=bu.Name,
         role=UserRole(bu.Role) if bu.Role else UserRole.USER,
-        language=bu.Language or "ru",
+        language=(bu.Language or "ru").lower(),
         personal_discount=bu.PersonalDiscount,
         purchase_discount=bu.PurchaseDiscount,
         purchase_discount_max_days=bu.PurchaseDiscountMaxDays,
