@@ -475,7 +475,7 @@ async def on_get_trial(
         )
         raise ValueError("Trial plan not exist")
 
-    await billing.create_trial_subscription(user.telegram_id, billing_plan.id)
+    await billing.create_trial_subscription(user.telegram_id, billing_plan.ID)
 
 
 @inject
