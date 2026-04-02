@@ -7,9 +7,8 @@ from src.core.config import AppConfig
 from src.core.constants import TIME_10M
 from src.core.enums import PlanAvailability
 from src.core.storage.key_builder import build_key
-from src.infrastructure.database import UnitOfWork
+from src.infrastructure.billing import BillingClient, billing_plan_to_dto
 from src.infrastructure.database.models.dto import PlanDto, UserDto
-from src.infrastructure.database.models.sql import Plan, PlanDuration, PlanPrice
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
 
@@ -17,7 +16,7 @@ from .base_billing import BaseBillingService
 
 
 class PlanService(BaseBillingService):
-    uow: UnitOfWork
+    billing: BillingClient
 
     def __init__(
         self,
@@ -25,198 +24,101 @@ class PlanService(BaseBillingService):
         redis_client: Redis,
         redis_repository: RedisRepository,
         #
-        uow: UnitOfWork,
+        billing: BillingClient,
     ) -> None:
         super().__init__(config, redis_client, redis_repository)
-        self.uow = uow
+        self.billing = billing
 
     async def create(self, plan: PlanDto) -> PlanDto:
-        async with self.uow:
-            order_index = await self.uow.repository.plans.get_max_index()
-            order_index = (order_index or 0) + 1
-            plan.order_index = order_index
-            db_plan = self._dto_to_model(plan)
-            db_created_plan = await self.uow.repository.plans.create(db_plan)
-
+        plan_data = _dto_to_billing_dict(plan)
+        billing_plan = await self.billing.create_plan(plan_data)
         await self._clear_plan_cache()
-        logger.info(f"Created plan '{plan.name}' with ID '{db_created_plan.id}'")
-        return PlanDto.from_model(db_created_plan)  # type: ignore[return-value]
-
-    async def get(self, plan_id: int) -> Optional[PlanDto]:
-        async with self.uow:
-            db_plan = await self.uow.repository.plans.get(plan_id)
-
-        if db_plan:
-            logger.debug(f"Retrieved plan '{plan_id}'")
-        else:
-            logger.warning(f"Plan '{plan_id}' not found")
-
-        return PlanDto.from_model(db_plan)
-
-    async def get_by_name(self, plan_name: str) -> Optional[PlanDto]:
-        async with self.uow:
-            db_plan = await self.uow.repository.plans.get_by_name(plan_name)
-
-        if db_plan:
-            logger.debug(f"Retrieved plan by name '{plan_name}'")
-        else:
-            logger.warning(f"Plan with name '{plan_name}' not found")
-
-        return PlanDto.from_model(db_plan)
-
-    async def get_all(self) -> list[PlanDto]:
-        async with self.uow:
-            db_plans = await self.uow.repository.plans.get_all()
-
-        logger.debug(f"Retrieved '{len(db_plans)}' plans")
-        return PlanDto.from_model_list(db_plans)
-
-    async def update(self, plan: PlanDto) -> Optional[PlanDto]:
-        db_plan = self._dto_to_model(plan)
-
-        async with self.uow:
-            db_updated_plan = await self.uow.repository.plans.update(db_plan)
-
-        await self._clear_plan_cache()
-
-        if db_updated_plan:
-            logger.info(f"Updated plan '{plan.name}' (ID: '{plan.id}') successfully")
-        else:
-            logger.warning(
-                f"Attempted to update plan '{plan.name}' (ID: '{plan.id}'), "
-                "but plan was not found or update failed"
-            )
-
-        return PlanDto.from_model(db_updated_plan)
-
-    async def delete(self, plan_id: int) -> bool:
-        async with self.uow:
-            result = await self.uow.repository.plans.delete(plan_id)
-
-        await self._clear_plan_cache()
-
-        if result:
-            logger.info(f"Plan '{plan_id}' deleted successfully")
-        else:
-            logger.warning(f"Failed to delete plan '{plan_id}'. Plan not found or deletion failed")
-
+        result = billing_plan_to_dto(billing_plan)
+        logger.info(f"Created plan '{result.name}' with ID '{result.id}'")
         return result
 
+    async def get(self, plan_id: int) -> Optional[PlanDto]:
+        billing_plan = await self.billing.get_plan(plan_id)
+        if billing_plan:
+            logger.debug(f"Retrieved plan '{plan_id}'")
+            return billing_plan_to_dto(billing_plan)
+        logger.warning(f"Plan '{plan_id}' not found")
+        return None
+
+    async def get_by_name(self, plan_name: str) -> Optional[PlanDto]:
+        billing_plan = await self.billing.get_plan_by_name(plan_name)
+        if billing_plan:
+            logger.debug(f"Retrieved plan by name '{plan_name}'")
+            return billing_plan_to_dto(billing_plan)
+        logger.warning(f"Plan with name '{plan_name}' not found")
+        return None
+
+    async def get_all(self) -> list[PlanDto]:
+        billing_plans = await self.billing.list_plans()
+        logger.debug(f"Retrieved '{len(billing_plans)}' plans")
+        return [billing_plan_to_dto(p) for p in billing_plans]
+
+    async def update(self, plan: PlanDto) -> Optional[PlanDto]:
+        plan_data = _dto_to_billing_dict(plan)
+        billing_plan = await self.billing.update_plan(plan_data)
+        await self._clear_plan_cache()
+        if billing_plan:
+            result = billing_plan_to_dto(billing_plan)
+            logger.info(f"Updated plan '{result.name}' (ID: '{result.id}')")
+            return result
+        logger.warning(f"Failed to update plan '{plan.name}' (ID: '{plan.id}')")
+        return None
+
+    async def delete(self, plan_id: int) -> bool:
+        try:
+            await self.billing.delete_plan(plan_id)
+            await self._clear_plan_cache()
+            logger.info(f"Plan '{plan_id}' deleted")
+            return True
+        except Exception:
+            logger.opt(exception=True).warning(f"Failed to delete plan '{plan_id}'")
+            return False
+
     async def count(self) -> int:
-        async with self.uow:
-            count = await self.uow.repository.plans.count()
-        logger.debug(f"Total plans count: '{count}'")
-        return count
+        plans = await self.billing.list_plans()
+        return len(plans)
 
     #
 
     @redis_cache(prefix="get_trial_plan", ttl=TIME_10M)
     async def get_trial_plan(self) -> Optional[PlanDto]:
-        async with self.uow:
-            db_plans: list[Plan] = await self.uow.repository.plans.filter_by_availability(
-                availability=PlanAvailability.TRIAL
-            )
-
-        if db_plans:
-            if len(db_plans) > 1:
-                logger.warning(
-                    f"Multiple trial plans found ({len(db_plans)}). "
-                    f"Using the first one: '{db_plans[0].name}'"
-                )
-
-            db_plan = db_plans[0]
-
-            if db_plan.is_active:
-                logger.debug(f"Available trial plan '{db_plans[0].name}'")
-                return PlanDto.from_model(db_plans[0])
-            else:
-                logger.warning(f"Trial plan '{db_plans[0].name}' found but is not active")
-
+        billing_plan = await self.billing.get_trial_plan()
+        if billing_plan:
+            dto = billing_plan_to_dto(billing_plan)
+            if dto.is_active:
+                logger.debug(f"Available trial plan '{dto.name}'")
+                return dto
+            logger.warning(f"Trial plan '{dto.name}' found but is not active")
         logger.debug("No active trial plan found")
         return None
 
     async def get_available_plans(self, user: UserDto) -> list[PlanDto]:
         logger.debug(f"Fetching available plans for user '{user.telegram_id}'")
-
-        async with self.uow:
-            db_plans: list[Plan] = await self.uow.repository.plans.filter_active(is_active=True)
-
-        logger.debug(f"Total active plans retrieved: '{len(db_plans)}'")
-        db_filtered_plans = []
-
-        for db_plan in db_plans:
-            match db_plan.availability:
-                case PlanAvailability.ALL:
-                    db_filtered_plans.append(db_plan)
-                case PlanAvailability.NEW if not user.has_any_subscription:
-                    logger.debug(
-                        f"User {user.telegram_id} has no subscription, "
-                        f"eligible for new user plan '{db_plan.name}'"
-                    )
-                    db_filtered_plans.append(db_plan)
-
-                case PlanAvailability.EXISTING if user.has_any_subscription:
-                    logger.debug(
-                        f"User {user.telegram_id} has an existing subscription, "
-                        f"eligible for existing user plan '{db_plan.name}'"
-                    )
-                    db_filtered_plans.append(db_plan)
-
-                case PlanAvailability.INVITED if user.is_invited_user:
-                    logger.debug(
-                        f"User {user.telegram_id} was invited, "
-                        f"eligible for invited user plan '{db_plan.name}'"
-                    )
-                    db_filtered_plans.append(db_plan)
-
-                case PlanAvailability.ALLOWED if user.telegram_id in db_plan.allowed_user_ids:
-                    logger.debug(
-                        f"User {user.telegram_id} is explicitly allowed for plan '{db_plan.name}'"
-                    )
-                    db_filtered_plans.append(db_plan)
-        logger.info(
-            f"Available plans filtered: '{len(db_filtered_plans)}' for user '{user.telegram_id}'"
-        )
-        return PlanDto.from_model_list(db_filtered_plans)
+        billing_plans = await self.billing.get_available_plans(user.telegram_id)
+        plans = [billing_plan_to_dto(p) for p in billing_plans]
+        logger.info(f"Available plans: '{len(plans)}' for user '{user.telegram_id}'")
+        return plans
 
     async def get_allowed_plans(self) -> list[PlanDto]:
-        async with self.uow:
-            db_plans: list[Plan] = await self.uow.repository.plans.filter_by_availability(
-                availability=PlanAvailability.ALLOWED,
-            )
-
-        if db_plans:
-            logger.debug(
-                f"Retrieved '{len(db_plans)}' plans with availability '{PlanAvailability.ALLOWED}'"
-            )
-        else:
-            logger.debug(f"No plans found with availability '{PlanAvailability.ALLOWED}'")
-
-        return PlanDto.from_model_list(db_plans)
+        billing_plans = await self.billing.get_allowed_plans()
+        plans = [billing_plan_to_dto(p) for p in billing_plans]
+        logger.debug(f"Retrieved '{len(plans)}' allowed plans")
+        return plans
 
     async def move_plan_up(self, plan_id: int) -> bool:
-        async with self.uow:
-            db_plans = await self.uow.repository.plans.get_all()
-            db_plans.sort(key=lambda p: p.order_index)
-
-            index = next((i for i, p in enumerate(db_plans) if p.id == plan_id), None)
-            if index is None:
-                logger.warning(f"Plan with ID '{plan_id}' not found for move operation")
-                return False
-
-            if index == 0:
-                plan = db_plans.pop(0)
-                db_plans.append(plan)
-                logger.debug(f"Plan '{plan_id}' moved from top to bottom")
-            else:
-                db_plans[index - 1], db_plans[index] = db_plans[index], db_plans[index - 1]
-                logger.debug(f"Plan '{plan_id}' moved up one position")
-
-            for i, plan in enumerate(db_plans, start=1):
-                plan.order_index = i
-
-        logger.info(f"Plan '{plan_id}' reorder successfully")
-        return True
+        try:
+            await self.billing.move_plan_up(plan_id)
+            await self._clear_plan_cache()
+            logger.info(f"Plan '{plan_id}' reordered")
+            return True
+        except Exception:
+            logger.opt(exception=True).warning(f"Failed to move plan '{plan_id}'")
+            return False
 
     #
 
@@ -225,17 +127,35 @@ class PlanService(BaseBillingService):
         await self.redis_client.delete(trial_plan_key)
         logger.debug("Trial plan cache invalidated")
 
-    def _dto_to_model(self, plan_dto: PlanDto) -> Plan:
-        db_plan = Plan(**plan_dto.model_dump(exclude={"durations"}))
 
-        for duration_dto in plan_dto.durations:
-            db_duration = PlanDuration(**duration_dto.model_dump(exclude={"prices"}))
-            db_plan.durations.append(db_duration)
-            db_duration.plan = db_plan
-
-            for price_dto in duration_dto.prices:
-                db_price = PlanPrice(**price_dto.model_dump())
-                db_duration.prices.append(db_price)
-                db_price.plan_duration = db_duration
-
-        return db_plan
+def _dto_to_billing_dict(plan: PlanDto) -> dict:
+    data = {
+        "name": plan.name,
+        "description": plan.description,
+        "tag": plan.tag,
+        "is_active": plan.is_active,
+        "type": plan.type.value if hasattr(plan.type, "value") else str(plan.type),
+        "availability": plan.availability.value if hasattr(plan.availability, "value") else str(plan.availability),
+        "traffic_limit": plan.traffic_limit,
+        "device_limit": plan.device_limit,
+        "traffic_limit_strategy": plan.traffic_limit_strategy.value if hasattr(plan.traffic_limit_strategy, "value") else str(plan.traffic_limit_strategy),
+        "allowed_user_ids": plan.allowed_user_ids,
+        "internal_squads": [str(s) for s in plan.internal_squads],
+        "external_squad": str(plan.external_squad) if plan.external_squad else None,
+        "durations": [
+            {
+                "days": d.days,
+                "prices": [
+                    {
+                        "currency": p.currency.value if hasattr(p.currency, "value") else str(p.currency),
+                        "price": str(p.price),
+                    }
+                    for p in d.prices
+                ],
+            }
+            for d in plan.durations
+        ],
+    }
+    if plan.id:
+        data["id"] = plan.id
+    return data

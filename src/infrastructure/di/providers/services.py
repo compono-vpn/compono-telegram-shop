@@ -9,7 +9,6 @@ from src.services.command import CommandService
 from src.services.importer import ImporterService
 from src.services.notification import NotificationService
 from src.services.plan import PlanService
-from src.services.promocode import PromocodeService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
@@ -25,7 +24,7 @@ class ServicesProvider(Provider):
     access_service = provide(source=AccessService, scope=Scope.REQUEST)
     notification_service = provide(source=NotificationService, scope=Scope.REQUEST)
     plan_service = provide(source=PlanService, scope=Scope.REQUEST)
-    promocode_service = provide(source=PromocodeService, scope=Scope.REQUEST)
+    # PromocodeService removed — billing handles promocode CRUD and activation
     remnawave_service = provide(source=RemnawaveService, scope=Scope.REQUEST)
     subscription_service = provide(source=SubscriptionService, scope=Scope.REQUEST)
     user_service = provide(source=UserService, scope=Scope.REQUEST)
