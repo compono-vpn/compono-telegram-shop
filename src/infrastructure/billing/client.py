@@ -308,6 +308,55 @@ class BillingClient:
         data = await self._put(f"/users/{telegram_id}", json=user_data)
         return BillingUser.model_validate(data)
 
+    async def delete_user(self, telegram_id: int) -> None:
+        await self._delete(f"/users/{telegram_id}")
+
+    async def list_users_by_role(self, role: str) -> list[BillingUser]:
+        data = await self._get(f"/users?role={role}")
+        if isinstance(data, list):
+            return [BillingUser.model_validate(u) for u in data]
+        return []
+
+    async def count_users(self) -> int:
+        data = await self._get("/users")
+        if isinstance(data, dict):
+            return data.get("count", 0)
+        return 0
+
+    async def get_user_by_referral_code(self, code: str) -> Optional[BillingUser]:
+        data = await self._get(f"/users/by-referral-code?code={code}")
+        return BillingUser.model_validate(data) if data else None
+
+    # ------------------------------------------------------------------ #
+    # Transactions (extended)
+    # ------------------------------------------------------------------ #
+
+    async def get_transaction_stats(self) -> dict[str, int]:
+        data = await self._get("/transactions/stats")
+        return data if isinstance(data, dict) else {}
+
+    # ------------------------------------------------------------------ #
+    # Subscriptions (extended)
+    # ------------------------------------------------------------------ #
+
+    async def list_subscriptions_by_user(self, telegram_id: int) -> list[BillingSubscription]:
+        data = await self._get(f"/subscriptions?telegram_id={telegram_id}")
+        if isinstance(data, list):
+            return [BillingSubscription.model_validate(s) for s in data]
+        return []
+
+    # ------------------------------------------------------------------ #
+    # Referrals (extended)
+    # ------------------------------------------------------------------ #
+
+    async def get_referral_stats(self, telegram_id: int) -> dict[str, Any]:
+        data = await self._get(f"/referral/{telegram_id}/stats")
+        return data if isinstance(data, dict) else {}
+
+    async def list_referral_rewards(self, telegram_id: int) -> list[dict[str, Any]]:
+        data = await self._get(f"/referral/{telegram_id}/rewards")
+        return data if isinstance(data, list) else []
+
     # ------------------------------------------------------------------ #
     # Web Orders
     # ------------------------------------------------------------------ #

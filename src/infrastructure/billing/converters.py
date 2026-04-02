@@ -47,7 +47,11 @@ from src.infrastructure.database.models.dto import (
     BaseTransactionDto,
 )
 
+from src.infrastructure.database.models.dto.user import UserDto
+from src.core.enums import UserRole, Locale
+
 from .models import (
+    BillingUser,
     BillingSettings,
     BillingPaymentGateway,
     BillingPlan,
@@ -251,6 +255,33 @@ def billing_gateway_to_dto(bg: BillingPaymentGateway) -> PaymentGatewayDto:
         currency=Currency(bg.Currency) if bg.Currency else Currency.USD,
         is_active=bg.IsActive,
         settings=None,
+    )
+
+
+# ------------------------------------------------------------------ #
+# Users
+# ------------------------------------------------------------------ #
+
+
+def billing_user_to_dto(bu: BillingUser) -> UserDto:
+    return UserDto(
+        id=bu.ID if bu.ID else None,
+        telegram_id=bu.TelegramID,
+        username=bu.Username,
+        referral_code=bu.ReferralCode,
+        name=bu.Name,
+        role=UserRole(bu.Role) if bu.Role else UserRole.USER,
+        language=bu.Language or "ru",
+        personal_discount=bu.PersonalDiscount,
+        purchase_discount=bu.PurchaseDiscount,
+        purchase_discount_max_days=bu.PurchaseDiscountMaxDays,
+        points=bu.Points,
+        source=bu.Source,
+        is_blocked=bu.IsBlocked,
+        is_bot_blocked=bu.IsBotBlocked,
+        is_rules_accepted=bu.IsRulesAccepted,
+        created_at=bu.CreatedAt,
+        updated_at=bu.UpdatedAt,
     )
 
 
