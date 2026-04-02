@@ -9,6 +9,7 @@ from typing import Optional
 from uuid import UUID
 
 from src.core.enums import (
+    AccessMode,
     Currency,
     GatewayChannel,
     PaymentGatewayType,
@@ -16,6 +17,10 @@ from src.core.enums import (
     PlanType,
     PromocodeAvailability,
     PromocodeRewardType,
+    ReferralAccrualStrategy,
+    ReferralLevel,
+    ReferralRewardStrategy,
+    ReferralRewardType,
     SubscriptionStatus,
     TransactionStatus,
     PurchaseType,
@@ -31,6 +36,11 @@ from src.infrastructure.database.models.dto import (
     PriceDetailsDto,
     PromocodeActivationDto,
     PromocodeDto,
+    SettingsDto,
+    ReferralSettingsDto,
+    ReferralRewardSettingsDto,
+    SystemNotificationDto,
+    UserNotificationDto,
     SubscriptionDto,
     TransactionDto,
     PaymentGatewayDto,
@@ -38,6 +48,7 @@ from src.infrastructure.database.models.dto import (
 )
 
 from .models import (
+    BillingSettings,
     BillingPaymentGateway,
     BillingPlan,
     BillingPlanDuration,
@@ -240,4 +251,65 @@ def billing_gateway_to_dto(bg: BillingPaymentGateway) -> PaymentGatewayDto:
         currency=Currency(bg.Currency) if bg.Currency else Currency.USD,
         is_active=bg.IsActive,
         settings=None,
+    )
+
+
+# ------------------------------------------------------------------ #
+# Settings
+# ------------------------------------------------------------------ #
+
+
+def billing_settings_to_dto(bs: BillingSettings) -> SettingsDto:
+    sys_ntf = SystemNotificationDto()
+    if bs.SystemNotifications and isinstance(bs.SystemNotifications, dict):
+        for k, v in bs.SystemNotifications.items():
+            key = k.lower() if isinstance(k, str) else k
+            if hasattr(sys_ntf, key):
+                setattr(sys_ntf, key, bool(v))
+
+    user_ntf = UserNotificationDto()
+    if bs.UserNotifications and isinstance(bs.UserNotifications, dict):
+        for k, v in bs.UserNotifications.items():
+            key = k.lower() if isinstance(k, str) else k
+            if hasattr(user_ntf, key):
+                setattr(user_ntf, key, bool(v))
+
+    referral = ReferralSettingsDto()
+    if bs.Referral and isinstance(bs.Referral, dict):
+        referral.enable = bs.Referral.get("Enable", bs.Referral.get("enable", True))
+        level_val = bs.Referral.get("Level", bs.Referral.get("level", "FIRST"))
+        referral.level = ReferralLevel(level_val) if level_val else ReferralLevel.FIRST
+        accrual = bs.Referral.get("AccrualStrategy", bs.Referral.get("accrual_strategy", "ON_FIRST_PAYMENT"))
+        referral.accrual_strategy = ReferralAccrualStrategy(accrual) if accrual else ReferralAccrualStrategy.ON_FIRST_PAYMENT
+        reward_data = bs.Referral.get("Reward", bs.Referral.get("reward"))
+        if reward_data and isinstance(reward_data, dict):
+            rtype = reward_data.get("Type", reward_data.get("type", "EXTRA_DAYS"))
+            rstrategy = reward_data.get("Strategy", reward_data.get("strategy", "AMOUNT"))
+            rconfig = reward_data.get("Config", reward_data.get("config", {}))
+            parsed_config = {}
+            for rk, rv in (rconfig or {}).items():
+                try:
+                    parsed_config[ReferralLevel(rk)] = int(rv)
+                except (ValueError, TypeError):
+                    pass
+            referral.reward = ReferralRewardSettingsDto(
+                type=ReferralRewardType(rtype) if rtype else ReferralRewardType.EXTRA_DAYS,
+                strategy=ReferralRewardStrategy(rstrategy) if rstrategy else ReferralRewardStrategy.AMOUNT,
+                config=parsed_config or {ReferralLevel.FIRST: 5},
+            )
+
+    return SettingsDto(
+        id=bs.ID if bs.ID else None,
+        rules_required=bs.RulesRequired,
+        channel_required=bs.ChannelRequired,
+        rules_link=bs.RulesLink or "https://telegram.org/tos/",
+        channel_id=bs.ChannelID,
+        channel_link=bs.ChannelLink or "@remna_shop",
+        access_mode=AccessMode(bs.AccessMode) if bs.AccessMode else AccessMode.PUBLIC,
+        purchases_allowed=bs.PurchasesAllowed,
+        registration_allowed=bs.RegistrationAllowed,
+        default_currency=Currency(bs.DefaultCurrency) if bs.DefaultCurrency else Currency.XTR,
+        user_notifications=user_ntf,
+        system_notifications=sys_ntf,
+        referral=referral,
     )

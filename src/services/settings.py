@@ -1,6 +1,7 @@
 from typing import Any, Optional
 
 from loguru import logger
+from pydantic import SecretStr
 from redis.asyncio import Redis
 
 from src.core.config import AppConfig
@@ -8,9 +9,9 @@ from src.core.constants import TIME_10M
 from src.core.enums import AccessMode, Currency, SystemNotificationType, UserNotificationType
 from src.core.storage.key_builder import build_key
 from src.core.utils.types import AnyNotification
-from src.infrastructure.database import UnitOfWork
+from src.infrastructure.billing import BillingClient
+from src.infrastructure.billing.converters import billing_settings_to_dto
 from src.infrastructure.database.models.dto import ReferralSettingsDto, SettingsDto
-from src.infrastructure.database.models.sql import Settings
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
 
@@ -18,7 +19,7 @@ from .base_billing import BaseBillingService
 
 
 class SettingsService(BaseBillingService):
-    uow: UnitOfWork
+    billing: BillingClient
 
     def __init__(
         self,
@@ -26,34 +27,17 @@ class SettingsService(BaseBillingService):
         redis_client: Redis,
         redis_repository: RedisRepository,
         #
-        uow: UnitOfWork,
+        billing: BillingClient,
     ) -> None:
         super().__init__(config, redis_client, redis_repository)
-        self.uow = uow
+        self.billing = billing
         self._settings_memo: Optional[SettingsDto] = None
-
-    async def create(self) -> SettingsDto:
-        settings = SettingsDto()
-        db_settings = Settings(**settings.prepare_init_data())
-
-        async with self.uow:
-            db_settings = await self.uow.repository.settings.create(db_settings)
-
-        await self._clear_cache()
-        logger.info("Default settings created in DB")
-        return SettingsDto.from_model(db_settings)  # type: ignore[return-value]
 
     @redis_cache(prefix="get_settings", ttl=TIME_10M)
     async def _fetch_settings(self) -> SettingsDto:
-        async with self.uow:
-            db_settings = await self.uow.repository.settings.get()
-
-        if not db_settings:
-            return await self.create()
-        else:
-            logger.debug("Retrieved settings from DB")
-
-        return SettingsDto.from_model(db_settings)  # type: ignore[return-value]
+        billing_settings = await self.billing.get_settings()
+        logger.debug("Retrieved settings from billing API")
+        return billing_settings_to_dto(billing_settings)
 
     async def get(self) -> SettingsDto:
         if self._settings_memo is not None:
@@ -62,28 +46,24 @@ class SettingsService(BaseBillingService):
         return self._settings_memo
 
     async def update(self, settings: SettingsDto) -> SettingsDto:
-        if settings.user_notifications.changed_data:
-            settings.user_notifications = settings.user_notifications  # FIXME: Fix this shit
-
-        if settings.system_notifications.changed_data:
-            settings.system_notifications = settings.system_notifications
-
-        if settings.referral.changed_data or settings.referral.reward:
-            settings.referral = settings.referral
-
         changed_data = settings.prepare_changed_data()
 
-        async with self.uow:
-            db_updated_settings = await self.uow.repository.settings.update(**changed_data)
-
-        await self._clear_cache()
-
-        if changed_data:
-            logger.info("Settings updated in DB")
-        else:
+        if not changed_data:
             logger.warning("Settings update called, but no fields were actually changed")
+            return settings
 
-        return SettingsDto.from_model(db_updated_settings)  # type: ignore[return-value]
+        # Convert SecretStr values to plain strings for JSON serialization
+        serializable = {}
+        for k, v in changed_data.items():
+            if isinstance(v, SecretStr):
+                serializable[k] = v.get_secret_value()
+            else:
+                serializable[k] = v
+
+        billing_settings = await self.billing.update_settings(serializable)
+        await self._clear_cache()
+        logger.info("Settings updated via billing API")
+        return billing_settings_to_dto(billing_settings)
 
     #
 

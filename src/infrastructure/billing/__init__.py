@@ -6,6 +6,7 @@ from .converters import (
     billing_price_details_to_dto,
     billing_promocode_to_dto,
     billing_subscription_to_dto,
+    billing_settings_to_dto,
     billing_transaction_to_dto,
 )
 
@@ -16,6 +17,7 @@ __all__ = [
     "billing_plan_to_dto",
     "billing_price_details_to_dto",
     "billing_promocode_to_dto",
+    "billing_settings_to_dto",
     "billing_subscription_to_dto",
     "billing_transaction_to_dto",
 ]
