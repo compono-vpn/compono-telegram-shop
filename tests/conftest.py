@@ -47,9 +47,9 @@ for k, v in _TEST_ENV.items():
 # Now safe to import app modules
 from src.core.enums import PlanType, SubscriptionStatus, UserRole, Locale
 from src.infrastructure.billing.models import BillingPlan, BillingSettings, BillingTGProxy
-from src.infrastructure.database.models.dto.plan import PlanSnapshotDto
-from src.infrastructure.database.models.dto.subscription import BaseSubscriptionDto
-from src.infrastructure.database.models.dto.user import UserDto
+from src.models.dto.plan import PlanSnapshotDto
+from src.models.dto.subscription import BaseSubscriptionDto
+from src.models.dto.user import UserDto
 
 from remnapy.enums import TrafficLimitStrategy
 
