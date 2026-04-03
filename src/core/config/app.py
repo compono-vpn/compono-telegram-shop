@@ -12,7 +12,6 @@ from src.core.utils.types import LocaleList, StringList
 from .base import BaseConfig
 from .bot import BotConfig
 from .build import BuildConfig
-from .database import DatabaseConfig
 from .redis import RedisConfig
 from .remnawave import RemnawaveConfig
 from .validators import validate_not_change_me
@@ -34,8 +33,7 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
 
     bot: BotConfig = Field(default_factory=BotConfig)
     remnawave: RemnawaveConfig = Field(default_factory=RemnawaveConfig)
-    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
-    redis: RedisConfig = Field(default_factory=RedisConfig)
+redis: RedisConfig = Field(default_factory=RedisConfig)
     build: BuildConfig = Field(default_factory=BuildConfig)
 
     resend_api_key: str = ""
