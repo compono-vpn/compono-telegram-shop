@@ -11,9 +11,11 @@ import httpx
 from loguru import logger
 
 from .models import (
+    BillingCustomer,
     BillingPaymentGateway,
     BillingPaymentResult,
     BillingPlan,
+    BillingPortalLookup,
     BillingPriceDetails,
     BillingPromocode,
     BillingReferral,
@@ -24,6 +26,7 @@ from .models import (
     BillingTGProxy,
     BillingTransaction,
     BillingUser,
+    BillingWebOrder,
     BillingWebOrderResult,
 )
 
@@ -431,6 +434,84 @@ class BillingClient:
             "short_id": short_id,
         })
         return BillingWebOrderResult.model_validate(data)
+
+    async def get_web_order_by_short_id(self, short_id: str) -> Optional[BillingWebOrder]:
+        try:
+            data = await self._get("/web-order/by-short-id", params={"short_id": short_id})
+            return BillingWebOrder.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+    async def exists_claimed_web_order_by_telegram_id(self, telegram_id: int) -> bool:
+        try:
+            data = await self._get(
+                "/web-order/exists-claimed",
+                params={"telegram_id": str(telegram_id)},
+            )
+            return data.get("exists", False) if data else False
+        except BillingClientError:
+            return False
+
+    async def update_web_order(self, payment_id: str, **kwargs: Any) -> None:
+        await self._put("/web-order/update", json={"payment_id": payment_id, **kwargs})
+
+    # ------------------------------------------------------------------ #
+    # Customers
+    # ------------------------------------------------------------------ #
+
+    async def get_customer_by_id(self, customer_id: int) -> Optional[BillingCustomer]:
+        try:
+            data = await self._get(f"/customers/{customer_id}")
+            return BillingCustomer.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+    async def get_customer_by_email(self, email: str) -> Optional[BillingCustomer]:
+        try:
+            data = await self._get("/customers/by-email", params={"email": email})
+            return BillingCustomer.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+    async def get_customer_by_remna_user_uuid(self, uuid: str) -> Optional[BillingCustomer]:
+        try:
+            data = await self._get("/customers/by-remna-uuid", params={"uuid": uuid})
+            return BillingCustomer.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+    async def get_or_create_customer_by_telegram_id(
+        self, telegram_id: int
+    ) -> BillingCustomer:
+        data = await self._post("/customers/get-or-create", json={
+            "telegram_id": telegram_id,
+        })
+        return BillingCustomer.model_validate(data)
+
+    async def update_customer(self, customer_id: int, **kwargs: Any) -> BillingCustomer:
+        data = await self._put(f"/customers/{customer_id}", json=kwargs)
+        return BillingCustomer.model_validate(data)
+
+    # ------------------------------------------------------------------ #
+    # Portal
+    # ------------------------------------------------------------------ #
+
+    async def portal_lookup(self, email: str) -> Optional[BillingPortalLookup]:
+        try:
+            data = await self._post("/portal/lookup", json={"email": email})
+            return BillingPortalLookup.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
 
     # ------------------------------------------------------------------ #
     # Settings

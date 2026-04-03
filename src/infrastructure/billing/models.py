@@ -274,10 +274,56 @@ class BillingStatistics(BaseModel):
 # --- Web Orders ---
 
 
+class BillingWebOrder(BaseModel):
+    """Maps domain.WebOrder from billing API."""
+
+    ID: int = 0
+    PaymentID: str = ""
+    ShortID: str = ""
+    Email: Optional[str] = None
+    Status: str = ""
+    IsTrial: bool = False
+    PlanDurationDays: int = 0
+    PlanSnapshot: Optional[dict[str, Any]] = None
+    SubscriptionURL: Optional[str] = None
+    ClaimedByTelegramID: Optional[int] = None
+    CustomerID: Optional[int] = None
+    CreatedAt: Optional[datetime] = None
+    UpdatedAt: Optional[datetime] = None
+
+
 class BillingWebOrderResult(BaseModel):
     """Maps the web order claim response."""
 
     status: str = ""
+    order: Optional[BillingWebOrder] = None
+
+
+# --- Customers ---
+
+
+class BillingCustomer(BaseModel):
+    """Maps domain.Customer from billing API."""
+
+    ID: int = 0
+    TelegramID: Optional[int] = None
+    Email: Optional[str] = None
+    RemnaUserUUID: Optional[str] = None
+    RemnaUsername: Optional[str] = None
+    SubscriptionURL: Optional[str] = None
+    CreatedAt: Optional[datetime] = None
+    UpdatedAt: Optional[datetime] = None
+
+
+# --- Portal ---
+
+
+class BillingPortalLookup(BaseModel):
+    """Maps the portal lookup response."""
+
+    has_subscription: bool = False
+    subscription_url: Optional[str] = None
+    plan_name: Optional[str] = None
 
 
 # --- TG Proxies ---

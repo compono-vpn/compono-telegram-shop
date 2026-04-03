@@ -14,7 +14,6 @@ from src.core.storage.keys import PendingNotConnectedRemindersKey
 from src.core.utils.iterables import chunked
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.types import RemnaUserDto
-from src.infrastructure.database import UnitOfWork
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
@@ -23,6 +22,9 @@ from src.services.user import UserService
 NOT_CONNECTED_REMINDER_DELAY = 2 * 60 * 60  # 2 hours
 NOT_CONNECTED_NOTIFICATION_KEY = "not_connected_reminder"
 _PENDING_KEY = PendingNotConnectedRemindersKey()
+# Redis dedup: track sent notifications for 90 days
+_SENT_NTF_KEY_PREFIX = "sent_ntf:"
+_SENT_NTF_TTL = 90 * 24 * 60 * 60  # 90 days
 
 
 @broker.task
@@ -170,7 +172,6 @@ async def process_pending_not_connected_reminders_task(
     remnawave_service: FromDishka[RemnawaveService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
-    uow: FromDishka[UnitOfWork],
 ) -> None:
     """Cron task: every 5 min, process reminders whose delay has elapsed."""
     now = time.time()
@@ -190,12 +191,11 @@ async def process_pending_not_connected_reminders_task(
         user_telegram_id = int(member[:sep])
         connect_url = member[sep + 1 :]
 
-        async with uow:
-            already_sent = await uow.repository.sent_notifications.exists(
-                user_telegram_id, NOT_CONNECTED_NOTIFICATION_KEY,
-            )
+        # Redis-based dedup (replaces DB sent_notifications table)
+        dedup_key = f"{_SENT_NTF_KEY_PREFIX}{user_telegram_id}:{NOT_CONNECTED_NOTIFICATION_KEY}"
+        already_sent = await redis_client.exists(dedup_key)
         if already_sent:
-            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already sent (DB)")
+            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already sent (Redis)")
             continue
 
         user = await user_service.get(user_telegram_id)
@@ -224,7 +224,5 @@ async def process_pending_not_connected_reminders_task(
             ntf_type=UserNotificationType.NOT_CONNECTED,
         )
 
-        async with uow:
-            await uow.repository.sent_notifications.mark_sent(
-                user_telegram_id, NOT_CONNECTED_NOTIFICATION_KEY,
-            )
+        # Mark as sent in Redis with TTL
+        await redis_client.setex(dedup_key, _SENT_NTF_TTL, "1")

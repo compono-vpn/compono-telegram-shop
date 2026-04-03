@@ -19,7 +19,7 @@ from remnapy.exceptions import NotFoundError
 from src.core.config import AppConfig
 from src.core.constants import API_V1
 from src.core.storage.keys import OtpKey, OtpRateLimitKey
-from src.infrastructure.database import UnitOfWork
+from src.infrastructure.billing import BillingClient
 from src.services.email import EmailService
 
 router = APIRouter(prefix=API_V1 + "/app")
@@ -150,7 +150,7 @@ async def me(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     *,
     config: FromDishka[AppConfig],
-    uow: FromDishka[UnitOfWork],
+    billing: FromDishka[BillingClient],
     remnawave: FromDishka[RemnawaveSDK],
 ) -> JSONResponse:
     jwt_secret = config.jwt_secret.get_secret_value()
@@ -166,25 +166,22 @@ async def me(
 
     email = payload["email"]
 
-    async with uow:
-        order = await uow.repository.web_orders.get_latest_completed_by_email(email)
+    lookup = await billing.portal_lookup(email)
 
-    if not order or not order.subscription_url:
+    if not lookup or not lookup.has_subscription or not lookup.subscription_url:
         return JSONResponse(
             content=MeResponse(email=email, has_subscription=False).model_dump()
         )
 
-    parsed = urlparse(order.subscription_url)
+    parsed = urlparse(lookup.subscription_url)
     short_uuid = parsed.path.rstrip("/").split("/")[-1]
 
-    plan_name = "VPN"
-    if order.plan_snapshot and isinstance(order.plan_snapshot, dict):
-        plan_name = order.plan_snapshot.get("name", plan_name)
+    plan_name = lookup.plan_name or "VPN"
 
     sub_response = SubscriptionResponse(
         status="unknown",
         plan_name=plan_name,
-        subscription_url=order.subscription_url,
+        subscription_url=lookup.subscription_url,
         short_uuid=short_uuid,
     )
 

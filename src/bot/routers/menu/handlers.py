@@ -16,7 +16,6 @@ from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import PlanSnapshotDto, UserDto
 from src.infrastructure.taskiq.tasks.subscriptions import trial_subscription_task
 from src.services.notification import NotificationService
@@ -45,7 +44,7 @@ async def on_start_command(
     message: Message,
     user: UserDto,
     dialog_manager: DialogManager,
-    uow: FromDishka[UnitOfWork],
+    billing: FromDishka[BillingClient],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
@@ -55,7 +54,7 @@ async def on_start_command(
         param = message.text.split()[1]
         if param.startswith("web_"):
             await _handle_web_link(
-                message, user, param, uow, remnawave_service,
+                message, user, param, billing, remnawave_service,
                 subscription_service, notification_service,
             )
 
@@ -66,7 +65,7 @@ async def _handle_web_link(
     message: Message,
     user: UserDto,
     param: str,
-    uow: UnitOfWork,
+    billing: BillingClient,
     remnawave_service: RemnawaveService,
     subscription_service: SubscriptionService,
     notification_service: NotificationService,
@@ -81,10 +80,9 @@ async def _handle_web_link(
     username = f"web_{short_id}"
 
     # 1. Validate the web order exists and is completed
-    async with uow:
-        order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
+    order = await billing.get_web_order_by_short_id(short_id)
 
-    if not order or order.status != "completed" or not order.subscription_url:
+    if not order or order.Status != "completed" or not order.SubscriptionURL:
         logger.warning(f"{log(user)} Web link '{param}' — order not found or not completed")
         await message.answer(
             "Ссылка недействительна или оплата ещё не завершена. "
@@ -92,22 +90,21 @@ async def _handle_web_link(
         )
         return
 
-    is_trial = order.is_trial
+    is_trial = order.IsTrial
 
     # 2. Check if this order was already claimed by someone
-    if order.claimed_by_telegram_id is not None:
-        if order.claimed_by_telegram_id == user.telegram_id:
+    if order.ClaimedByTelegramID is not None:
+        if order.ClaimedByTelegramID == user.telegram_id:
             logger.info(f"{log(user)} Re-opened already claimed web link '{param}'")
             await message.answer("Эта подписка уже привязана к вашему аккаунту.")
         else:
-            logger.warning(f"{log(user)} Tried to claim web link '{param}' already claimed by {order.claimed_by_telegram_id}")
+            logger.warning(f"{log(user)} Tried to claim web link '{param}' already claimed by {order.ClaimedByTelegramID}")
             await message.answer("Эта ссылка уже была использована другим пользователем.")
         return
 
     # 3. Trial-only checks (skip for full purchases)
     if is_trial:
-        async with uow:
-            already_claimed = await uow.repository.web_orders.exists_claimed_by_telegram_id(user.telegram_id)
+        already_claimed = await billing.exists_claimed_web_order_by_telegram_id(user.telegram_id)
 
         if already_claimed:
             logger.warning(f"{log(user)} Already claimed a web trial, rejecting '{param}'")
@@ -135,42 +132,32 @@ async def _handle_web_link(
         return
 
     # 5. Claim the order — atomically set claimed_by_telegram_id
-    async with uow:
-        await uow.repository.web_orders.update_by_payment_id(
-            order.payment_id,
-            claimed_by_telegram_id=user.telegram_id,
-        )
+    await billing.update_web_order(
+        order.PaymentID,
+        claimed_by_telegram_id=user.telegram_id,
+    )
 
     # 5b. Link Customer to this telegram user
     customer = None
-    if order.customer_id:
-        async with uow:
-            customer = await uow.repository.customers.get_by_id(order.customer_id)
-    if not customer and order.email:
-        async with uow:
-            customer = await uow.repository.customers.get_by_email(order.email)
+    if order.CustomerID:
+        customer = await billing.get_customer_by_id(order.CustomerID)
+    if not customer and order.Email:
+        customer = await billing.get_customer_by_email(order.Email)
     if customer:
-        if not customer.telegram_id:
-            async with uow:
-                await uow.repository.customers.update(
-                    customer.id, telegram_id=user.telegram_id
-                )
+        if not customer.TelegramID:
+            await billing.update_customer(
+                customer.ID, telegram_id=user.telegram_id
+            )
         if not user.customer_id:
-            async with uow:
-                await uow.repository.users.update(
-                    user.telegram_id, customer_id=customer.id
-                )
+            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
     # 5c. Append email to user's linked_emails (deduplicated)
-    if order.email and order.email not in (user.linked_emails or []):
+    if order.Email and order.Email not in (user.linked_emails or []):
         emails = list(user.linked_emails or [])
-        emails.append(order.email)
+        emails.append(order.Email)
         user.linked_emails = emails
-        async with uow:
-            await uow.repository.users.update(
-                user.telegram_id, linked_emails=emails,
-            )
-        logger.info(f"{log(user)} Linked email '{order.email}' (total: {len(emails)})")
+        await billing.update_user(user.telegram_id, {"linked_emails": emails})
+        logger.info(f"{log(user)} Linked email '{order.Email}' (total: {len(emails)})")
 
     # 6. Update Remnawave user with telegram_id
     await remnawave_service.remnawave.users.update_user(
@@ -184,10 +171,10 @@ async def _handle_web_link(
     from datetime import timedelta  # noqa: PLC0415
     from src.core.utils.time import datetime_now  # noqa: PLC0415
 
-    total_days = order.plan_duration_days
+    total_days = order.PlanDurationDays
 
-    if order.plan_snapshot and not is_trial:
-        snapshot = order.plan_snapshot
+    if order.PlanSnapshot and not is_trial:
+        snapshot = order.PlanSnapshot
         plan = PlanSnapshotDto(
             id=snapshot.get("id", -1),
             name=snapshot.get("name", "Web Purchase"),
@@ -251,7 +238,7 @@ async def _handle_web_link(
 
         logger.info(
             f"{log(user)} Extended existing subscription by {total_days}d "
-            f"(new expiry: {existing.expire_at}, email: {order.email})"
+            f"(new expiry: {existing.expire_at}, email: {order.Email})"
         )
         await message.answer(
             f"✅ Подписка продлена на {total_days} дней!\n"
@@ -277,7 +264,7 @@ async def _handle_web_link(
         )
         await subscription_service.create(user, subscription)
         kind = "trial" if is_trial else "purchase"
-        logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.email}, {total_days}d)")
+        logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.Email}, {total_days}d)")
         await message.answer(
             f"✅ Подписка привязана!\n"
             f"📦 План: {plan.name} ({total_days}д)\n"
@@ -292,7 +279,7 @@ async def _handle_web_link(
                 "user_id": str(user.telegram_id),
                 "user_name": user.name,
                 "username": user.username or False,
-                "email": order.email,
+                "email": order.Email,
                 "plan_name": plan.name,
                 "plan_duration": total_days,
             },
@@ -305,7 +292,7 @@ async def _handle_web_link(
 async def on_subscription_url_paste(
     message: Message,
     user: UserDto,
-    uow: FromDishka[UnitOfWork],
+    billing: FromDishka[BillingClient],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
@@ -367,31 +354,24 @@ async def on_subscription_url_paste(
     )
 
     # Link Customer if one exists for this Remnawave user
-    async with uow:
-        customer = await uow.repository.customers.get_by_remna_user_uuid(sub_info.uuid)
+    customer = await billing.get_customer_by_remna_user_uuid(str(sub_info.uuid))
     if customer:
-        if not customer.telegram_id:
-            async with uow:
-                await uow.repository.customers.update(
-                    customer.id, telegram_id=user.telegram_id
-                )
+        if not customer.TelegramID:
+            await billing.update_customer(
+                customer.ID, telegram_id=user.telegram_id
+            )
         if not user.customer_id:
-            async with uow:
-                await uow.repository.users.update(
-                    user.telegram_id, customer_id=customer.id
-                )
+            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
     # Try to find matching web order to claim it
     if sub_info.username and sub_info.username.startswith("web_"):
         short_id = sub_info.username[len("web_"):]
-        async with uow:
-            order = await uow.repository.web_orders.get_by_payment_id_prefix(short_id)
-        if order and order.claimed_by_telegram_id is None:
-            async with uow:
-                await uow.repository.web_orders.update_by_payment_id(
-                    order.payment_id,
-                    claimed_by_telegram_id=user.telegram_id,
-                )
+        order = await billing.get_web_order_by_short_id(short_id)
+        if order and order.ClaimedByTelegramID is None:
+            await billing.update_web_order(
+                order.PaymentID,
+                claimed_by_telegram_id=user.telegram_id,
+            )
 
     # Create local subscription
     sub_url = remnawave_service._rewrite_sub_url(sub_info.subscription_url)

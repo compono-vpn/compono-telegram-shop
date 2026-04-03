@@ -1,3 +1,9 @@
+# TODO: Migrate BroadcastService to BillingClient.
+# Broadcasts are bot-specific and billing doesn't have broadcast tables yet.
+# This is the ONLY service still using UnitOfWork (direct DB access).
+# Next steps: add broadcast CRUD endpoints to compono-billing, then rewrite
+# this service to use BillingClient like all other services.
+
 from typing import Optional
 from uuid import UUID
 

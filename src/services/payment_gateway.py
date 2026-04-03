@@ -23,24 +23,16 @@ from src.core.utils.formatters import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.database import UnitOfWork
+from src.infrastructure.billing import BillingClient, billing_gateway_to_dto
+from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.database.models.dto import (
-    AnyGatewaySettingsDto,
-    CryptomusGatewaySettingsDto,
-    CryptopayGatewaySettingsDto,
-    HeleketGatewaySettingsDto,
     PaymentGatewayDto,
-    PlategaGatewaySettingsDto,
     PaymentResult,
     PlanSnapshotDto,
     PriceDetailsDto,
-    RobokassaGatewaySettingsDto,
     TransactionDto,
     UserDto,
-    YookassaGatewaySettingsDto,
-    YoomoneyGatewaySettingsDto,
 )
-from src.infrastructure.database.models.sql import PaymentGateway
 from src.infrastructure.payment_gateways import BasePaymentGateway, PaymentGatewayFactory
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.taskiq.tasks.subscriptions import purchase_subscription_task
@@ -54,7 +46,7 @@ from .user import UserService
 
 
 class PaymentGatewayService(BaseService):
-    uow: UnitOfWork
+    billing: BillingClient
     transaction_service: TransactionService
     subscription_service: SubscriptionService
     payment_gateway_factory: PaymentGatewayFactory
@@ -69,7 +61,7 @@ class PaymentGatewayService(BaseService):
         redis_repository: RedisRepository,
         translator_hub: TranslatorHub,
         #
-        uow: UnitOfWork,
+        billing: BillingClient,
         transaction_service: TransactionService,
         subscription_service: SubscriptionService,
         payment_gateway_factory: PaymentGatewayFactory,
@@ -78,7 +70,7 @@ class PaymentGatewayService(BaseService):
         user_service: UserService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
-        self.uow = uow
+        self.billing = billing
         self.transaction_service = transaction_service
         self.subscription_service = subscription_service
         self.payment_gateway_factory = payment_gateway_factory
@@ -87,93 +79,79 @@ class PaymentGatewayService(BaseService):
         self.user_service = user_service
 
     async def create_default(self) -> None:
-        for gateway_type in PaymentGatewayType:
-            settings: Optional[AnyGatewaySettingsDto]
+        existing_gateways = await self.billing.list_gateways()
+        existing_types = {g.Type for g in existing_gateways}
 
-            async with self.uow as uow:
-                if await uow.repository.gateways.exists_by_type(gateway_type):
-                    continue
+        for gateway_type in PaymentGatewayType:
+            if gateway_type.value in existing_types:
+                continue
 
             match gateway_type:
                 case PaymentGatewayType.TELEGRAM_STARS:
                     is_active = True
-                    settings = None
                 case PaymentGatewayType.YOOKASSA:
                     is_active = False
-                    settings = YookassaGatewaySettingsDto()
                 case PaymentGatewayType.YOOMONEY:
                     is_active = False
-                    settings = YoomoneyGatewaySettingsDto()
                 case PaymentGatewayType.CRYPTOMUS:
                     is_active = False
-                    settings = CryptomusGatewaySettingsDto()
                 case PaymentGatewayType.HELEKET:
                     is_active = False
-                    settings = HeleketGatewaySettingsDto()
                 case PaymentGatewayType.PLATEGA:
                     is_active = False
-                    settings = PlategaGatewaySettingsDto()
-                # case PaymentGatewayType.CRYPTOPAY:
-                #     is_active = False
-                #     settings = CryptopayGatewaySettingsDto()
-                # case PaymentGatewayType.ROBOKASSA:
-                #     is_active = False
-                #     settings = RobokassaGatewaySettingsDto()
                 case _:
                     logger.warning(f"Unhandled payment gateway type '{gateway_type}' - skipping")
                     continue
 
-            async with self.uow:
-                order_index = await self.uow.repository.gateways.get_max_index()
+            gateway_data = {
+                "order_index": len(existing_gateways) + 1,
+                "type": gateway_type.value,
+                "channel": GatewayChannel.ALL.value,
+                "currency": Currency.from_gateway_type(gateway_type).value,
+                "is_active": is_active,
+            }
 
-                order_index = (order_index or 0) + 1
-
-                payment_gateway = PaymentGatewayDto(
-                    order_index=order_index,
-                    type=gateway_type,
-                    channel=GatewayChannel.ALL,
-                    currency=Currency.from_gateway_type(gateway_type),
-                    is_active=is_active,
-                    settings=settings,
-                )
-
-                db_payment_gateway = PaymentGateway(**payment_gateway.model_dump())
-                db_payment_gateway = await self.uow.repository.gateways.create(db_payment_gateway)
-
+            await self.billing.create_gateway(gateway_data)
+            existing_gateways = await self.billing.list_gateways()
             logger.info(f"Payment gateway '{gateway_type}' created")
 
     async def get(self, gateway_id: int) -> Optional[PaymentGatewayDto]:
-        async with self.uow:
-            db_gateway = await self.uow.repository.gateways.get(gateway_id)
+        billing_gw = await self.billing.get_gateway(gateway_id)
 
-        if not db_gateway:
+        if not billing_gw:
             logger.warning(f"Payment gateway '{gateway_id}' not found")
             return None
 
         logger.debug(f"Retrieved payment gateway '{gateway_id}'")
-        return PaymentGatewayDto.from_model(db_gateway, decrypt=True)
+        return billing_gateway_to_dto(billing_gw)
 
     async def get_by_type(
         self,
         gateway_type: PaymentGatewayType,
         channel: Optional[GatewayChannel] = None,
     ) -> Optional[PaymentGatewayDto]:
-        async with self.uow:
-            db_gateway = await self.uow.repository.gateways.get_by_type(gateway_type, channel)
+        billing_gw = await self.billing.get_gateway_by_type(gateway_type.value)
 
-        if not db_gateway:
+        if not billing_gw:
             logger.warning(f"Payment gateway of type '{gateway_type}' not found")
             return None
 
+        # Filter by channel if specified
+        if channel and billing_gw.Channel != GatewayChannel.ALL.value and billing_gw.Channel != channel.value:
+            logger.warning(f"Payment gateway of type '{gateway_type}' not found for channel '{channel}'")
+            return None
+
         logger.debug(f"Retrieved payment gateway of type '{gateway_type}'")
-        return PaymentGatewayDto.from_model(db_gateway, decrypt=True)
+        return billing_gateway_to_dto(billing_gw)
 
     async def get_all(self, sorted: bool = False) -> list[PaymentGatewayDto]:
-        async with self.uow:
-            db_gateways = await self.uow.repository.gateways.get_all(sorted)
+        billing_gateways = await self.billing.list_gateways()
 
-        logger.debug(f"Retrieved '{len(db_gateways)}' payment gateways")
-        return PaymentGatewayDto.from_model_list(db_gateways, decrypt=False)
+        if sorted:
+            billing_gateways.sort(key=lambda g: g.OrderIndex)
+
+        logger.debug(f"Retrieved '{len(billing_gateways)}' payment gateways")
+        return [billing_gateway_to_dto(g) for g in billing_gateways]
 
     async def update(self, gateway: PaymentGatewayDto) -> Optional[PaymentGatewayDto]:
         updated_data = gateway.changed_data
@@ -181,58 +159,55 @@ class PaymentGatewayService(BaseService):
         if gateway.settings and gateway.settings.changed_data:
             updated_data["settings"] = gateway.settings.prepare_init_data(encrypt=True)
 
-        async with self.uow:
-            db_updated_gateway = await self.uow.repository.gateways.update(
-                gateway_id=gateway.id,  # type: ignore[arg-type]
-                **updated_data,
-            )
+        gateway_data = {
+            "id": gateway.id,
+            **updated_data,
+        }
+        # Serialize enum values for the API
+        for key, value in list(gateway_data.items()):
+            if hasattr(value, "value"):
+                gateway_data[key] = value.value
 
-        if db_updated_gateway:
-            logger.info(f"Payment gateway '{gateway.type}' updated successfully")
-        else:
+        try:
+            billing_gw = await self.billing.update_gateway(gateway_data)
+        except BillingClientError as e:
             logger.warning(
                 f"Attempted to update gateway '{gateway.type}' (ID: '{gateway.id}'), "
-                f"but gateway was not found or update failed"
+                f"but update failed: {e}"
             )
+            return None
 
-        return PaymentGatewayDto.from_model(db_updated_gateway, decrypt=True)
+        logger.info(f"Payment gateway '{gateway.type}' updated successfully")
+        return billing_gateway_to_dto(billing_gw)
 
     async def filter_active(
         self,
         is_active: bool = True,
         channel: Optional[GatewayChannel] = None,
     ) -> list[PaymentGatewayDto]:
-        async with self.uow:
-            db_gateways = await self.uow.repository.gateways.filter_active(is_active, channel)
+        if is_active:
+            billing_gateways = await self.billing.list_active_gateways()
+        else:
+            billing_gateways = await self.billing.list_gateways()
+            billing_gateways = [g for g in billing_gateways if not g.IsActive]
 
-        logger.debug(f"Filtered active gateways: '{is_active}', found '{len(db_gateways)}'")
-        return PaymentGatewayDto.from_model_list(db_gateways, decrypt=False)
+        if channel:
+            billing_gateways = [
+                g for g in billing_gateways
+                if g.Channel == GatewayChannel.ALL.value or g.Channel == channel.value
+            ]
+
+        logger.debug(f"Filtered active gateways: '{is_active}', found '{len(billing_gateways)}'")
+        return [billing_gateway_to_dto(g) for g in billing_gateways]
 
     async def move_gateway_up(self, gateway_id: int) -> bool:
-        async with self.uow:
-            db_gateways = await self.uow.repository.gateways.get_all()
-            db_gateways.sort(key=lambda p: p.order_index)
-
-            index = next((i for i, p in enumerate(db_gateways) if p.id == gateway_id), None)
-            if index is None:
-                logger.warning(
-                    f"Payment gateway with ID '{gateway_id}' not found for move operation"
-                )
-                return False
-
-            if index == 0:
-                gateway = db_gateways.pop(0)
-                db_gateways.append(gateway)
-                logger.debug(f"Payment gateway '{gateway_id}' moved from top to bottom")
-            else:
-                db_gateways[index - 1], db_gateways[index] = (
-                    db_gateways[index],
-                    db_gateways[index - 1],
-                )
-                logger.debug(f"Payment gateway '{gateway_id}' moved up one position")
-
-            for i, gateway in enumerate(db_gateways, start=1):
-                gateway.order_index = i
+        try:
+            await self.billing.move_gateway_up(gateway_id)
+        except BillingClientError as e:
+            logger.warning(
+                f"Payment gateway with ID '{gateway_id}' not found for move operation: {e}"
+            )
+            return False
 
         logger.info(f"Payment gateway '{gateway_id}' reorder successfully")
         return True
@@ -440,9 +415,9 @@ class PaymentGatewayService(BaseService):
     async def list_active_by_type(
         self, gateway_type: PaymentGatewayType
     ) -> list[PaymentGatewayDto]:
-        async with self.uow:
-            db_gateways = await self.uow.repository.gateways.list_by_type_active(gateway_type)
-        return PaymentGatewayDto.from_model_list(db_gateways, decrypt=True)
+        billing_gateways = await self.billing.list_active_gateways()
+        filtered = [g for g in billing_gateways if g.Type == gateway_type.value]
+        return [billing_gateway_to_dto(g) for g in filtered]
 
     async def _get_gateway_instance(
         self,

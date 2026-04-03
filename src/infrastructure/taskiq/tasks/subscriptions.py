@@ -24,7 +24,7 @@ from src.core.utils.formatters import (
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.types import RemnaUserDto
-from src.infrastructure.database import UnitOfWork
+from src.infrastructure.billing import BillingClient
 from src.infrastructure.database.models.dto import (
     PlanSnapshotDto,
     SubscriptionDto,
@@ -71,7 +71,7 @@ async def trial_subscription_task(
     plan: PlanSnapshotDto,
     skip_redirect: bool,
     config: FromDishka[AppConfig],
-    uow: FromDishka[UnitOfWork],
+    billing: FromDishka[BillingClient],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
@@ -82,23 +82,16 @@ async def trial_subscription_task(
     try:
         created_user = await remnawave_service.create_user(user, plan=plan)
 
-        # Link Customer record
-        async with uow:
-            customer, _ = await uow.repository.customers.get_or_create_by_telegram_id(
-                user.telegram_id
-            )
-        async with uow:
-            await uow.repository.customers.update(
-                customer.id,
-                remna_user_uuid=created_user.uuid,
-                remna_username=created_user.username,
-                subscription_url=created_user.subscription_url,
-            )
+        # Link Customer record via billing API
+        customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
+        await billing.update_customer(
+            customer.ID,
+            remna_user_uuid=str(created_user.uuid),
+            remna_username=created_user.username,
+            subscription_url=created_user.subscription_url,
+        )
         if not user.customer_id:
-            async with uow:
-                await uow.repository.users.update(
-                    user.telegram_id, customer_id=customer.id
-                )
+            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
         trial_subscription = SubscriptionDto(
             user_remna_id=created_user.uuid,
@@ -193,7 +186,7 @@ async def purchase_subscription_task(
     transaction: TransactionDto,
     subscription: Optional[SubscriptionDto],
     config: FromDishka[AppConfig],
-    uow: FromDishka[UnitOfWork],
+    billing: FromDishka[BillingClient],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     transaction_service: FromDishka[TransactionService],
@@ -215,23 +208,16 @@ async def purchase_subscription_task(
         if purchase_type == PurchaseType.NEW and not has_trial:
             created_user = await remnawave_service.create_user(user, plan=plan)
 
-            # Link Customer record
-            async with uow:
-                customer, _ = await uow.repository.customers.get_or_create_by_telegram_id(
-                    user.telegram_id
-                )
-            async with uow:
-                await uow.repository.customers.update(
-                    customer.id,
-                    remna_user_uuid=created_user.uuid,
-                    remna_username=created_user.username,
-                    subscription_url=created_user.subscription_url,
-                )
+            # Link Customer record via billing API
+            customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
+            await billing.update_customer(
+                customer.ID,
+                remna_user_uuid=str(created_user.uuid),
+                remna_username=created_user.username,
+                subscription_url=created_user.subscription_url,
+            )
             if not user.customer_id:
-                async with uow:
-                    await uow.repository.users.update(
-                        user.telegram_id, customer_id=customer.id
-                    )
+                await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
             new_subscription = SubscriptionDto(
                 user_remna_id=created_user.uuid,
