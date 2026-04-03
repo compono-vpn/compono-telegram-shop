@@ -11,6 +11,9 @@ import httpx
 from loguru import logger
 
 from .models import (
+    BillingAudienceCount,
+    BillingBroadcast,
+    BillingBroadcastMessage,
     BillingCustomer,
     BillingPaymentGateway,
     BillingPaymentResult,
@@ -682,3 +685,86 @@ class BillingClient:
     async def get_tg_proxies(self, plan_id: int) -> list[BillingTGProxy]:
         data = await self._get("/tg-proxies", params={"plan_id": plan_id})
         return [BillingTGProxy.model_validate(p) for p in (data or [])]
+
+    # ------------------------------------------------------------------ #
+    # Broadcasts
+    # ------------------------------------------------------------------ #
+
+    async def create_broadcast(self, broadcast_data: dict[str, Any]) -> BillingBroadcast:
+        data = await self._post("/broadcasts", json=broadcast_data)
+        return BillingBroadcast.model_validate(data)
+
+    async def list_broadcasts(self) -> list[BillingBroadcast]:
+        data = await self._get("/broadcasts")
+        return [BillingBroadcast.model_validate(b) for b in (data or [])]
+
+    async def get_broadcast(self, broadcast_id: int) -> Optional[BillingBroadcast]:
+        try:
+            data = await self._get(f"/broadcasts/{broadcast_id}")
+            return BillingBroadcast.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+    async def update_broadcast(
+        self, broadcast_id: int, broadcast_data: dict[str, Any],
+    ) -> Optional[BillingBroadcast]:
+        try:
+            data = await self._put(f"/broadcasts/{broadcast_id}", json=broadcast_data)
+            return BillingBroadcast.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+    async def delete_broadcast(self, broadcast_id: int) -> None:
+        await self._delete(f"/broadcasts/{broadcast_id}")
+
+    async def create_broadcast_messages(
+        self, broadcast_id: int, messages_data: list[dict[str, Any]],
+    ) -> list[BillingBroadcastMessage]:
+        data = await self._post(
+            f"/broadcasts/{broadcast_id}/messages",
+            json={"messages": messages_data},
+        )
+        return [BillingBroadcastMessage.model_validate(m) for m in (data or [])]
+
+    async def list_broadcast_messages(
+        self, broadcast_id: int,
+    ) -> list[BillingBroadcastMessage]:
+        data = await self._get(f"/broadcasts/{broadcast_id}/messages")
+        return [BillingBroadcastMessage.model_validate(m) for m in (data or [])]
+
+    async def update_broadcast_messages(
+        self, messages_data: list[dict[str, Any]],
+    ) -> None:
+        await self._put("/broadcast-messages", json={"messages": messages_data})
+
+    async def bulk_update_broadcast_messages(
+        self, broadcast_id: int, messages_data: list[dict[str, Any]],
+    ) -> None:
+        await self._put(
+            f"/broadcasts/{broadcast_id}/messages/bulk-update",
+            json={"messages": messages_data},
+        )
+
+    async def get_broadcast_audience_count(
+        self, audience: str, plan_id: Optional[int] = None,
+    ) -> int:
+        params: dict[str, Any] = {"audience": audience}
+        if plan_id is not None:
+            params["plan_id"] = plan_id
+        data = await self._get("/broadcasts/audience-count", params=params)
+        if isinstance(data, dict):
+            return data.get("count", 0)
+        return 0
+
+    async def get_broadcast_audience(
+        self, audience: str, plan_id: Optional[int] = None,
+    ) -> list[BillingUser]:
+        params: dict[str, Any] = {"audience": audience}
+        if plan_id is not None:
+            params["plan_id"] = plan_id
+        data = await self._get("/broadcasts/audience", params=params)
+        return [BillingUser.model_validate(u) for u in (data or [])]
