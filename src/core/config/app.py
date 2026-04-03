@@ -46,8 +46,8 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     otp_max_attempts: int = 5
     jwt_expiry_days: int = 30
 
-    billing_api_url: str = ""
-    billing_internal_secret: SecretStr = SecretStr("")
+    api_url: str = ""
+    api_internal_secret: SecretStr = SecretStr("")
 
     kafka_brokers: str = "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
     kafka_topic_env: str = "stage"
