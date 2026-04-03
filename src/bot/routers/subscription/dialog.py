@@ -173,7 +173,7 @@ confirm = Window(
             text=I18nFormat("btn-subscription-get"),
             id=f"{PURCHASE_PREFIX}get",
             on_click=on_get_subscription,
-            when=~F["url"],
+            when=F["is_free"],
         ),
     ),
     Row(
