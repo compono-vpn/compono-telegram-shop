@@ -66,9 +66,23 @@ class SubscriptionService(BaseService):
         return f"{parsed.scheme}://{netloc}/connect/{token}"
 
     async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
-        data = subscription.model_dump(exclude={"user"}, mode="json")
-        data["plan"] = subscription.plan.model_dump(mode="json")
-        data["user_telegram_id"] = user.telegram_id
+        # Billing API (Go) Subscription struct has no json tags — expects PascalCase keys.
+        # PlanSnapshot has snake_case json tags, so plan dict stays snake_case.
+        data = {
+            "UserRemnaID": str(subscription.user_remna_id),
+            "UserTelegramID": user.telegram_id,
+            "Status": subscription.status.value if subscription.status else "ACTIVE",
+            "IsTrial": subscription.is_trial,
+            "TrafficLimit": subscription.traffic_limit,
+            "DeviceLimit": subscription.device_limit,
+            "TrafficLimitStrategy": subscription.traffic_limit_strategy.value if subscription.traffic_limit_strategy else "NO_RESET",
+            "Tag": subscription.tag,
+            "InternalSquads": [str(s) for s in subscription.internal_squads],
+            "ExternalSquad": str(subscription.external_squad) if subscription.external_squad else None,
+            "ExpireAt": subscription.expire_at.isoformat() if subscription.expire_at else None,
+            "URL": subscription.url,
+            "Plan": subscription.plan.model_dump(mode="json"),
+        }
         billing_sub = await self.billing.create_subscription(data)
         created = billing_subscription_to_dto(billing_sub)
         await self.user_service.set_current_subscription(
