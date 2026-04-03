@@ -36,6 +36,8 @@ from src.infrastructure.database.models.dto import (
     PriceDetailsDto,
     PromocodeActivationDto,
     PromocodeDto,
+    ReferralDto,
+    ReferralRewardDto,
     SettingsDto,
     ReferralSettingsDto,
     SystemNotificationDto,
@@ -52,6 +54,8 @@ from src.core.enums import UserRole, Locale
 
 from .models import (
     BillingUser,
+    BillingReferral,
+    BillingReferralReward,
     BillingSettings,
     BillingPaymentGateway,
     BillingPlan,
@@ -343,4 +347,43 @@ def billing_settings_to_dto(bs: BillingSettings) -> SettingsDto:
         user_notifications=user_ntf,
         system_notifications=sys_ntf,
         referral=referral,
+    )
+
+
+# ------------------------------------------------------------------ #
+# Referrals
+# ------------------------------------------------------------------ #
+
+
+def _stub_user(telegram_id: int) -> "BaseUserDto":
+    """Create a minimal BaseUserDto from just a telegram ID.
+
+    The billing API only returns telegram IDs for referrer/referred,
+    not full user objects. This stub is sufficient for the referral
+    service which only accesses telegram_id on these objects.
+    """
+    from src.infrastructure.database.models.dto.user import BaseUserDto  # noqa: PLC0415
+
+    return BaseUserDto(telegram_id=telegram_id, name="")
+
+
+def billing_referral_to_dto(br: BillingReferral) -> ReferralDto:
+    return ReferralDto(
+        id=br.ID if br.ID else None,
+        level=ReferralLevel(br.Level) if br.Level else ReferralLevel.FIRST,
+        referrer=_stub_user(br.ReferrerTelegramID),
+        referred=_stub_user(br.ReferredTelegramID),
+        created_at=br.CreatedAt,
+        updated_at=br.UpdatedAt,
+    )
+
+
+def billing_referral_reward_to_dto(brr: BillingReferralReward) -> ReferralRewardDto:
+    return ReferralRewardDto(
+        id=brr.ID if brr.ID else None,
+        type=ReferralRewardType(brr.Type) if brr.Type else ReferralRewardType.EXTRA_DAYS,
+        amount=brr.Amount,
+        is_issued=brr.IsIssued,
+        created_at=brr.CreatedAt,
+        updated_at=brr.UpdatedAt,
     )

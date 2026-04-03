@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Any, List, Optional, cast
+from typing import Any, Optional, cast
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile, Message, TelegramObject
@@ -19,16 +19,16 @@ from src.core.enums import (
 )
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
-from src.infrastructure.billing.client import BillingClientError
-from src.infrastructure.database import UnitOfWork
+from src.infrastructure.billing.converters import (
+    billing_referral_reward_to_dto,
+    billing_referral_to_dto,
+)
 from src.infrastructure.database.models.dto import (
     ReferralDto,
     ReferralRewardDto,
-    ReferralSettingsDto,
     TransactionDto,
     UserDto,
 )
-from src.infrastructure.database.models.sql import Referral, ReferralReward
 from src.infrastructure.redis import RedisRepository
 from src.services.notification import NotificationService
 from src.services.settings import SettingsService
@@ -52,14 +52,12 @@ class ReferralService(BaseService):
         translator_hub: TranslatorHub,
         #
         billing: BillingClient,
-        uow: UnitOfWork,
         user_service: UserService,
         settings_service: SettingsService,
         notification_service: NotificationService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.billing = billing
-        self.uow = uow
         self.user_service = user_service
         self.settings_service = settings_service
         self.notification_service = notification_service
@@ -68,49 +66,41 @@ class ReferralService(BaseService):
     async def create_referral(
         self, referrer: UserDto, referred: UserDto, level: ReferralLevel,
     ) -> ReferralDto:
-        async with self.uow:
-            referral = await self.uow.repository.referrals.create_referral(
-                Referral(
-                    referrer_telegram_id=referrer.telegram_id,
-                    referred_telegram_id=referred.telegram_id,
-                    level=level,
-                )
-            )
+        billing_ref = await self.billing.create_referral(
+            referrer_telegram_id=referrer.telegram_id,
+            referred_telegram_id=referred.telegram_id,
+            level=level.value,
+        )
         logger.info(f"Referral created: {referrer.telegram_id} -> {referred.telegram_id}")
-        return ReferralDto.from_model(referral)  # type: ignore[return-value]
+        return billing_referral_to_dto(billing_ref)
 
     async def get_referral_by_referred(self, telegram_id: int) -> Optional[ReferralDto]:
-        async with self.uow:
-            referral = await self.uow.repository.referrals.get_referral_by_referred(telegram_id)
-        return ReferralDto.from_model(referral) if referral else None
+        billing_ref = await self.billing.get_referral_by_referred(telegram_id)
+        return billing_referral_to_dto(billing_ref) if billing_ref else None
 
     async def get_referrals_by_referrer(self, telegram_id: int) -> list[ReferralDto]:
-        async with self.uow:
-            referrals = await self.uow.repository.referrals.get_referrals_by_referrer(telegram_id)
-        return ReferralDto.from_model_list(referrals)
+        billing_refs = await self.billing.get_referrals_by_referrer(telegram_id)
+        return [billing_referral_to_dto(r) for r in billing_refs]
 
     async def create_reward(
         self, referral_id: int, user_telegram_id: int,
         type: ReferralRewardType, amount: int,
     ) -> ReferralRewardDto:
-        async with self.uow:
-            reward = await self.uow.repository.referrals.create_reward(
-                ReferralReward(
-                    referral_id=referral_id, user_telegram_id=user_telegram_id,
-                    type=type, amount=amount, is_issued=False,
-                )
-            )
+        billing_reward = await self.billing.create_referral_reward(
+            referral_id=referral_id,
+            user_telegram_id=user_telegram_id,
+            type=type.value,
+            amount=amount,
+        )
         logger.info(f"ReferralReward created for user '{user_telegram_id}'")
-        return ReferralRewardDto.from_model(reward)  # type: ignore[return-value]
+        return billing_referral_reward_to_dto(billing_reward)
 
     async def get_rewards_by_referral(self, referral_id: int) -> list[ReferralRewardDto]:
-        async with self.uow:
-            rewards = await self.uow.repository.referrals.get_rewards_by_referral(referral_id)
-        return ReferralRewardDto.from_model_list(rewards)
+        billing_rewards = await self.billing.get_rewards_by_referral(referral_id)
+        return [billing_referral_reward_to_dto(r) for r in billing_rewards]
 
     async def mark_reward_as_issued(self, reward_id: int) -> None:
-        async with self.uow:
-            await self.uow.repository.referrals.update_reward(reward_id, is_issued=True)
+        await self.billing.update_referral_reward(reward_id, is_issued=True)
         logger.info(f"Marked reward '{reward_id}' as issued")
 
     async def assign_referral_rewards(self, transaction: TransactionDto) -> None:

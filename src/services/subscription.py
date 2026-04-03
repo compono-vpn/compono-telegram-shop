@@ -14,7 +14,6 @@ from src.core.enums import SubscriptionStatus
 from src.core.storage.key_builder import build_key
 from src.core.utils.time import datetime_now
 from src.infrastructure.billing import BillingClient, billing_subscription_to_dto
-from src.infrastructure.database import UnitOfWork
 from src.infrastructure.database.models.dto import (
     PlanDto,
     PlanSnapshotDto,
@@ -22,7 +21,6 @@ from src.infrastructure.database.models.dto import (
     SubscriptionDto,
     UserDto,
 )
-from src.infrastructure.database.models.sql import Subscription
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
 from src.services.user import UserService
@@ -44,12 +42,10 @@ class SubscriptionService(BaseService):
         translator_hub: TranslatorHub,
         #
         billing: BillingClient,
-        uow: UnitOfWork,
         user_service: UserService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.billing = billing
-        self.uow = uow
         self.user_service = user_service
 
     def _rewrite_sub_url(self, subscription: Optional[SubscriptionDto]) -> Optional[SubscriptionDto]:
@@ -70,44 +66,48 @@ class SubscriptionService(BaseService):
         return f"{parsed.scheme}://{netloc}/connect/{token}"
 
     async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
-        data = subscription.model_dump(exclude={"user"})
+        data = subscription.model_dump(exclude={"user"}, mode="json")
         data["plan"] = subscription.plan.model_dump(mode="json")
-        db_subscription = Subscription(**data, user_telegram_id=user.telegram_id)
-        async with self.uow:
-            db_created = await self.uow.repository.subscriptions.create(db_subscription)
+        data["user_telegram_id"] = user.telegram_id
+        billing_sub = await self.billing.create_subscription(data)
+        created = billing_subscription_to_dto(billing_sub)
         await self.user_service.set_current_subscription(
-            telegram_id=user.telegram_id, subscription_id=db_created.id,
+            telegram_id=user.telegram_id, subscription_id=created.id,
         )
-        await self.clear_subscription_cache(db_created.id, user.telegram_id)
-        logger.info(f"Created subscription '{db_created.id}' for user '{user.telegram_id}'")
-        return SubscriptionDto.from_model(db_created)  # type: ignore[return-value]
+        await self.clear_subscription_cache(created.id, user.telegram_id)
+        logger.info(f"Created subscription '{created.id}' for user '{user.telegram_id}'")
+        return created
 
     @redis_cache(prefix="get_subscription", ttl=TIME_5M)
     async def get(self, subscription_id: int) -> Optional[SubscriptionDto]:
-        async with self.uow:
-            db_sub = await self.uow.repository.subscriptions.get(subscription_id)
-        if not db_sub:
+        billing_sub = await self.billing.get_subscription(subscription_id)
+        if not billing_sub:
             return None
-        return self._rewrite_sub_url(SubscriptionDto.from_model(db_sub))
+        return self._rewrite_sub_url(billing_subscription_to_dto(billing_sub))
 
     async def update(self, subscription: SubscriptionDto) -> Optional[SubscriptionDto]:
         data = subscription.changed_data.copy()
         if subscription.plan.changed_data or "plan" in data:
             data["plan"] = subscription.plan.model_dump(mode="json")
-        async with self.uow:
-            db_updated = await self.uow.repository.subscriptions.update(
-                subscription_id=subscription.id, **data,
-            )
-        if db_updated:
-            await self.clear_subscription_cache(db_updated.id, db_updated.user_telegram_id)
-            await self.user_service.clear_user_cache(db_updated.user_telegram_id)
-            logger.info(f"Updated subscription '{subscription.id}'")
-        return SubscriptionDto.from_model(db_updated) if db_updated else None
+        # Serialize non-JSON-safe values for the billing API
+        for key, value in list(data.items()):
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+            elif isinstance(value, list):
+                data[key] = [str(v) for v in value]
+            elif hasattr(value, 'value'):
+                # Enum values
+                data[key] = value.value
+        billing_sub = await self.billing.update_subscription(subscription.id, data)
+        updated = billing_subscription_to_dto(billing_sub)
+        await self.clear_subscription_cache(updated.id, billing_sub.UserTelegramID)
+        await self.user_service.clear_user_cache(billing_sub.UserTelegramID)
+        logger.info(f"Updated subscription '{subscription.id}'")
+        return updated
 
     async def get_all(self) -> list[SubscriptionDto]:
-        async with self.uow:
-            db_subs = await self.uow.repository.subscriptions.get_all()
-        return SubscriptionDto.from_model_list(db_subs)
+        billing_subs = await self.billing.list_all_subscriptions()
+        return [billing_subscription_to_dto(s) for s in billing_subs]
 
     @redis_cache(prefix="get_current_subscription", ttl=TIME_1M)
     async def get_current(self, telegram_id: int) -> Optional[SubscriptionDto]:

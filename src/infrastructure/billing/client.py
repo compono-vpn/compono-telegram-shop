@@ -16,6 +16,8 @@ from .models import (
     BillingPlan,
     BillingPriceDetails,
     BillingPromocode,
+    BillingReferral,
+    BillingReferralReward,
     BillingSettings,
     BillingStatistics,
     BillingSubscription,
@@ -193,6 +195,15 @@ class BillingClient:
     # Transactions
     # ------------------------------------------------------------------ #
 
+    async def create_transaction(
+        self, telegram_id: int, transaction_data: dict[str, Any]
+    ) -> BillingTransaction:
+        data = await self._post("/transactions", json={
+            "telegram_id": telegram_id,
+            **transaction_data,
+        })
+        return BillingTransaction.model_validate(data)
+
     async def list_transactions(self, telegram_id: int) -> list[BillingTransaction]:
         data = await self._get(f"/transactions/{telegram_id}")
         return [BillingTransaction.model_validate(t) for t in (data or [])]
@@ -205,6 +216,34 @@ class BillingClient:
             if e.status_code == 404:
                 return None
             raise
+
+    async def list_all_transactions(self) -> list[BillingTransaction]:
+        data = await self._get("/transactions/stats")
+        if isinstance(data, list):
+            return [BillingTransaction.model_validate(t) for t in data]
+        return []
+
+    async def list_transactions_by_status(self, status: str) -> list[BillingTransaction]:
+        data = await self._get("/transactions/by-status", params={"status": status})
+        return [BillingTransaction.model_validate(t) for t in (data or [])]
+
+    async def transition_transaction_status(
+        self, payment_id: UUID, from_status: str, to_status: str
+    ) -> Optional[BillingTransaction]:
+        try:
+            data = await self._put(f"/transactions/{payment_id}/transition", json={
+                "from_status": from_status,
+                "to_status": to_status,
+            })
+            return BillingTransaction.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404 or e.status_code == 409:
+                return None
+            raise
+
+    async def count_transactions(self) -> dict[str, Any]:
+        data = await self._get("/transactions/count")
+        return data if isinstance(data, dict) else {}
 
     # ------------------------------------------------------------------ #
     # Payments
@@ -341,6 +380,31 @@ class BillingClient:
 
     async def list_subscriptions_by_user(self, telegram_id: int) -> list[BillingSubscription]:
         data = await self._get(f"/subscriptions?telegram_id={telegram_id}")
+        if isinstance(data, list):
+            return [BillingSubscription.model_validate(s) for s in data]
+        return []
+
+    async def create_subscription(self, subscription_data: dict[str, Any]) -> BillingSubscription:
+        data = await self._post("/subscriptions", json=subscription_data)
+        return BillingSubscription.model_validate(data)
+
+    async def update_subscription(
+        self, subscription_id: int, subscription_data: dict[str, Any],
+    ) -> BillingSubscription:
+        data = await self._put(f"/subscriptions/{subscription_id}", json=subscription_data)
+        return BillingSubscription.model_validate(data)
+
+    async def get_subscription(self, subscription_id: int) -> Optional[BillingSubscription]:
+        try:
+            data = await self._get(f"/subscriptions/{subscription_id}")
+            return BillingSubscription.model_validate(data) if data else None
+        except BillingClientError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+    async def list_all_subscriptions(self) -> list[BillingSubscription]:
+        data = await self._get("/subscriptions")
         if isinstance(data, list):
             return [BillingSubscription.model_validate(s) for s in data]
         return []
@@ -482,6 +546,53 @@ class BillingClient:
     async def get_referral_info(self, telegram_id: int) -> dict[str, Any]:
         data = await self._get(f"/referral/{telegram_id}")
         return data if data else {}
+
+    async def create_referral(
+        self,
+        referrer_telegram_id: int,
+        referred_telegram_id: int,
+        level: str,
+    ) -> BillingReferral:
+        data = await self._post("/referrals", json={
+            "referrer_telegram_id": referrer_telegram_id,
+            "referred_telegram_id": referred_telegram_id,
+            "level": level,
+        })
+        return BillingReferral.model_validate(data)
+
+    async def get_referral_by_referred(self, telegram_id: int) -> Optional[BillingReferral]:
+        data = await self._get(f"/referrals/by-referred/{telegram_id}")
+        return BillingReferral.model_validate(data) if data else None
+
+    async def get_referrals_by_referrer(self, telegram_id: int) -> list[BillingReferral]:
+        data = await self._get(f"/referrals/by-referrer/{telegram_id}")
+        return [BillingReferral.model_validate(r) for r in (data or [])]
+
+    async def create_referral_reward(
+        self,
+        referral_id: int,
+        user_telegram_id: int,
+        type: str,
+        amount: int,
+    ) -> BillingReferralReward:
+        data = await self._post("/referral/reward", json={
+            "referral_id": referral_id,
+            "user_telegram_id": user_telegram_id,
+            "type": type,
+            "amount": amount,
+            "is_issued": False,
+        })
+        return BillingReferralReward.model_validate(data)
+
+    async def update_referral_reward(self, reward_id: int, is_issued: bool) -> BillingReferralReward:
+        data = await self._put(f"/referral/reward/{reward_id}", json={
+            "is_issued": is_issued,
+        })
+        return BillingReferralReward.model_validate(data)
+
+    async def get_rewards_by_referral(self, referral_id: int) -> list[BillingReferralReward]:
+        data = await self._get(f"/referral/rewards-by-referral/{referral_id}")
+        return [BillingReferralReward.model_validate(r) for r in (data or [])]
 
     # ------------------------------------------------------------------ #
     # TG Proxies

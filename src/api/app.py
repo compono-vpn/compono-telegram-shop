@@ -7,7 +7,6 @@ from src.api.endpoints import (
     TelegramWebhookEndpoint,
     app_router,
     health_router,
-    web_router,
 )
 from src.core.config import AppConfig
 from src.lifespan import lifespan
@@ -31,7 +30,6 @@ def create_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
         return response
     app.include_router(app_router)
     app.include_router(health_router)
-    app.include_router(web_router)
     app.mount("/metrics", make_asgi_app())
 
     telegram_webhook_endpoint = TelegramWebhookEndpoint(

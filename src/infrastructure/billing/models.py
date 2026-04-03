@@ -233,6 +233,30 @@ class BillingReferralInfo(BaseModel):
     rewards: list[Any] = Field(default_factory=list)
 
 
+class BillingReferral(BaseModel):
+    """Maps domain.Referral from billing API (PascalCase, no json tags)."""
+
+    ID: int = 0
+    ReferrerTelegramID: int = 0
+    ReferredTelegramID: int = 0
+    Level: str = ""
+    CreatedAt: Optional[datetime] = None
+    UpdatedAt: Optional[datetime] = None
+
+
+class BillingReferralReward(BaseModel):
+    """Maps domain.ReferralReward from billing API (PascalCase, no json tags)."""
+
+    ID: int = 0
+    ReferralID: int = 0
+    UserTelegramID: int = 0
+    Type: str = ""
+    Amount: int = 0
+    IsIssued: bool = False
+    CreatedAt: Optional[datetime] = None
+    UpdatedAt: Optional[datetime] = None
+
+
 # --- Statistics ---
 
 

@@ -8,6 +8,7 @@ from .converters import (
     billing_subscription_to_dto,
     billing_settings_to_dto,
     billing_transaction_to_dto,
+    billing_user_to_dto,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "billing_settings_to_dto",
     "billing_subscription_to_dto",
     "billing_transaction_to_dto",
+    "billing_user_to_dto",
 ]

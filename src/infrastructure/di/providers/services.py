@@ -32,7 +32,7 @@ class ServicesProvider(Provider):
     settings_service = provide(source=SettingsService, scope=Scope.REQUEST)
     broadcast_service = provide(source=BroadcastService, scope=Scope.REQUEST)
     payment_gateway_service = provide(source=PaymentGatewayService, scope=Scope.REQUEST)
-    transaction_service = provide(source=TransactionService, scope=Scope.REQUEST)  # kept for PaymentGatewayService
+    transaction_service = provide(source=TransactionService, scope=Scope.REQUEST)  # uses BillingClient (HTTP API)
     # PricingService removed — billing owns pricing via calculate_price API
     importer_service = provide(source=ImporterService)
     referral_service = provide(source=ReferralService, scope=Scope.REQUEST)
