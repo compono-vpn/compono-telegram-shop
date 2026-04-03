@@ -10,10 +10,11 @@ from remnapy.enums.users import TrafficLimitStrategy
 
 from src.core.config import AppConfig
 from src.core.constants import TIME_1M, TIME_5M, TIME_10M, TIMEZONE
-from src.core.enums import SubscriptionStatus
 from src.core.storage.key_builder import build_key
 from src.core.utils.time import datetime_now
 from src.infrastructure.billing import BillingClient, billing_subscription_to_dto
+from src.infrastructure.redis import RedisRepository
+from src.infrastructure.redis.cache import redis_cache
 from src.models.dto import (
     PlanDto,
     PlanSnapshotDto,
@@ -21,8 +22,6 @@ from src.models.dto import (
     SubscriptionDto,
     UserDto,
 )
-from src.infrastructure.redis import RedisRepository
-from src.infrastructure.redis.cache import redis_cache
 from src.services.user import UserService
 
 from .base import BaseService
@@ -48,7 +47,9 @@ class SubscriptionService(BaseService):
         self.billing = billing
         self.user_service = user_service
 
-    def _rewrite_sub_url(self, subscription: Optional[SubscriptionDto]) -> Optional[SubscriptionDto]:
+    def _rewrite_sub_url(
+        self, subscription: Optional[SubscriptionDto]
+    ) -> Optional[SubscriptionDto]:
         if not subscription:
             return subscription
         domain = self.config.remnawave.sub_public_domain
@@ -66,13 +67,32 @@ class SubscriptionService(BaseService):
         return f"{parsed.scheme}://{netloc}/connect/{token}"
 
     async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
-        data = subscription.model_dump(exclude={"user"}, mode="json")
-        data["plan"] = subscription.plan.model_dump(mode="json")
-        data["user_telegram_id"] = user.telegram_id
+        # Billing API (Go) Subscription struct has no json tags — expects PascalCase keys.
+        # PlanSnapshot has snake_case json tags, so plan dict stays snake_case.
+        data = {
+            "UserRemnaID": str(subscription.user_remna_id),
+            "UserTelegramID": user.telegram_id,
+            "Status": subscription.status.value if subscription.status else "ACTIVE",
+            "IsTrial": subscription.is_trial,
+            "TrafficLimit": subscription.traffic_limit,
+            "DeviceLimit": subscription.device_limit,
+            "TrafficLimitStrategy": subscription.traffic_limit_strategy.value
+            if subscription.traffic_limit_strategy
+            else "NO_RESET",
+            "Tag": subscription.tag,
+            "InternalSquads": [str(s) for s in subscription.internal_squads],
+            "ExternalSquad": str(subscription.external_squad)
+            if subscription.external_squad
+            else None,
+            "ExpireAt": subscription.expire_at.isoformat() if subscription.expire_at else None,
+            "URL": subscription.url,
+            "Plan": subscription.plan.model_dump(mode="json"),
+        }
         billing_sub = await self.billing.create_subscription(data)
         created = billing_subscription_to_dto(billing_sub)
         await self.user_service.set_current_subscription(
-            telegram_id=user.telegram_id, subscription_id=created.id,
+            telegram_id=user.telegram_id,
+            subscription_id=created.id,
         )
         await self.clear_subscription_cache(created.id, user.telegram_id)
         logger.info(f"Created subscription '{created.id}' for user '{user.telegram_id}'")
@@ -95,7 +115,7 @@ class SubscriptionService(BaseService):
                 data[key] = value.isoformat()
             elif isinstance(value, list):
                 data[key] = [str(v) for v in value]
-            elif hasattr(value, 'value'):
+            elif hasattr(value, "value"):
                 # Enum values
                 data[key] = value.value
         billing_sub = await self.billing.update_subscription(subscription.id, data)
