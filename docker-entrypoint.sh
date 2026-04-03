@@ -51,15 +51,6 @@ else
 fi
 
 
-echo "Migrating database"
-
-if ! alembic -c src/infrastructure/database/alembic.ini upgrade head; then
-    echo "Database migration failed! Exiting container..."
-    exit 1
-fi
-
-echo "Migrations deployed successfully"
-
 
 if [ "$UVICORN_RELOAD_ENABLED" = "true" ]; then
     echo "Uvicorn will run with reload enabled"
