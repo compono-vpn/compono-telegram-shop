@@ -34,8 +34,8 @@ _TEST_ENV = {
     "REDIS_HOST": "localhost",
     "REDIS_PORT": "6379",
     "REDIS_PASSWORD": "test",
-    "APP_BILLING_API_URL": "http://localhost:8080",
-    "APP_BILLING_INTERNAL_SECRET": "testsecret",
+    "APP_API_URL": "http://localhost:8080",
+    "APP_API_INTERNAL_SECRET": "testsecret",
     "APP_LOCALES": "en",
     "APP_HYDRA_DOMAINS": "test.example.com",
 }
