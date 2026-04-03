@@ -7,7 +7,7 @@ from fastapi import Request
 from loguru import logger
 
 from src.core.enums import TransactionStatus
-from src.infrastructure.database.models.dto import PaymentResult
+from src.models.dto import PaymentResult
 
 from .base import BasePaymentGateway
 

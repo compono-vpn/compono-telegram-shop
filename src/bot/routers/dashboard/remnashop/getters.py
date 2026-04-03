@@ -7,7 +7,7 @@ from dishka.integrations.aiogram_dialog import inject
 from src.__version__ import __version__
 from src.core.config import AppConfig
 from src.core.enums import UserRole
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.user import UserService
 
 

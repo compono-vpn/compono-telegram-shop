@@ -12,7 +12,7 @@ from loguru import logger
 from src.core.config import AppConfig
 from src.core.constants import CONFIG_KEY, USER_KEY
 from src.core.enums import BannerFormat, BannerName, Locale
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 
 
 @functools.lru_cache(maxsize=None)

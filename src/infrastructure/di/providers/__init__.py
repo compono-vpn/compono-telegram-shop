@@ -4,7 +4,6 @@ from dishka.integrations.aiogram import AiogramProvider
 from .billing import BillingProvider
 from .bot import BotProvider
 from .config import ConfigProvider
-from .database import DatabaseProvider
 from .i18n import I18nProvider
 from .payment_gateways import PaymentGatewaysProvider
 from .redis import RedisProvider
@@ -18,7 +17,6 @@ def get_providers() -> list[Provider]:
         BillingProvider(),
         BotProvider(),
         ConfigProvider(),
-        DatabaseProvider(),
         I18nProvider(),
         RedisProvider(),
         RemnawaveProvider(),

@@ -9,7 +9,7 @@ from src.core.enums import TransactionStatus
 from src.infrastructure.billing import BillingClient, billing_transaction_to_dto
 from src.infrastructure.billing.converters import billing_user_to_dto
 from src.infrastructure.billing.models import BillingTransaction
-from src.infrastructure.database.models.dto import TransactionDto, UserDto
+from src.models.dto import TransactionDto, UserDto
 from src.infrastructure.redis import RedisRepository
 
 from .base_billing import BaseBillingService

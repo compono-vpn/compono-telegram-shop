@@ -14,7 +14,7 @@ from src.core.enums import SubscriptionStatus
 from src.core.storage.key_builder import build_key
 from src.core.utils.time import datetime_now
 from src.infrastructure.billing import BillingClient, billing_subscription_to_dto
-from src.infrastructure.database.models.dto import (
+from src.models.dto import (
     PlanDto,
     PlanSnapshotDto,
     RemnaSubscriptionDto,

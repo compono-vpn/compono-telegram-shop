@@ -24,7 +24,7 @@ from src.core.utils.formatters import format_username_to_url
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.infrastructure.database.models.dto import BroadcastDto, PlanDto, UserDto
+from src.models.dto import BroadcastDto, PlanDto, UserDto
 from src.infrastructure.taskiq.tasks.broadcast import delete_broadcast_task, send_broadcast_task
 from src.services.broadcast import BroadcastService
 from src.services.notification import NotificationService

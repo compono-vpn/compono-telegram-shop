@@ -16,7 +16,7 @@ from src.core.storage.keys import SyncRunningKey
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.infrastructure.redis.repository import RedisRepository
 from src.infrastructure.taskiq.tasks.importer import (
     import_exported_users_task,

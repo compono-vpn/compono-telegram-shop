@@ -16,7 +16,7 @@ from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click, parse_int
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_promocode_to_dto
-from src.infrastructure.database.models.dto import PlanSnapshotDto, PromocodeDto, UserDto
+from src.models.dto import PlanSnapshotDto, PromocodeDto, UserDto
 from src.services.notification import NotificationService
 
 

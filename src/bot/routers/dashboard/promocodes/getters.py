@@ -8,7 +8,7 @@ from src.core.enums import PromocodeRewardType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import i18n_format_days, i18n_format_limit, i18n_format_traffic_limit
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_promocode_to_dto
-from src.infrastructure.database.models.dto import PromocodeDto
+from src.models.dto import PromocodeDto
 
 
 async def configurator_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:

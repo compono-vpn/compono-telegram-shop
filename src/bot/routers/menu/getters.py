@@ -15,7 +15,7 @@ from src.core.utils.formatters import (
     i18n_format_traffic_limit,
 )
 from src.infrastructure.billing import BillingClient
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService

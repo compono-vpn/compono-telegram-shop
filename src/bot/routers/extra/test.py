@@ -18,8 +18,8 @@ from src.bot.filters import SuperDevFilter
 from src.core.config.app import AppConfig
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.time import datetime_now
-from src.infrastructure.database.models.dto import SubscriptionDto, UserDto
-from src.infrastructure.database.models.dto.plan import PlanSnapshotDto
+from src.models.dto import SubscriptionDto, UserDto
+from src.models.dto.plan import PlanSnapshotDto
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 

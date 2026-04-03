@@ -8,7 +8,7 @@ from src.core.constants import TIME_10M
 from src.core.enums import PlanAvailability
 from src.core.storage.key_builder import build_key
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.infrastructure.database.models.dto import PlanDto, UserDto
+from src.models.dto import PlanDto, UserDto
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
 

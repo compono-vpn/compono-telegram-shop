@@ -6,7 +6,7 @@ from loguru import logger
 from src.core.enums import MessageEffect, ReferralRewardType, UserNotificationType
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
-from src.infrastructure.database.models.dto import ReferralRewardDto
+from src.models.dto import ReferralRewardDto
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService

@@ -16,7 +16,7 @@ from src.infrastructure.billing import (
     billing_broadcast_to_dto,
     billing_user_to_dto,
 )
-from src.infrastructure.database.models.dto import BroadcastDto, BroadcastMessageDto, UserDto
+from src.models.dto import BroadcastDto, BroadcastMessageDto, UserDto
 from src.infrastructure.redis import RedisRepository
 
 from .base_billing import BaseBillingService

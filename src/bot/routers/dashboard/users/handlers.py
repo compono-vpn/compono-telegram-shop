@@ -11,7 +11,7 @@ from src.core.constants import USER_KEY
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_double_click
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.notification import NotificationService
 from src.services.user import UserService
 

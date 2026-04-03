@@ -8,7 +8,7 @@ from src.bot.keyboards import get_goto_buttons
 from src.core.constants import DATETIME_FORMAT
 from src.core.enums import PlanAvailability
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.infrastructure.database.models.dto import PlanDto
+from src.models.dto import PlanDto
 from src.services.broadcast import BroadcastService
 
 

@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from src.infrastructure.database.models.dto.base import SqlModel
-
     from .subscription import BaseSubscriptionDto
 
 from datetime import datetime
@@ -89,16 +87,3 @@ class UserDto(BaseUserDto):
     @property
     def has_any_subscription(self) -> bool:
         return self._has_any_subscription
-
-    @classmethod  # Fuck it, the main thing is that it works
-    def from_model(
-        cls,
-        model_instance: Optional["SqlModel"],
-        *,
-        decrypt: bool = False,
-    ) -> Optional["UserDto"]:
-        dto = super().from_model(model_instance, decrypt=decrypt)
-        if dto and model_instance:
-            dto._has_any_subscription = bool(getattr(model_instance, "subscriptions", []))
-            dto._is_invited_user = bool(getattr(model_instance, "referral", None))
-        return dto

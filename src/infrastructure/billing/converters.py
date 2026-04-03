@@ -31,7 +31,7 @@ from src.core.enums import (
 
 from remnapy.enums.users import TrafficLimitStrategy
 
-from src.infrastructure.database.models.dto import (
+from src.models.dto import (
     PlanDto,
     PlanDurationDto,
     PlanPriceDto,
@@ -50,9 +50,9 @@ from src.infrastructure.database.models.dto import (
     PaymentGatewayDto,
     BaseTransactionDto,
 )
-from src.infrastructure.database.models.dto.settings import ReferralRewardSettingsDto
+from src.models.dto.settings import ReferralRewardSettingsDto
 
-from src.infrastructure.database.models.dto.user import UserDto
+from src.models.dto.user import UserDto
 from src.core.enums import UserRole, Locale
 
 from .models import (
@@ -367,7 +367,7 @@ def _stub_user(telegram_id: int) -> "BaseUserDto":
     not full user objects. This stub is sufficient for the referral
     service which only accesses telegram_id on these objects.
     """
-    from src.infrastructure.database.models.dto.user import BaseUserDto  # noqa: PLC0415
+    from src.models.dto.user import BaseUserDto  # noqa: PLC0415
 
     return BaseUserDto(telegram_id=telegram_id, name="")
 
@@ -400,7 +400,7 @@ def billing_referral_reward_to_dto(brr: BillingReferralReward) -> ReferralReward
 
 
 def billing_broadcast_message_to_dto(bm: BillingBroadcastMessage) -> "BroadcastMessageDto":
-    from src.infrastructure.database.models.dto import BroadcastMessageDto  # noqa: PLC0415
+    from src.models.dto import BroadcastMessageDto  # noqa: PLC0415
 
     return BroadcastMessageDto(
         id=bm.ID if bm.ID else None,
@@ -411,7 +411,7 @@ def billing_broadcast_message_to_dto(bm: BillingBroadcastMessage) -> "BroadcastM
 
 
 def billing_broadcast_to_dto(bb: BillingBroadcast) -> "BroadcastDto":
-    from src.infrastructure.database.models.dto import BroadcastDto  # noqa: PLC0415
+    from src.models.dto import BroadcastDto  # noqa: PLC0415
     from src.core.utils.message_payload import MessagePayload  # noqa: PLC0415
 
     payload = MessagePayload.model_validate(bb.Payload) if bb.Payload else MessagePayload(

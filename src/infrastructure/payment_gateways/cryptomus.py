@@ -15,7 +15,7 @@ from loguru import logger
 
 from src.core.config import AppConfig
 from src.core.enums import Currency, TransactionStatus
-from src.infrastructure.database.models.dto import (
+from src.models.dto import (
     CryptomusGatewaySettingsDto,
     HeleketGatewaySettingsDto,
     PaymentGatewayDto,

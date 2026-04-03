@@ -5,7 +5,7 @@ from dishka import FromDishka
 from loguru import logger
 
 from src.core.utils.formatters import format_user_log as log
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.user import UserService
 
 # For only ChatType.PRIVATE (app/bot/filters/private.py)

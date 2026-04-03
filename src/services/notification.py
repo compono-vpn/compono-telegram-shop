@@ -34,8 +34,8 @@ from src.core.utils.formatters import i18n_postprocess_text
 from src.core.storage.keys import NotificationDedupKey
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.types import AnyKeyboard
-from src.infrastructure.database.models.dto import UserDto
-from src.infrastructure.database.models.dto.user import BaseUserDto
+from src.models.dto import UserDto
+from src.models.dto.user import BaseUserDto
 from src.infrastructure.redis.repository import RedisRepository
 from src.services.settings import SettingsService
 

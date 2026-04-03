@@ -20,8 +20,8 @@ from src.core.utils.formatters import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
-from src.infrastructure.database.models.dto import UserDto
-from src.infrastructure.database.models.dto.subscription import RemnaSubscriptionDto
+from src.models.dto import UserDto
+from src.models.dto.subscription import RemnaSubscriptionDto
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_transaction_to_dto
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService

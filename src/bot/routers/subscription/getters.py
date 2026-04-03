@@ -15,7 +15,7 @@ from src.core.utils.formatters import (
     i18n_format_traffic_limit,
 )
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_price_details_to_dto, billing_gateway_to_dto
-from src.infrastructure.database.models.dto import PlanDto, PriceDetailsDto, UserDto
+from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.core.enums import PromocodeRewardType
 from src.services.subscription import SubscriptionService
 

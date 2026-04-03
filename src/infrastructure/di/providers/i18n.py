@@ -8,7 +8,7 @@ from loguru import logger
 
 from src.core.config import AppConfig
 from src.core.constants import USER_KEY
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 
 
 class I18nProvider(Provider):

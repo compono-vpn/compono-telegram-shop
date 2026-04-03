@@ -7,7 +7,7 @@ from src.bot.keyboards import CALLBACK_RULES_ACCEPT, get_rules_keyboard
 from src.core.constants import CONTAINER_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.notification import NotificationService
 from src.services.settings import SettingsService
 from src.services.user import UserService

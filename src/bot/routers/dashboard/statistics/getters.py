@@ -12,7 +12,7 @@ from src.infrastructure.billing import (
     billing_plan_to_dto,
     billing_promocode_to_dto,
 )
-from src.infrastructure.database.models.dto import (
+from src.models.dto import (
     PromocodeDto,
 )
 

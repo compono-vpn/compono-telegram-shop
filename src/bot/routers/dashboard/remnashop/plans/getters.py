@@ -10,7 +10,7 @@ from remnapy.enums.users import TrafficLimitStrategy
 from src.core.enums import Currency, PlanAvailability, PlanType
 from src.core.utils.adapter import DialogDataAdapter
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.infrastructure.database.models.dto import PlanDto, PlanDurationDto, PlanPriceDto
+from src.models.dto import PlanDto, PlanDurationDto, PlanPriceDto
 
 
 @inject

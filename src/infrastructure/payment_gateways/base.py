@@ -14,7 +14,7 @@ from starlette.datastructures import Headers
 from src.core.config.app import AppConfig
 from src.core.constants import T_ME
 from src.core.enums import TransactionStatus
-from src.infrastructure.database.models.dto import PaymentGatewayDto, PaymentResult
+from src.models.dto import PaymentGatewayDto, PaymentResult
 
 
 class PaymentGatewayFactory(Protocol):

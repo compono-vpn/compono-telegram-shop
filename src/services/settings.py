@@ -11,7 +11,7 @@ from src.core.storage.key_builder import build_key
 from src.core.utils.types import AnyNotification
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_settings_to_dto
-from src.infrastructure.database.models.dto import ReferralSettingsDto, SettingsDto
+from src.models.dto import ReferralSettingsDto, SettingsDto
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
 

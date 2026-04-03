@@ -5,7 +5,7 @@ from aiogram.types import Message
 
 from src.core.config import AppConfig
 from src.core.constants import CONFIG_KEY, USER_KEY
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 
 
 class SuperDevFilter(BaseFilter):

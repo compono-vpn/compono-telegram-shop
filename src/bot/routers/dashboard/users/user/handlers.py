@@ -22,9 +22,9 @@ from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.validators import is_double_click, parse_int
-from src.infrastructure.database.models.dto import UserDto
-from src.infrastructure.database.models.dto.plan import PlanSnapshotDto
-from src.infrastructure.database.models.dto.subscription import (
+from src.models.dto import UserDto
+from src.models.dto.plan import PlanSnapshotDto
+from src.models.dto.subscription import (
     RemnaSubscriptionDto,
     SubscriptionDto,
 )

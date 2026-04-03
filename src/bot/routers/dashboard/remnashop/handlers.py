@@ -13,7 +13,7 @@ from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.validators import is_double_click
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
 from src.services.notification import NotificationService
 from src.services.user import UserService

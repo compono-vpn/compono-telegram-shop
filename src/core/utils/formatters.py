@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final, Optional, Union
 
 if TYPE_CHECKING:
-    from src.infrastructure.database.models.dto import UserDto
+    from src.models.dto import UserDto
 
 import html
 import re
@@ -18,7 +18,7 @@ from src.core.constants import T_ME
 from src.core.enums import PlanType
 from src.core.i18n.keys import ByteUnitKey, TimeUnitKey, UtilKey
 from src.core.utils.time import datetime_now
-from src.infrastructure.database.models.dto.user import BaseUserDto
+from src.models.dto.user import BaseUserDto
 
 _HTML_RE = re.compile(r"<[^>]*>")
 _URL_RE = re.compile(r"(?i)\b(?:https?://|www\.|tg://|t\.me/|telegram\.me/|joinchat/)\S+")

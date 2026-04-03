@@ -25,7 +25,7 @@ from src.infrastructure.billing import (
     billing_promocode_to_dto,
 )
 from src.infrastructure.billing.client import BillingClientError
-from src.infrastructure.database.models.dto import PlanDto, PlanSnapshotDto, UserDto
+from src.models.dto import PlanDto, PlanSnapshotDto, UserDto
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
 
@@ -100,7 +100,7 @@ async def _create_payment_and_get_data(
             )
             pricing = billing_price_details_to_dto(price_details)
         else:
-            from src.infrastructure.database.models.dto import PriceDetailsDto  # noqa: PLC0415
+            from src.models.dto import PriceDetailsDto  # noqa: PLC0415
             pricing = PriceDetailsDto()
 
         return CachedPaymentData(

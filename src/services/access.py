@@ -11,7 +11,7 @@ from src.core.constants import PURCHASE_PREFIX
 from src.core.enums import AccessMode
 from src.core.storage.keys import AccessWaitListKey
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.infrastructure.redis.repository import RedisRepository
 from src.infrastructure.taskiq.tasks.notifications import send_access_opened_notifications_task
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task

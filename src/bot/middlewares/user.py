@@ -12,7 +12,7 @@ from src.core.constants import CONTAINER_KEY, IS_SUPER_DEV_KEY, SOURCE_PREFIX, U
 from src.core.enums import MiddlewareEventType, SystemNotificationType
 from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.infrastructure.taskiq.tasks.subscriptions import auto_assign_trial_task
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_subscription_to_dto

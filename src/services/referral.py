@@ -23,7 +23,7 @@ from src.infrastructure.billing.converters import (
     billing_referral_reward_to_dto,
     billing_referral_to_dto,
 )
-from src.infrastructure.database.models.dto import (
+from src.models.dto import (
     ReferralDto,
     ReferralRewardDto,
     TransactionDto,

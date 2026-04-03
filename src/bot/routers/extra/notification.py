@@ -6,7 +6,7 @@ from loguru import logger
 
 from src.bot.states import Notification
 from src.core.utils.formatters import format_user_log as log
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 
 router = Router(name=__name__)
 

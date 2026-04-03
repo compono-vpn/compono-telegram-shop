@@ -8,7 +8,7 @@ from loguru import logger
 
 from src.core.config import AppConfig
 from src.core.enums import GatewayChannel, PaymentGatewayType
-from src.infrastructure.database.models.dto import PaymentGatewayDto
+from src.models.dto import PaymentGatewayDto
 from src.infrastructure.payment_gateways import (
     BasePaymentGateway,
     CryptomusGateway,

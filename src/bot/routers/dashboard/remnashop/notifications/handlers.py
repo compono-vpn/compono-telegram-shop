@@ -8,7 +8,7 @@ from loguru import logger
 from src.core.constants import USER_KEY
 from src.core.enums import SystemNotificationType, UserNotificationType
 from src.core.utils.formatters import format_user_log as log
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.settings import SettingsService
 
 

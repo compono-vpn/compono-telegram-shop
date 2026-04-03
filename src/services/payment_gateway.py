@@ -25,7 +25,7 @@ from src.core.utils.formatters import (
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient, billing_gateway_to_dto
 from src.infrastructure.billing.client import BillingClientError
-from src.infrastructure.database.models.dto import (
+from src.models.dto import (
     PaymentGatewayDto,
     PaymentResult,
     PlanSnapshotDto,

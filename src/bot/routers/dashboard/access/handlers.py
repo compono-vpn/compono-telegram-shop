@@ -13,7 +13,7 @@ from src.core.enums import AccessMode
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.validators import is_valid_url, is_valid_username
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.access import AccessService
 from src.services.notification import NotificationService
 from src.services.settings import SettingsService

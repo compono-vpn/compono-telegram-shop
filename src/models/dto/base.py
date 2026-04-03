@@ -1,14 +1,9 @@
-from typing import Any, Iterable, Optional, Type, TypeVar
+from typing import Any
 
 from pydantic import BaseModel as _BaseModel
 from pydantic import ConfigDict, PrivateAttr, SecretStr
 
-from src.core.security.crypto import deep_decrypt
 from src.core.security.crypto import encrypt as encrypt_func
-from src.infrastructure.database.models.sql import BaseSql
-
-SqlModel = TypeVar("SqlModel", bound=BaseSql)
-DtoModel = TypeVar("DtoModel", bound="BaseDto")
 
 
 class BaseDto(_BaseModel):
@@ -17,35 +12,6 @@ class BaseDto(_BaseModel):
         from_attributes=True,
         populate_by_name=True,
     )
-
-    @classmethod
-    def from_model(
-        cls: Type[DtoModel],
-        model_instance: Optional[SqlModel],
-        *,
-        decrypt: bool = False,
-    ) -> Optional[DtoModel]:
-        if model_instance is None:
-            return None
-
-        data = model_instance.__dict__.copy()
-        if decrypt:
-            data = deep_decrypt(data)
-
-        return cls.model_validate(data)
-
-    @classmethod
-    def from_model_list(
-        cls: Type[DtoModel],
-        model_instances: Iterable[SqlModel],
-        *,
-        decrypt: bool = False,
-    ) -> list[DtoModel]:
-        return [
-            dto
-            for model in model_instances
-            if (dto := cls.from_model(model, decrypt=decrypt)) is not None
-        ]
 
 
 class TrackableDto(BaseDto):

@@ -16,7 +16,7 @@ from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.infrastructure.database.models.dto import PlanSnapshotDto, UserDto
+from src.models.dto import PlanSnapshotDto, UserDto
 from src.infrastructure.taskiq.tasks.subscriptions import trial_subscription_task
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
@@ -74,7 +74,7 @@ async def _handle_web_link(
     from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
     from src.core.enums import PlanType  # noqa: PLC0415
     from src.core.utils.formatters import format_device_count  # noqa: PLC0415
-    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
+    from src.models.dto import SubscriptionDto  # noqa: PLC0415
 
     short_id = param[len("web_"):]
     username = f"web_{short_id}"
@@ -303,7 +303,7 @@ async def on_subscription_url_paste(
     from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
     from src.core.enums import PlanType  # noqa: PLC0415
     from src.core.utils.formatters import format_device_count  # noqa: PLC0415
-    from src.infrastructure.database.models.dto import SubscriptionDto  # noqa: PLC0415
+    from src.models.dto import SubscriptionDto  # noqa: PLC0415
 
     text = (message.text or "").strip()
 

@@ -5,7 +5,7 @@ from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 
 from src.core.utils.formatters import format_percent
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.user import UserService
 
 

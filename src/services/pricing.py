@@ -4,7 +4,7 @@ from typing import Optional
 from loguru import logger
 
 from src.core.enums import Currency
-from src.infrastructure.database.models.dto import PriceDetailsDto, UserDto
+from src.models.dto import PriceDetailsDto, UserDto
 
 from .base_billing import BaseBillingService
 

@@ -25,8 +25,8 @@ from src.core.utils.types import RemnaUserDto
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.billing.converters import billing_user_to_dto
-from src.infrastructure.database.models.dto import UserDto
-from src.infrastructure.database.models.dto.user import BaseUserDto
+from src.models.dto import UserDto
+from src.models.dto.user import BaseUserDto
 from src.infrastructure.redis import RedisRepository, redis_cache
 from src.infrastructure.redis.cache import prepare_for_cache
 

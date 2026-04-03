@@ -25,7 +25,7 @@ from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.types import RemnaUserDto
 from src.infrastructure.billing import BillingClient
-from src.infrastructure.database.models.dto import (
+from src.models.dto import (
     PlanSnapshotDto,
     SubscriptionDto,
     TransactionDto,

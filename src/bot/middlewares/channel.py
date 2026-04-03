@@ -15,7 +15,7 @@ from src.core.constants import CONTAINER_KEY, TIME_5M, USER_KEY
 from src.core.enums import MiddlewareEventType
 from src.core.storage.key_builder import build_key
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.database.models.dto import UserDto
+from src.models.dto import UserDto
 from src.services.notification import NotificationService
 from src.services.settings import SettingsService
 

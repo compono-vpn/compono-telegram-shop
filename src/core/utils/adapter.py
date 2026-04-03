@@ -4,7 +4,7 @@ from aiogram_dialog import DialogManager
 from loguru import logger
 from pydantic import ValidationError
 
-from src.infrastructure.database.models.dto import BaseDto
+from src.models.dto import BaseDto
 
 DtoModel = TypeVar("DtoModel", bound="BaseDto")
 
