@@ -93,11 +93,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 i18n_key="ntf-event-bot-startup",
                 i18n_kwargs={
                     "access_mode": settings.access_mode,
-                "purchases_allowed": settings.purchases_allowed,
-                "registration_allowed": settings.registration_allowed,
-            },
-        ),
-    )
+                    "purchases_allowed": settings.purchases_allowed,
+                    "registration_allowed": settings.registration_allowed,
+                },
+            ),
+        )
     except Exception:
         logger.opt(exception=True).warning("Failed to send startup notification")
 

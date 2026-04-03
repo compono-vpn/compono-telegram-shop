@@ -24,11 +24,13 @@ class EmailService:
     <p>Ваш код подтверждения:</p>
     <div style="margin: 24px 0; padding: 16px; background: #f5f5f5; border: 1px solid #ddd;
                 border-radius: 8px; text-align: center;">
-        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">
+        <span style="font-size: 32px; font-weight: bold;
+              letter-spacing: 8px; font-family: monospace;">
             {code}
         </span>
     </div>
-    <p style="color: #666; font-size: 14px;">Код действителен 5 минут. Если вы не запрашивали код, проигнорируйте это письмо.</p>
+    <p style="color: #666; font-size: 14px;">Код действителен 5 минут.
+        Если вы не запрашивали код, проигнорируйте это письмо.</p>
     <hr style="margin-top: 32px; border: none; border-top: 1px solid #eee;">
     <p style="color: #999; font-size: 12px;">Compono VPN — быстрый и безопасный интернет</p>
 </div>"""
@@ -94,7 +96,10 @@ class EmailService:
             logger.error(f"Failed to send email to '{to_email}': {e}")
 
     async def send_purchase_subscription(
-        self, to_email: str, subscription_url: str, plan_name: str,
+        self,
+        to_email: str,
+        subscription_url: str,
+        plan_name: str,
         bot_link: str = "",
     ) -> None:
         if not self.api_key:
@@ -105,7 +110,8 @@ class EmailService:
         if bot_link:
             bot_section = f"""\
     <h3 style="margin-top: 24px;">Привязать к Telegram</h3>
-    <p>Привяжите подписку к Telegram-боту, чтобы управлять ей, получать уведомления и продлевать:</p>
+    <p>Привяжите подписку к Telegram-боту, чтобы управлять ей,
+        получать уведомления и продлевать:</p>
     <p style="margin: 16px 0;">
         <a href="{bot_link}"
            style="display: inline-block; padding: 12px 24px; background: #FFD600;
@@ -119,9 +125,11 @@ class EmailService:
 <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
     <h2 style="margin-bottom: 16px;">Добро пожаловать в Compono VPN!</h2>
     <p>Ваша подписка <strong>{plan_name}</strong> активирована.</p>
-    <p>Скопируйте ссылку ниже и добавьте её в ваш VPN-клиент:</p>
+    <p>Скопируйте ссылку ниже и добавьте её
+        в ваш VPN-клиент:</p>
     <div style="margin: 16px 0; padding: 12px; background: #f5f5f5; border: 1px solid #ddd;
-                border-radius: 4px; word-break: break-all; font-family: monospace; font-size: 13px;">
+                border-radius: 4px; word-break: break-all;
+                font-family: monospace; font-size: 13px;">
         {subscription_url}
     </div>
     <h3 style="margin-top: 24px;">Как подключиться</h3>
@@ -160,8 +168,6 @@ class EmailService:
                     },
                 )
                 resp.raise_for_status()
-                logger.info(
-                    f"Purchase email sent to '{to_email}', id={resp.json().get('id')}"
-                )
+                logger.info(f"Purchase email sent to '{to_email}', id={resp.json().get('id')}")
         except Exception as e:
             logger.error(f"Failed to send purchase email to '{to_email}': {e}")

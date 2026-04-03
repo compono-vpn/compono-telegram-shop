@@ -6,7 +6,7 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 
 from src.core.config import AppConfig
-from src.core.enums import PurchaseType
+from src.core.enums import PromocodeRewardType, PurchaseType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import (
     i18n_format_days,
@@ -14,9 +14,14 @@ from src.core.utils.formatters import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
-from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_price_details_to_dto, billing_gateway_to_dto
+from src.infrastructure.billing import (
+    BillingClient,
+    billing_gateway_to_dto,
+    billing_plan_to_dto,
+    billing_price_details_to_dto,
+)
+from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
-from src.core.enums import PromocodeRewardType
 from src.services.subscription import SubscriptionService
 
 
@@ -86,6 +91,7 @@ async def duration_getter(
         )
         pricing = billing_price_details_to_dto(price_details)
         from src.core.enums import Currency  # noqa: PLC0415
+
         currency_enum = Currency(default_currency)
         durations.append(
             {
@@ -188,7 +194,11 @@ async def confirm_getter(
     is_free = dialog_manager.dialog_data.get("is_free", False)
     selected_payment_method = dialog_manager.dialog_data["selected_payment_method"]
     purchase_type = dialog_manager.dialog_data["purchase_type"]
-    billing_gateway = await billing.get_gateway_by_type(selected_payment_method.value if hasattr(selected_payment_method, 'value') else str(selected_payment_method))
+    billing_gateway = await billing.get_gateway_by_type(
+        selected_payment_method.value
+        if hasattr(selected_payment_method, "value")
+        else str(selected_payment_method)
+    )
     duration = plan.get_duration(selected_duration)
 
     if not duration:
@@ -203,7 +213,9 @@ async def confirm_getter(
     pricing = PriceDetailsDto.model_validate_json(pricing_data)
 
     key, kw = i18n_format_days(duration.days)
-    billing_active_gateways = [g for g in await billing.list_active_gateways() if g.Channel in ("BOT", "ALL")]
+    billing_active_gateways = [
+        g for g in await billing.list_active_gateways() if g.Channel in ("BOT", "ALL")
+    ]
 
     return {
         "purchase_type": purchase_type,
@@ -234,7 +246,10 @@ async def promocode_success_getter(
 ) -> dict[str, Any]:
     reward_type_value = dialog_manager.dialog_data.get("promocode_reward_type")
     reward_type = PromocodeRewardType(reward_type_value) if reward_type_value else None
-    has_subscription = reward_type in (PromocodeRewardType.SUBSCRIPTION, PromocodeRewardType.DURATION)
+    has_subscription = reward_type in (
+        PromocodeRewardType.SUBSCRIPTION,
+        PromocodeRewardType.DURATION,
+    )
     code = dialog_manager.dialog_data.get("promocode_code", "")
 
     url = ""
@@ -296,7 +311,6 @@ async def success_payment_getter(
     if not subscription:
         # Race condition: notification arrived before subscription was committed.
         # Fall back to billing API.
-        from src.infrastructure.billing.converters import billing_subscription_to_dto
         billing_sub = await billing.get_current_subscription(user.telegram_id)
         if billing_sub:
             subscription = billing_subscription_to_dto(billing_sub)
@@ -311,6 +325,8 @@ async def success_payment_getter(
         "expire_time": i18n_format_expire_time(subscription.expire_at),
         "added_duration": i18n_format_days(subscription.plan.duration),
         "is_app": False,
-        "url": SubscriptionService.build_connect_url(subscription.url, config.remnawave.sub_public_domain),
+        "url": SubscriptionService.build_connect_url(
+            subscription.url, config.remnawave.sub_public_domain
+        ),
         "connectable": True,
     }

@@ -25,6 +25,9 @@ from src.core.utils.formatters import (
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient, billing_gateway_to_dto
 from src.infrastructure.billing.client import BillingClientError
+from src.infrastructure.payment_gateways import BasePaymentGateway, PaymentGatewayFactory
+from src.infrastructure.redis import RedisRepository
+from src.infrastructure.taskiq.tasks.subscriptions import purchase_subscription_task
 from src.models.dto import (
     PaymentGatewayDto,
     PaymentResult,
@@ -33,9 +36,6 @@ from src.models.dto import (
     TransactionDto,
     UserDto,
 )
-from src.infrastructure.payment_gateways import BasePaymentGateway, PaymentGatewayFactory
-from src.infrastructure.redis import RedisRepository
-from src.infrastructure.taskiq.tasks.subscriptions import purchase_subscription_task
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.subscription import SubscriptionService
@@ -137,8 +137,14 @@ class PaymentGatewayService(BaseService):
             return None
 
         # Filter by channel if specified
-        if channel and billing_gw.Channel != GatewayChannel.ALL.value and billing_gw.Channel != channel.value:
-            logger.warning(f"Payment gateway of type '{gateway_type}' not found for channel '{channel}'")
+        if (
+            channel
+            and billing_gw.Channel != GatewayChannel.ALL.value
+            and billing_gw.Channel != channel.value
+        ):
+            logger.warning(
+                f"Payment gateway of type '{gateway_type}' not found for channel '{channel}'"
+            )
             return None
 
         logger.debug(f"Retrieved payment gateway of type '{gateway_type}'")
@@ -193,7 +199,8 @@ class PaymentGatewayService(BaseService):
 
         if channel:
             billing_gateways = [
-                g for g in billing_gateways
+                g
+                for g in billing_gateways
                 if g.Channel == GatewayChannel.ALL.value or g.Channel == channel.value
             ]
 
@@ -222,7 +229,9 @@ class PaymentGatewayService(BaseService):
         purchase_type: PurchaseType,
         gateway_type: PaymentGatewayType,
     ) -> PaymentResult:
-        gateway_instance = await self._get_gateway_instance(gateway_type, channel=GatewayChannel.BOT)
+        gateway_instance = await self._get_gateway_instance(
+            gateway_type, channel=GatewayChannel.BOT
+        )
 
         i18n = self.translator_hub.get_translator_by_locale(locale=user.language)
         key, kw = i18n_format_days(plan.duration)
@@ -405,7 +414,9 @@ class PaymentGatewayService(BaseService):
         )
 
         if not updated:
-            logger.warning(f"Transaction '{payment_id}' already processed or not found, skipping cancel")
+            logger.warning(
+                f"Transaction '{payment_id}' already processed or not found, skipping cancel"
+            )
             return
 
         logger.info(f"Payment canceled '{payment_id}'")

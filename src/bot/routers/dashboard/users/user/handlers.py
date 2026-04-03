@@ -22,14 +22,17 @@ from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.validators import is_double_click, parse_int
+from src.infrastructure.billing import (
+    BillingClient,
+    billing_plan_to_dto,
+)
+from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
 from src.models.dto import UserDto
 from src.models.dto.plan import PlanSnapshotDto
 from src.models.dto.subscription import (
     RemnaSubscriptionDto,
     SubscriptionDto,
 )
-from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
-from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_transaction_to_dto
 from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService

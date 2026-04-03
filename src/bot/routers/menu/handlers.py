@@ -15,9 +15,8 @@ from src.core.enums import MediaType, SystemNotificationType
 from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.models.dto import PlanSnapshotDto, UserDto
-from src.infrastructure.taskiq.tasks.subscriptions import trial_subscription_task
+from src.infrastructure.billing import BillingClient
+from src.models.dto import PlanSnapshotDto, SubscriptionDto, UserDto
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
@@ -54,11 +53,241 @@ async def on_start_command(
         param = message.text.split()[1]
         if param.startswith("web_"):
             await _handle_web_link(
-                message, user, param, billing, remnawave_service,
-                subscription_service, notification_service,
+                message,
+                user,
+                param,
+                billing,
+                remnawave_service,
+                subscription_service,
+                notification_service,
             )
 
     await on_start_dialog(user, dialog_manager)
+
+
+async def _validate_web_order(message: Message, user: UserDto, param: str, billing: BillingClient):
+    """Validate that the web order exists and is completed. Returns (order, short_id) or None."""
+    short_id = param[len("web_") :]
+    order = await billing.get_web_order_by_short_id(short_id)
+
+    if not order or order.Status != "completed" or not order.SubscriptionURL:
+        logger.warning(f"{log(user)} Web link '{param}' — order not found or not completed")
+        await message.answer(
+            "Ссылка недействительна или оплата ещё не завершена. "
+            "Если вы только что оплатили — подождите минуту и попробуйте снова."
+        )
+        return None
+    return order, short_id
+
+
+async def _check_already_claimed(message: Message, user: UserDto, order, param: str) -> bool:
+    """Check if the order was already claimed. Returns True if we should stop processing."""
+    if order.ClaimedByTelegramID is None:
+        return False
+    if order.ClaimedByTelegramID == user.telegram_id:
+        logger.info(f"{log(user)} Re-opened already claimed web link '{param}'")
+        await message.answer("Эта подписка уже привязана к вашему аккаунту.")
+    else:
+        logger.warning(
+            f"{log(user)} Tried to claim web link '{param}'"
+            f" already claimed by {order.ClaimedByTelegramID}"
+        )
+        await message.answer("Эта ссылка уже была использована другим пользователем.")
+    return True
+
+
+async def _check_trial_eligibility(
+    message: Message,
+    user: UserDto,
+    param: str,
+    billing: BillingClient,
+    subscription_service: SubscriptionService,
+) -> bool:
+    """Check trial eligibility. Returns True if the user is NOT eligible (should stop)."""
+    already_claimed = await billing.exists_claimed_web_order_by_telegram_id(user.telegram_id)
+    if already_claimed:
+        logger.warning(f"{log(user)} Already claimed a web trial, rejecting '{param}'")
+        await message.answer(
+            "Пробный период можно активировать только один раз. "
+            "Оформите подписку для продолжения использования."
+        )
+        return True
+
+    has_trial = await subscription_service.has_used_trial(user.telegram_id)
+    if has_trial:
+        logger.warning(f"{log(user)} Already has trial subscription, rejecting web link '{param}'")
+        await message.answer(
+            "Пробный период можно активировать только один раз. "
+            "Оформите подписку для продолжения использования."
+        )
+        return True
+    return False
+
+
+async def _link_customer_and_email(user: UserDto, order, billing: BillingClient) -> None:
+    """Link customer record and append email to user's linked_emails."""
+    customer = None
+    if order.CustomerID:
+        customer = await billing.get_customer_by_id(order.CustomerID)
+    if not customer and order.Email:
+        customer = await billing.get_customer_by_email(order.Email)
+    if customer:
+        if not customer.TelegramID:
+            await billing.update_customer(customer.ID, telegram_id=user.telegram_id)
+        if not user.customer_id:
+            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
+
+    if order.Email and order.Email not in (user.linked_emails or []):
+        emails = list(user.linked_emails or [])
+        emails.append(order.Email)
+        user.linked_emails = emails
+        await billing.update_user(user.telegram_id, {"linked_emails": emails})
+        logger.info(f"{log(user)} Linked email '{order.Email}' (total: {len(emails)})")
+
+
+def _build_plan_snapshot(order, remna_user, is_trial: bool) -> tuple[PlanSnapshotDto, int, int]:
+    """Build a PlanSnapshotDto from the web order. Returns (plan, traffic_limit, device_limit)."""
+    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
+
+    from src.core.enums import PlanType  # noqa: PLC0415
+    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
+
+    total_days = order.PlanDurationDays
+    strategy = remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET
+    squads = [s.uuid for s in remna_user.active_internal_squads]
+
+    if order.PlanSnapshot and not is_trial:
+        snapshot = order.PlanSnapshot
+        traffic_limit = snapshot.get("traffic_limit", -1)
+        device_limit = snapshot.get("device_limit", -1)
+        plan = PlanSnapshotDto(
+            id=snapshot.get("id", -1),
+            name=snapshot.get("name", "Web Purchase"),
+            tag=remna_user.tag,
+            type=PlanType(snapshot.get("type", "UNLIMITED")),
+            traffic_limit=traffic_limit,
+            device_limit=device_limit,
+            duration=total_days,
+            traffic_limit_strategy=strategy,
+            internal_squads=squads,
+            external_squad=remna_user.external_squad_uuid,
+        )
+    else:
+        traffic_limit = 5
+        device_limit = format_device_count(remna_user.hwid_device_limit)
+        plan = PlanSnapshotDto(
+            id=-1,
+            name="Web Trial",
+            tag=remna_user.tag,
+            type=PlanType.UNLIMITED,
+            traffic_limit=traffic_limit,
+            device_limit=device_limit,
+            duration=total_days,
+            traffic_limit_strategy=strategy,
+            internal_squads=squads,
+            external_squad=remna_user.external_squad_uuid,
+        )
+    return plan, traffic_limit, device_limit
+
+
+async def _extend_existing_subscription(
+    message: Message,
+    user: UserDto,
+    existing: SubscriptionDto,
+    plan: PlanSnapshotDto,
+    traffic_limit: int,
+    device_limit: int,
+    total_days: int,
+    remna_user,
+    username: str,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+    order,
+) -> None:
+    """Extend an existing subscription by stacking days on top of current expiry."""
+    from datetime import timedelta  # noqa: PLC0415
+
+    from src.core.utils.time import datetime_now  # noqa: PLC0415
+
+    base_date = max(existing.expire_at, datetime_now())
+    new_expire = base_date + timedelta(days=total_days)
+
+    existing.traffic_limit = max(existing.traffic_limit or 0, traffic_limit or 0)
+    existing.device_limit = max(existing.device_limit or 0, device_limit or 0)
+    existing.expire_at = new_expire
+    existing.is_trial = False
+    existing.plan = plan
+
+    updated_remna = await remnawave_service.updated_user(
+        user=user,
+        uuid=existing.user_remna_id,
+        subscription=existing,
+    )
+    existing.expire_at = updated_remna.expire_at
+    await subscription_service.update(existing)
+
+    try:
+        await remnawave_service.remnawave.users.disable_user(remna_user.uuid)
+        logger.info(f"{log(user)} Disabled orphaned web Remnawave user '{username}'")
+    except Exception:
+        logger.warning(f"{log(user)} Failed to disable orphaned web Remnawave user '{username}'")
+
+    logger.info(
+        f"{log(user)} Extended existing subscription by {total_days}d "
+        f"(new expiry: {existing.expire_at}, email: {order.Email})"
+    )
+    await message.answer(
+        f"✅ Подписка продлена на {total_days} дней!\n"
+        f"📦 План: {plan.name}\n"
+        f"📅 Действует до: {existing.expire_at.strftime('%d.%m.%Y')}"
+    )
+
+
+async def _create_new_web_subscription(
+    message: Message,
+    user: UserDto,
+    plan: PlanSnapshotDto,
+    traffic_limit: int,
+    device_limit: int,
+    total_days: int,
+    is_trial: bool,
+    remna_user,
+    username: str,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+    order,
+) -> None:
+    """Create a brand new subscription from a web order."""
+    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
+
+    from src.models.dto import SubscriptionDto  # noqa: PLC0415
+
+    sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
+    subscription = SubscriptionDto(
+        user_remna_id=remna_user.uuid,
+        status=remna_user.status,
+        is_trial=is_trial,
+        traffic_limit=traffic_limit,
+        device_limit=device_limit,
+        traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
+        tag=remna_user.tag,
+        internal_squads=[s.uuid for s in remna_user.active_internal_squads],
+        external_squad=remna_user.external_squad_uuid,
+        expire_at=remna_user.expire_at,
+        url=sub_url,
+        plan=plan,
+    )
+    await subscription_service.create(user, subscription)
+    kind = "trial" if is_trial else "purchase"
+    logger.info(
+        f"{log(user)} Linked web {kind} subscription"
+        f" '{username}' (email: {order.Email}, {total_days}d)"
+    )
+    await message.answer(
+        f"✅ Подписка привязана!\n"
+        f"📦 План: {plan.name} ({total_days}д)\n"
+        f"🔗 Ваша ссылка для подключения уже в профиле."
+    )
 
 
 async def _handle_web_link(
@@ -71,204 +300,79 @@ async def _handle_web_link(
     notification_service: NotificationService,
 ) -> None:
     from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
-    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
-    from src.core.enums import PlanType  # noqa: PLC0415
-    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
-    from src.models.dto import SubscriptionDto  # noqa: PLC0415
 
-    short_id = param[len("web_"):]
-    username = f"web_{short_id}"
-
-    # 1. Validate the web order exists and is completed
-    order = await billing.get_web_order_by_short_id(short_id)
-
-    if not order or order.Status != "completed" or not order.SubscriptionURL:
-        logger.warning(f"{log(user)} Web link '{param}' — order not found or not completed")
-        await message.answer(
-            "Ссылка недействительна или оплата ещё не завершена. "
-            "Если вы только что оплатили — подождите минуту и попробуйте снова."
-        )
+    # 1. Validate the web order
+    result = await _validate_web_order(message, user, param, billing)
+    if not result:
         return
-
+    order, short_id = result
+    username = f"web_{short_id}"
     is_trial = order.IsTrial
 
-    # 2. Check if this order was already claimed by someone
-    if order.ClaimedByTelegramID is not None:
-        if order.ClaimedByTelegramID == user.telegram_id:
-            logger.info(f"{log(user)} Re-opened already claimed web link '{param}'")
-            await message.answer("Эта подписка уже привязана к вашему аккаунту.")
-        else:
-            logger.warning(f"{log(user)} Tried to claim web link '{param}' already claimed by {order.ClaimedByTelegramID}")
-            await message.answer("Эта ссылка уже была использована другим пользователем.")
+    # 2. Check if already claimed
+    if await _check_already_claimed(message, user, order, param):
         return
 
-    # 3. Trial-only checks (skip for full purchases)
+    # 3. Trial-only checks
     if is_trial:
-        already_claimed = await billing.exists_claimed_web_order_by_telegram_id(user.telegram_id)
-
-        if already_claimed:
-            logger.warning(f"{log(user)} Already claimed a web trial, rejecting '{param}'")
-            await message.answer(
-                "Пробный период можно активировать только один раз. "
-                "Оформите подписку для продолжения использования."
-            )
+        if await _check_trial_eligibility(message, user, param, billing, subscription_service):
             return
 
-        has_trial = await subscription_service.has_used_trial(user.telegram_id)
-        if has_trial:
-            logger.warning(f"{log(user)} Already has trial subscription, rejecting web link '{param}'")
-            await message.answer(
-                "Пробный период можно активировать только один раз. "
-                "Оформите подписку для продолжения использования."
-            )
-            return
-
-    # 4. Find the Remnawave user created for this web order
+    # 4. Find the Remnawave user
     try:
         remna_user = await remnawave_service.remnawave.users.get_user_by_username(username)
     except Exception:
         logger.error(f"{log(user)} Remnawave user '{username}' not found")
-        await message.answer("Произошла ошибка при активации. Напишите в поддержку: support@componovpn.com")
+        await message.answer(
+            "Произошла ошибка при активации. Напишите в поддержку: support@componovpn.com"
+        )
         return
 
-    # 5. Claim the order — atomically set claimed_by_telegram_id
-    await billing.update_web_order(
-        order.PaymentID,
-        claimed_by_telegram_id=user.telegram_id,
-    )
-
-    # 5b. Link Customer to this telegram user
-    customer = None
-    if order.CustomerID:
-        customer = await billing.get_customer_by_id(order.CustomerID)
-    if not customer and order.Email:
-        customer = await billing.get_customer_by_email(order.Email)
-    if customer:
-        if not customer.TelegramID:
-            await billing.update_customer(
-                customer.ID, telegram_id=user.telegram_id
-            )
-        if not user.customer_id:
-            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
-
-    # 5c. Append email to user's linked_emails (deduplicated)
-    if order.Email and order.Email not in (user.linked_emails or []):
-        emails = list(user.linked_emails or [])
-        emails.append(order.Email)
-        user.linked_emails = emails
-        await billing.update_user(user.telegram_id, {"linked_emails": emails})
-        logger.info(f"{log(user)} Linked email '{order.Email}' (total: {len(emails)})")
+    # 5. Claim the order and link customer/email
+    await billing.update_web_order(order.PaymentID, claimed_by_telegram_id=user.telegram_id)
+    await _link_customer_and_email(user, order, billing)
 
     # 6. Update Remnawave user with telegram_id
     await remnawave_service.remnawave.users.update_user(
-        UpdateUserRequestDto(
-            uuid=remna_user.uuid,
-            telegram_id=user.telegram_id,
-        )
+        UpdateUserRequestDto(uuid=remna_user.uuid, telegram_id=user.telegram_id)
     )
 
-    # 7. Build plan snapshot from web order
-    from datetime import timedelta  # noqa: PLC0415
-    from src.core.utils.time import datetime_now  # noqa: PLC0415
-
+    # 7. Build plan snapshot
+    plan, traffic_limit, device_limit = _build_plan_snapshot(order, remna_user, is_trial)
     total_days = order.PlanDurationDays
-
-    if order.PlanSnapshot and not is_trial:
-        snapshot = order.PlanSnapshot
-        plan = PlanSnapshotDto(
-            id=snapshot.get("id", -1),
-            name=snapshot.get("name", "Web Purchase"),
-            tag=remna_user.tag,
-            type=PlanType(snapshot.get("type", "UNLIMITED")),
-            traffic_limit=snapshot.get("traffic_limit", -1),
-            device_limit=snapshot.get("device_limit", -1),
-            duration=total_days,
-            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-            external_squad=remna_user.external_squad_uuid,
-        )
-        traffic_limit = snapshot.get("traffic_limit", -1)
-        device_limit = snapshot.get("device_limit", -1)
-    else:
-        traffic_limit = 5
-        device_limit = format_device_count(remna_user.hwid_device_limit)
-        plan = PlanSnapshotDto(
-            id=-1,
-            name="Web Trial",
-            tag=remna_user.tag,
-            type=PlanType.UNLIMITED,
-            traffic_limit=traffic_limit,
-            device_limit=device_limit,
-            duration=total_days,
-            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-            external_squad=remna_user.external_squad_uuid,
-        )
 
     # 8. Merge into existing subscription or create new
     existing = await subscription_service.get_current(user.telegram_id)
 
     if existing and existing.expire_at:
-        # Extend existing subscription — stack days on top of current expiry
-        base_date = max(existing.expire_at, datetime_now())
-        new_expire = base_date + timedelta(days=total_days)
-
-        # Take the higher limits between existing and web order plan
-        existing.traffic_limit = max(existing.traffic_limit or 0, traffic_limit or 0)
-        existing.device_limit = max(existing.device_limit or 0, device_limit or 0)
-        existing.expire_at = new_expire
-        existing.is_trial = False
-        existing.plan = plan
-
-        updated_remna = await remnawave_service.updated_user(
-            user=user,
-            uuid=existing.user_remna_id,
-            subscription=existing,
-        )
-        existing.expire_at = updated_remna.expire_at
-        await subscription_service.update(existing)
-
-        # Disable orphaned web Remnawave user (don't delete — deletion triggers
-        # a webhook that can race with the merge and nuke the real subscription)
-        try:
-            await remnawave_service.remnawave.users.disable_user(remna_user.uuid)
-            logger.info(f"{log(user)} Disabled orphaned web Remnawave user '{username}'")
-        except Exception:
-            logger.warning(f"{log(user)} Failed to disable orphaned web Remnawave user '{username}'")
-
-        logger.info(
-            f"{log(user)} Extended existing subscription by {total_days}d "
-            f"(new expiry: {existing.expire_at}, email: {order.Email})"
-        )
-        await message.answer(
-            f"✅ Подписка продлена на {total_days} дней!\n"
-            f"📦 План: {plan.name}\n"
-            f"📅 Действует до: {existing.expire_at.strftime('%d.%m.%Y')}"
+        await _extend_existing_subscription(
+            message,
+            user,
+            existing,
+            plan,
+            traffic_limit,
+            device_limit,
+            total_days,
+            remna_user,
+            username,
+            remnawave_service,
+            subscription_service,
+            order,
         )
     else:
-        # No existing subscription — create new one
-        sub_url = remnawave_service._rewrite_sub_url(remna_user.subscription_url)
-        subscription = SubscriptionDto(
-            user_remna_id=remna_user.uuid,
-            status=remna_user.status,
-            is_trial=is_trial,
-            traffic_limit=traffic_limit,
-            device_limit=device_limit,
-            traffic_limit_strategy=remna_user.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-            tag=remna_user.tag,
-            internal_squads=[s.uuid for s in remna_user.active_internal_squads],
-            external_squad=remna_user.external_squad_uuid,
-            expire_at=remna_user.expire_at,
-            url=sub_url,
-            plan=plan,
-        )
-        await subscription_service.create(user, subscription)
-        kind = "trial" if is_trial else "purchase"
-        logger.info(f"{log(user)} Linked web {kind} subscription '{username}' (email: {order.Email}, {total_days}d)")
-        await message.answer(
-            f"✅ Подписка привязана!\n"
-            f"📦 План: {plan.name} ({total_days}д)\n"
-            f"🔗 Ваша ссылка для подключения уже в профиле."
+        await _create_new_web_subscription(
+            message,
+            user,
+            plan,
+            traffic_limit,
+            device_limit,
+            total_days,
+            is_trial,
+            remna_user,
+            username,
+            remnawave_service,
+            subscription_service,
+            order,
         )
 
     await notification_service.system_notify(
@@ -287,6 +391,127 @@ async def _handle_web_link(
     )
 
 
+async def _validate_pasted_sub_url(
+    message: Message,
+    user: UserDto,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+):
+    """Validate pasted subscription URL. Returns (sub_info, token) or None on failure."""
+    import re  # noqa: PLC0415
+
+    text = (message.text or "").strip()
+    match = re.search(r"/api/sub/([A-Za-z0-9_-]+)", text)
+    if not match:
+        await message.answer("Не удалось распознать ссылку подписки.")
+        return None
+
+    token = match.group(1)
+
+    try:
+        sub_info = await remnawave_service.remnawave.users.get_user_by_short_uuid(token)
+    except Exception:
+        logger.warning(
+            f"{log(user)} Pasted sub URL with token '{token}' — remnawave user not found"
+        )
+        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
+        return None
+
+    if not sub_info:
+        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
+        return None
+
+    if sub_info.telegram_id and sub_info.telegram_id != user.telegram_id:
+        await message.answer("Эта подписка уже привязана к другому аккаунту Telegram.")
+        return None
+
+    if sub_info.telegram_id == user.telegram_id:
+        await message.answer("Эта подписка уже привязана к вашему аккаунту.")
+        return None
+
+    existing = await subscription_service.get_current(user.telegram_id)
+    if existing:
+        await message.answer(
+            "У вас уже есть активная подписка. Для привязки другой подписки обратитесь в поддержку."
+        )
+        return None
+
+    return sub_info, token
+
+
+async def _link_pasted_subscription(
+    user: UserDto,
+    sub_info,
+    billing: BillingClient,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+) -> None:
+    """Link customer, claim web order, and create local subscription for a pasted URL."""
+    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
+    from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
+
+    from src.core.enums import PlanType  # noqa: PLC0415
+    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
+    from src.models.dto import SubscriptionDto  # noqa: PLC0415
+
+    await remnawave_service.remnawave.users.update_user(
+        UpdateUserRequestDto(uuid=sub_info.uuid, telegram_id=user.telegram_id)
+    )
+
+    customer = await billing.get_customer_by_remna_user_uuid(str(sub_info.uuid))
+    if customer:
+        if not customer.TelegramID:
+            await billing.update_customer(customer.ID, telegram_id=user.telegram_id)
+        if not user.customer_id:
+            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
+
+    if sub_info.username and sub_info.username.startswith("web_"):
+        short_id = sub_info.username[len("web_") :]
+        order = await billing.get_web_order_by_short_id(short_id)
+        if order and order.ClaimedByTelegramID is None:
+            await billing.update_web_order(
+                order.PaymentID,
+                claimed_by_telegram_id=user.telegram_id,
+            )
+
+    sub_url = remnawave_service._rewrite_sub_url(sub_info.subscription_url)
+    traffic_limit = (
+        sub_info.traffic_limit_bytes // (1024**3) if sub_info.traffic_limit_bytes else -1
+    )
+    device_limit = format_device_count(sub_info.hwid_device_limit)
+    strategy = sub_info.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET
+    squads = [s.uuid for s in sub_info.active_internal_squads]
+
+    plan = PlanSnapshotDto(
+        id=-1,
+        name="Web Purchase",
+        tag=sub_info.tag,
+        type=PlanType.UNLIMITED,
+        traffic_limit=traffic_limit,
+        device_limit=device_limit,
+        duration=-1,
+        traffic_limit_strategy=strategy,
+        internal_squads=squads,
+        external_squad=sub_info.external_squad_uuid,
+    )
+
+    subscription = SubscriptionDto(
+        user_remna_id=sub_info.uuid,
+        status=sub_info.status,
+        is_trial=False,
+        traffic_limit=traffic_limit,
+        device_limit=device_limit,
+        traffic_limit_strategy=strategy,
+        tag=sub_info.tag,
+        internal_squads=squads,
+        external_squad=sub_info.external_squad_uuid,
+        expire_at=sub_info.expire_at,
+        url=sub_url,
+        plan=plan,
+    )
+    await subscription_service.create(user, subscription)
+
+
 @inject
 @router.message(F.text.contains("/api/sub/"))
 async def on_subscription_url_paste(
@@ -298,122 +523,28 @@ async def on_subscription_url_paste(
     notification_service: FromDishka[NotificationService],
 ) -> None:
     """Handle when user pastes a subscription URL to link their web purchase."""
-    import re  # noqa: PLC0415
-    from remnapy.models import UpdateUserRequestDto  # noqa: PLC0415
-    from remnapy.enums.users import TrafficLimitStrategy  # noqa: PLC0415
-    from src.core.enums import PlanType  # noqa: PLC0415
-    from src.core.utils.formatters import format_device_count  # noqa: PLC0415
-    from src.models.dto import SubscriptionDto  # noqa: PLC0415
-
-    text = (message.text or "").strip()
-
-    # Extract the token (last path segment of the subscription URL)
-    match = re.search(r"/api/sub/([A-Za-z0-9_-]+)", text)
-    if not match:
-        await message.answer("Не удалось распознать ссылку подписки.")
-        return
-
-    token = match.group(1)
-
-    # Find the Remnawave user by subscription token (shortUuid)
-    try:
-        sub_info = await remnawave_service.remnawave.users.get_user_by_short_uuid(token)
-    except Exception:
-        logger.warning(f"{log(user)} Pasted sub URL with token '{token}' — remnawave user not found")
-        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
-        return
-
-    if not sub_info:
-        await message.answer("Подписка не найдена. Проверьте ссылку и попробуйте снова.")
-        return
-
-    # Check if this remnawave user is already linked to a telegram account
-    if sub_info.telegram_id and sub_info.telegram_id != user.telegram_id:
-        await message.answer("Эта подписка уже привязана к другому аккаунту Telegram.")
-        return
-
-    if sub_info.telegram_id == user.telegram_id:
-        await message.answer("Эта подписка уже привязана к вашему аккаунту.")
-        return
-
-    # Check if this user already has a subscription linked
-    existing = await subscription_service.get_current(user.telegram_id)
-    if existing:
-        await message.answer(
-            "У вас уже есть активная подписка. "
-            "Для привязки другой подписки обратитесь в поддержку."
-        )
-        return
-
-    # Link: update remnawave user with telegram_id
-    await remnawave_service.remnawave.users.update_user(
-        UpdateUserRequestDto(
-            uuid=sub_info.uuid,
-            telegram_id=user.telegram_id,
-        )
+    result = await _validate_pasted_sub_url(
+        message,
+        user,
+        remnawave_service,
+        subscription_service,
     )
+    if not result:
+        return
 
-    # Link Customer if one exists for this Remnawave user
-    customer = await billing.get_customer_by_remna_user_uuid(str(sub_info.uuid))
-    if customer:
-        if not customer.TelegramID:
-            await billing.update_customer(
-                customer.ID, telegram_id=user.telegram_id
-            )
-        if not user.customer_id:
-            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
+    sub_info, token = result
 
-    # Try to find matching web order to claim it
-    if sub_info.username and sub_info.username.startswith("web_"):
-        short_id = sub_info.username[len("web_"):]
-        order = await billing.get_web_order_by_short_id(short_id)
-        if order and order.ClaimedByTelegramID is None:
-            await billing.update_web_order(
-                order.PaymentID,
-                claimed_by_telegram_id=user.telegram_id,
-            )
-
-    # Create local subscription
-    sub_url = remnawave_service._rewrite_sub_url(sub_info.subscription_url)
-
-    # Determine plan details from remnawave user
-    traffic_limit = sub_info.traffic_limit_bytes // (1024 ** 3) if sub_info.traffic_limit_bytes else -1
-    device_limit = format_device_count(sub_info.hwid_device_limit)
-
-    plan = PlanSnapshotDto(
-        id=-1,
-        name="Web Purchase",
-        tag=sub_info.tag,
-        type=PlanType.UNLIMITED,
-        traffic_limit=traffic_limit,
-        device_limit=device_limit,
-        duration=-1,
-        traffic_limit_strategy=sub_info.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-        internal_squads=[s.uuid for s in sub_info.active_internal_squads],
-        external_squad=sub_info.external_squad_uuid,
+    await _link_pasted_subscription(
+        user,
+        sub_info,
+        billing,
+        remnawave_service,
+        subscription_service,
     )
-
-    subscription = SubscriptionDto(
-        user_remna_id=sub_info.uuid,
-        status=sub_info.status,
-        is_trial=False,
-        traffic_limit=traffic_limit,
-        device_limit=device_limit,
-        traffic_limit_strategy=sub_info.traffic_limit_strategy or TrafficLimitStrategy.NO_RESET,
-        tag=sub_info.tag,
-        internal_squads=[s.uuid for s in sub_info.active_internal_squads],
-        external_squad=sub_info.external_squad_uuid,
-        expire_at=sub_info.expire_at,
-        url=sub_url,
-        plan=plan,
-    )
-
-    await subscription_service.create(user, subscription)
     logger.info(f"{log(user)} Linked subscription via pasted URL, token='{token}'")
 
     await message.answer(
-        "Подписка успешно привязана к вашему аккаунту! "
-        "Теперь вы можете управлять ей через бота."
+        "Подписка успешно привязана к вашему аккаунту! Теперь вы можете управлять ей через бота."
     )
 
 

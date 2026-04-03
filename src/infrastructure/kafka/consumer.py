@@ -1,13 +1,14 @@
 import asyncio
 import json
 
+from aiogram import Bot
+from aiogram_dialog import BgManagerFactory, ShowMode, StartMode
 from aiokafka import AIOKafkaConsumer
 from dishka import AsyncContainer
 from loguru import logger
 
-from aiogram import Bot
-from aiogram_dialog import BgManagerFactory, ShowMode, StartMode
-
+from src.bot.keyboards import get_user_keyboard
+from src.bot.states import Subscription
 from src.core.config import AppConfig
 from src.core.enums import PurchaseType, SystemNotificationType
 from src.core.utils.formatters import (
@@ -16,8 +17,6 @@ from src.core.utils.formatters import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.message_payload import MessagePayload
-from src.bot.keyboards import get_user_keyboard
-from src.bot.states import Subscription
 from src.services.notification import NotificationService
 
 
@@ -114,10 +113,16 @@ class UserNotificationConsumer:
         i18n_kwargs = payload.get("i18n_kwargs", {})
 
         # Apply Fluent-compatible formatters for known plan fields
-        if "plan_traffic_limit" in i18n_kwargs and isinstance(i18n_kwargs["plan_traffic_limit"], int):
-            i18n_kwargs["plan_traffic_limit"] = i18n_format_traffic_limit(i18n_kwargs["plan_traffic_limit"])
+        if "plan_traffic_limit" in i18n_kwargs and isinstance(
+            i18n_kwargs["plan_traffic_limit"], int
+        ):
+            i18n_kwargs["plan_traffic_limit"] = i18n_format_traffic_limit(
+                i18n_kwargs["plan_traffic_limit"]
+            )
         if "plan_device_limit" in i18n_kwargs and isinstance(i18n_kwargs["plan_device_limit"], int):
-            i18n_kwargs["plan_device_limit"] = i18n_format_device_limit(i18n_kwargs["plan_device_limit"])
+            i18n_kwargs["plan_device_limit"] = i18n_format_device_limit(
+                i18n_kwargs["plan_device_limit"]
+            )
         if "plan_duration" in i18n_kwargs and isinstance(i18n_kwargs["plan_duration"], int):
             i18n_kwargs["plan_duration"] = i18n_format_days(i18n_kwargs["plan_duration"])
 

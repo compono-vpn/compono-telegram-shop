@@ -8,7 +8,6 @@ from loguru import logger
 
 from src.core.config import AppConfig
 from src.core.enums import GatewayChannel, PaymentGatewayType
-from src.models.dto import PaymentGatewayDto
 from src.infrastructure.payment_gateways import (
     BasePaymentGateway,
     CryptomusGateway,
@@ -19,6 +18,7 @@ from src.infrastructure.payment_gateways import (
     YookassaGateway,
     YoomoneyGateway,
 )
+from src.models.dto import PaymentGatewayDto
 
 GATEWAY_MAP: dict[PaymentGatewayType, Type[BasePaymentGateway]] = {
     PaymentGatewayType.TELEGRAM_STARS: TelegramStarsGateway,
@@ -44,7 +44,8 @@ class PaymentGatewaysProvider(Provider):
 
                 if cached_gateway.data != gateway:
                     logger.warning(
-                        f"Gateway '{gateway.type}' channel='{gateway.channel}' data changed. Re-initializing instance"
+                        f"Gateway '{gateway.type}' channel='{gateway.channel}'"
+                        f" data changed. Re-initializing instance"
                     )
                     del self._cached_gateways[cache_key]
 
@@ -57,7 +58,9 @@ class PaymentGatewaysProvider(Provider):
                 self._cached_gateways[cache_key] = gateway_instance(
                     gateway=gateway, bot=bot, config=config
                 )
-                logger.debug(f"Initialized new gateway '{gateway.type}' channel='{gateway.channel}' instance")
+                logger.debug(
+                    f"Initialized new gateway '{gateway.type}' channel='{gateway.channel}' instance"
+                )
 
             return self._cached_gateways[cache_key]
 

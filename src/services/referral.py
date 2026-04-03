@@ -1,3 +1,5 @@
+import importlib
+from decimal import Decimal
 from io import BytesIO
 from typing import Any, Optional, cast
 
@@ -13,7 +15,10 @@ from src.core.config import AppConfig
 from src.core.constants import ASSETS_DIR, REFERRAL_PREFIX, T_ME
 from src.core.enums import (
     MessageEffect,
+    PurchaseType,
+    ReferralAccrualStrategy,
     ReferralLevel,
+    ReferralRewardStrategy,
     ReferralRewardType,
     UserNotificationType,
 )
@@ -23,13 +28,13 @@ from src.infrastructure.billing.converters import (
     billing_referral_reward_to_dto,
     billing_referral_to_dto,
 )
+from src.infrastructure.redis import RedisRepository
 from src.models.dto import (
     ReferralDto,
     ReferralRewardDto,
     TransactionDto,
     UserDto,
 )
-from src.infrastructure.redis import RedisRepository
 from src.services.notification import NotificationService
 from src.services.settings import SettingsService
 from src.services.user import UserService
@@ -64,7 +69,10 @@ class ReferralService(BaseService):
         self._bot_username: Optional[str] = None
 
     async def create_referral(
-        self, referrer: UserDto, referred: UserDto, level: ReferralLevel,
+        self,
+        referrer: UserDto,
+        referred: UserDto,
+        level: ReferralLevel,
     ) -> ReferralDto:
         billing_ref = await self.billing.create_referral(
             referrer_telegram_id=referrer.telegram_id,
@@ -83,8 +91,11 @@ class ReferralService(BaseService):
         return [billing_referral_to_dto(r) for r in billing_refs]
 
     async def create_reward(
-        self, referral_id: int, user_telegram_id: int,
-        type: ReferralRewardType, amount: int,
+        self,
+        referral_id: int,
+        user_telegram_id: int,
+        type: ReferralRewardType,
+        amount: int,
     ) -> ReferralRewardDto:
         billing_reward = await self.billing.create_referral_reward(
             referral_id=referral_id,
@@ -103,10 +114,43 @@ class ReferralService(BaseService):
         await self.billing.update_referral_reward(reward_id, is_issued=True)
         logger.info(f"Marked reward '{reward_id}' as issued")
 
+    @staticmethod
+    def _compute_reward_amount(
+        settings_reward,
+        reward_type: ReferralRewardType,
+        level: ReferralLevel,
+        transaction: TransactionDto,
+    ) -> Optional[int]:
+        """Compute the reward amount for a given level. Returns None if no reward applies."""
+        config_value = settings_reward.config.get(level)
+        if config_value is None:
+            return None
+
+        if settings_reward.strategy == ReferralRewardStrategy.AMOUNT:
+            reward_amount = config_value
+        elif settings_reward.strategy == ReferralRewardStrategy.PERCENT:
+            pct = Decimal(config_value) / Decimal(100)
+            if reward_type == ReferralRewardType.POINTS:
+                reward_amount = max(1, int(transaction.pricing.final_amount * pct))
+            elif reward_type == ReferralRewardType.EXTRA_DAYS:
+                if transaction.plan and transaction.plan.duration:
+                    reward_amount = max(1, int(Decimal(transaction.plan.duration) * pct))
+                else:
+                    return None
+            else:
+                return None
+        else:
+            return None
+
+        if not reward_amount or reward_amount <= 0:
+            return None
+        return reward_amount
+
     async def assign_referral_rewards(self, transaction: TransactionDto) -> None:
-        from src.infrastructure.taskiq.tasks.referrals import give_referrer_reward_task  # noqa: PLC0415
-        from src.core.enums import PurchaseType, ReferralAccrualStrategy, ReferralRewardStrategy  # noqa: PLC0415
-        from decimal import Decimal  # noqa: PLC0415
+        # Resolved via importlib to avoid circular import:
+        # referral.py -> taskiq/tasks/referrals.py -> referral.py
+        _tasks = importlib.import_module("src.infrastructure.taskiq.tasks.referrals")
+        give_referrer_reward_task = _tasks.give_referrer_reward_task
 
         settings = await self.settings_service.get_referral_settings()
         if (
@@ -127,32 +171,24 @@ class ReferralService(BaseService):
         for level, referrer in reward_chain.items():
             if level > settings.level:
                 continue
-            config_value = settings.reward.config.get(level)
-            if config_value is None:
-                continue
-            if settings.reward.strategy == ReferralRewardStrategy.AMOUNT:
-                reward_amount = config_value
-            elif settings.reward.strategy == ReferralRewardStrategy.PERCENT:
-                pct = Decimal(config_value) / Decimal(100)
-                if reward_type == ReferralRewardType.POINTS:
-                    reward_amount = max(1, int(transaction.pricing.final_amount * pct))
-                elif reward_type == ReferralRewardType.EXTRA_DAYS:
-                    if transaction.plan and transaction.plan.duration:
-                        reward_amount = max(1, int(Decimal(transaction.plan.duration) * pct))
-                    else:
-                        continue
-                else:
-                    continue
-            else:
-                continue
-            if not reward_amount or reward_amount <= 0:
+            reward_amount = self._compute_reward_amount(
+                settings.reward,
+                reward_type,
+                level,
+                transaction,
+            )
+            if reward_amount is None:
                 continue
             reward = await self.create_reward(
-                referral_id=referral.id, user_telegram_id=referrer.telegram_id,
-                type=reward_type, amount=reward_amount,
+                referral_id=referral.id,
+                user_telegram_id=referrer.telegram_id,
+                type=reward_type,
+                amount=reward_amount,
             )
             await give_referrer_reward_task.kiq(
-                user_telegram_id=referrer.telegram_id, reward=reward, referred_name=user.name,
+                user_telegram_id=referrer.telegram_id,
+                reward=reward,
+                referred_name=user.name,
             )
 
     async def get_referral_count(self, telegram_id: int) -> int:
@@ -177,7 +213,7 @@ class ReferralService(BaseService):
         if not code:
             return
 
-        code = code[len(REFERRAL_PREFIX):] if code.startswith(REFERRAL_PREFIX) else code
+        code = code[len(REFERRAL_PREFIX) :] if code.startswith(REFERRAL_PREFIX) else code
 
         referrer = await self._get_valid_referrer(code, user.telegram_id)
         if not referrer:
@@ -190,7 +226,9 @@ class ReferralService(BaseService):
 
         level = self._define_referral_level(parent.level if parent else None)
         await self.create_referral(referrer, user, level)
-        logger.info(f"Referral linked: {referrer.telegram_id} -> {user.telegram_id}, level {level.name}")
+        logger.info(
+            f"Referral linked: {referrer.telegram_id} -> {user.telegram_id}, level {level.name}"
+        )
 
         if await self.settings_service.is_referral_enable():
             await self.notification_service.notify_user(
@@ -275,7 +313,7 @@ class ReferralService(BaseService):
         code = parts[1]
         if not code.startswith(REFERRAL_PREFIX):
             return None
-        return code[len(REFERRAL_PREFIX):]
+        return code[len(REFERRAL_PREFIX) :]
 
     def _define_referral_level(self, parent_level: Optional[ReferralLevel]) -> ReferralLevel:
         if parent_level is None:
@@ -287,7 +325,8 @@ class ReferralService(BaseService):
         return ReferralLevel(next_level_value)
 
     async def _get_referral_chain(
-        self, user_id: int,
+        self,
+        user_id: int,
     ) -> tuple[Optional[ReferralDto], Optional[ReferralDto]]:
         referral = await self.get_referral_by_referred(user_id)
         parent = None

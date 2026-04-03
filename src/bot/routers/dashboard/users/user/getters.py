@@ -20,9 +20,13 @@ from src.core.utils.formatters import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.infrastructure.billing import (
+    BillingClient,
+    billing_plan_to_dto,
+    billing_transaction_to_dto,
+)
 from src.models.dto import UserDto
 from src.models.dto.subscription import RemnaSubscriptionDto
-from src.infrastructure.billing import BillingClient, billing_plan_to_dto, billing_transaction_to_dto
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
@@ -421,6 +425,7 @@ async def transaction_getter(
     target_telegram_id = dialog_manager.dialog_data["target_telegram_id"]
     selected_transaction = dialog_manager.dialog_data["selected_transaction"]
     from uuid import UUID  # noqa: PLC0415
+
     billing_txn = await billing.get_transaction(UUID(str(selected_transaction)))
     transaction = billing_transaction_to_dto(billing_txn) if billing_txn else None
 

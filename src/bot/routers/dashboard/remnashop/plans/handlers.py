@@ -1,5 +1,4 @@
-from decimal import Decimal
-from typing import Optional
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 from aiogram.types import CallbackQuery, Message
@@ -538,7 +537,6 @@ async def on_price_input(
         raise ValueError("Missing duration or currency selection for price input")
 
     try:
-        from decimal import Decimal, InvalidOperation
         new_price = Decimal(message.text.strip())
         if new_price < 0:
             raise ValueError("negative price")
@@ -773,11 +771,15 @@ async def on_confirm_plan(  # noqa: C901
         "description": plan_dto.description,
         "tag": plan_dto.tag,
         "is_active": plan_dto.is_active,
-        "type": plan_dto.type.value if hasattr(plan_dto.type, 'value') else str(plan_dto.type),
-        "availability": plan_dto.availability.value if hasattr(plan_dto.availability, 'value') else str(plan_dto.availability),
+        "type": plan_dto.type.value if hasattr(plan_dto.type, "value") else str(plan_dto.type),
+        "availability": plan_dto.availability.value
+        if hasattr(plan_dto.availability, "value")
+        else str(plan_dto.availability),
         "traffic_limit": plan_dto.traffic_limit,
         "device_limit": plan_dto.device_limit,
-        "traffic_limit_strategy": plan_dto.traffic_limit_strategy.value if hasattr(plan_dto.traffic_limit_strategy, 'value') else str(plan_dto.traffic_limit_strategy),
+        "traffic_limit_strategy": plan_dto.traffic_limit_strategy.value
+        if hasattr(plan_dto.traffic_limit_strategy, "value")
+        else str(plan_dto.traffic_limit_strategy),
         "allowed_user_ids": plan_dto.allowed_user_ids,
         "internal_squads": [str(s) for s in plan_dto.internal_squads],
         "external_squad": str(plan_dto.external_squad) if plan_dto.external_squad else None,
@@ -786,7 +788,9 @@ async def on_confirm_plan(  # noqa: C901
                 "days": d.days,
                 "prices": [
                     {
-                        "currency": p.currency.value if hasattr(p.currency, 'value') else str(p.currency),
+                        "currency": p.currency.value
+                        if hasattr(p.currency, "value")
+                        else str(p.currency),
                         "price": str(p.price),
                     }
                     for p in d.prices

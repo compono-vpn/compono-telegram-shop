@@ -1,25 +1,18 @@
-from datetime import timedelta
-from uuid import UUID
-
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import DialogManager
-from aiogram_dialog.api.exceptions import UnknownIntent, UnknownState
 from aiogram_dialog.widgets.kbd import Button
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 from loguru import logger
 from remnapy import RemnawaveSDK
-from remnapy.models import CreateUserRequestDto
 
 from src.bot.filters import SuperDevFilter
 from src.core.config.app import AppConfig
 from src.core.utils.formatters import format_user_log as log
-from src.core.utils.time import datetime_now
-from src.models.dto import SubscriptionDto, UserDto
-from src.models.dto.plan import PlanSnapshotDto
+from src.models.dto import UserDto
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 

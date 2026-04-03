@@ -30,13 +30,13 @@ from src.core.enums import (
     UserRole,
 )
 from src.core.i18n.translator import get_translated_kwargs
-from src.core.utils.formatters import i18n_postprocess_text
 from src.core.storage.keys import NotificationDedupKey
+from src.core.utils.formatters import i18n_postprocess_text
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.types import AnyKeyboard
+from src.infrastructure.redis.repository import RedisRepository
 from src.models.dto import UserDto
 from src.models.dto.user import BaseUserDto
-from src.infrastructure.redis.repository import RedisRepository
 from src.services.settings import SettingsService
 
 from .base import BaseService
@@ -81,8 +81,7 @@ class NotificationService(BaseService):
 
         if ntf_type and await self._is_duplicate(user.telegram_id, ntf_type):
             logger.debug(
-                f"Skipping duplicate notification '{ntf_type.value}' "
-                f"for '{user.telegram_id}'"
+                f"Skipping duplicate notification '{ntf_type.value}' for '{user.telegram_id}'"
             )
             return None
 

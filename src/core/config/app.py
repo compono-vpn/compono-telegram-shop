@@ -75,7 +75,11 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     @property
     def hydra_primary_domain(self) -> str:
         """First domain in HYDRA_DOMAINS list, used as default for fallback URLs."""
-        return self.hydra_domains[0] if self.hydra_domains and self.hydra_domains[0] else "componovpn.com"
+        return (
+            self.hydra_domains[0]
+            if self.hydra_domains and self.hydra_domains[0]
+            else "componovpn.com"
+        )
 
     @property
     def hydra_allowed_origins(self) -> set[str]:

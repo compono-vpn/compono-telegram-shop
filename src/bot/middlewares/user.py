@@ -12,10 +12,10 @@ from src.core.constants import CONTAINER_KEY, IS_SUPER_DEV_KEY, SOURCE_PREFIX, U
 from src.core.enums import MiddlewareEventType, SystemNotificationType
 from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
-from src.models.dto import UserDto
-from src.infrastructure.taskiq.tasks.subscriptions import auto_assign_trial_task
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_subscription_to_dto
+from src.infrastructure.taskiq.tasks.subscriptions import auto_assign_trial_task
+from src.models.dto import UserDto
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.user import UserService
@@ -61,12 +61,14 @@ class UserMiddleware(EventTypedMiddleware):
 
             # Sync user to billing so pricing/promocodes work
             try:
-                await billing.create_user({
-                    "telegram_id": user.telegram_id,
-                    "username": user.username,
-                    "name": user.name,
-                    "source": source,
-                })
+                await billing.create_user(
+                    {
+                        "telegram_id": user.telegram_id,
+                        "username": user.username,
+                        "name": user.name,
+                        "source": source,
+                    }
+                )
             except Exception:
                 logger.opt(exception=True).warning("Failed to sync new user to billing")
             referrer = await referral_service.get_referrer_by_event(event, user.telegram_id)
@@ -105,7 +107,8 @@ class UserMiddleware(EventTypedMiddleware):
             # Skip auto-trial if user came via web trial deep link — the
             # web link handler will activate their subscription instead
             is_web_trial = (
-                hasattr(event, "text") and event.text
+                hasattr(event, "text")
+                and event.text
                 and len(event.text.split()) > 1
                 and event.text.split()[1].startswith("web_")
             )
@@ -125,7 +128,9 @@ class UserMiddleware(EventTypedMiddleware):
             else:
                 user.current_subscription = None
         except Exception:
-            logger.opt(exception=True).warning("Failed to fetch subscription from billing API, using ORM value")
+            logger.opt(exception=True).warning(
+                "Failed to fetch subscription from billing API, using ORM value"
+            )
 
         data[USER_KEY] = user
         data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
@@ -141,5 +146,5 @@ class UserMiddleware(EventTypedMiddleware):
             return None
         param = parts[1]
         if param.startswith(SOURCE_PREFIX):
-            return param[len(SOURCE_PREFIX):]
+            return param[len(SOURCE_PREFIX) :]
         return None

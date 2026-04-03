@@ -4,8 +4,8 @@ from dishka.integrations.taskiq import FromDishka, inject
 
 from src.bot.states import MainMenu, Subscription
 from src.core.enums import PurchaseType
-from src.models.dto import UserDto
 from src.infrastructure.taskiq.broker import broker
+from src.models.dto import UserDto
 
 
 @broker.task

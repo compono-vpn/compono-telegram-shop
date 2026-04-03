@@ -25,13 +25,13 @@ from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.types import RemnaUserDto
 from src.infrastructure.billing import BillingClient
+from src.infrastructure.taskiq.broker import broker
 from src.models.dto import (
     PlanSnapshotDto,
     SubscriptionDto,
     TransactionDto,
     UserDto,
 )
-from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
 from src.services.plan import PlanService
 from src.services.remnawave import RemnawaveService
@@ -180,6 +180,121 @@ async def trial_subscription_task(
             await redirect_to_failed_subscription_task.kiq(user)
 
 
+async def _handle_new_purchase(
+    user: UserDto,
+    plan: PlanSnapshotDto,
+    billing: BillingClient,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+) -> None:
+    """Handle a NEW purchase type (no existing trial)."""
+    created_user = await remnawave_service.create_user(user, plan=plan)
+
+    customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
+    await billing.update_customer(
+        customer.ID,
+        remna_user_uuid=str(created_user.uuid),
+        remna_username=created_user.username,
+        subscription_url=created_user.subscription_url,
+    )
+    if not user.customer_id:
+        await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
+
+    new_subscription = SubscriptionDto(
+        user_remna_id=created_user.uuid,
+        status=created_user.status,
+        traffic_limit=plan.traffic_limit,
+        device_limit=plan.device_limit,
+        traffic_limit_strategy=plan.traffic_limit_strategy,
+        tag=plan.tag,
+        internal_squads=plan.internal_squads,
+        external_squad=plan.external_squad,
+        expire_at=created_user.expire_at,
+        url=created_user.subscription_url,
+        plan=plan,
+    )
+    await subscription_service.create(user, new_subscription)
+    logger.debug(f"Created new subscription for user '{user.telegram_id}'")
+
+
+async def _handle_renew_purchase(
+    user: UserDto,
+    plan: PlanSnapshotDto,
+    subscription: SubscriptionDto,
+    transaction: TransactionDto,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+) -> None:
+    """Handle a RENEW purchase type."""
+    base_date = max(subscription.expire_at, datetime_now())
+    new_expire = base_date + timedelta(days=transaction.plan.duration)
+    subscription.expire_at = new_expire
+
+    updated_user = await remnawave_service.updated_user(
+        user=user,
+        uuid=subscription.user_remna_id,
+        subscription=subscription,
+    )
+
+    subscription.expire_at = updated_user.expire_at
+    subscription.plan = plan
+    await subscription_service.update(subscription)
+    logger.debug(f"Renewed subscription for user '{user.telegram_id}'")
+
+
+async def _handle_change_purchase(
+    user: UserDto,
+    plan: PlanSnapshotDto,
+    subscription: SubscriptionDto,
+    remnawave_service: RemnawaveService,
+    subscription_service: SubscriptionService,
+) -> None:
+    """Handle a CHANGE purchase type (or upgrade from trial)."""
+    subscription.status = SubscriptionStatus.DISABLED
+    await subscription_service.update(subscription)
+
+    remaining = subscription.expire_at - datetime_now()
+    remaining_days = max(remaining.total_seconds() / 86400, 0)
+    total_days = plan.duration + remaining_days
+    new_expire = datetime_now() + timedelta(days=total_days)
+
+    temp_subscription = SubscriptionDto(
+        user_remna_id=subscription.user_remna_id,
+        status=SubscriptionStatus.ACTIVE,
+        traffic_limit=plan.traffic_limit,
+        device_limit=plan.device_limit,
+        traffic_limit_strategy=plan.traffic_limit_strategy,
+        tag=plan.tag,
+        internal_squads=plan.internal_squads,
+        external_squad=plan.external_squad,
+        expire_at=new_expire,
+        url=subscription.url,
+        plan=plan,
+    )
+
+    updated_user = await remnawave_service.updated_user(
+        user=user,
+        uuid=subscription.user_remna_id,
+        subscription=temp_subscription,
+        reset_traffic=True,
+    )
+    new_subscription = SubscriptionDto(
+        user_remna_id=updated_user.uuid,
+        status=updated_user.status,
+        traffic_limit=plan.traffic_limit,
+        device_limit=plan.device_limit,
+        traffic_limit_strategy=plan.traffic_limit_strategy,
+        tag=plan.tag,
+        internal_squads=plan.internal_squads,
+        external_squad=plan.external_squad,
+        expire_at=updated_user.expire_at,
+        url=updated_user.subscription_url,
+        plan=plan,
+    )
+    await subscription_service.create(user, new_subscription)
+    logger.debug(f"Changed subscription for user '{user.telegram_id}'")
+
+
 @broker.task(retry_on_error=True)
 @inject
 async def purchase_subscription_task(
@@ -206,104 +321,34 @@ async def purchase_subscription_task(
 
     try:
         if purchase_type == PurchaseType.NEW and not has_trial:
-            created_user = await remnawave_service.create_user(user, plan=plan)
-
-            # Link Customer record via billing API
-            customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
-            await billing.update_customer(
-                customer.ID,
-                remna_user_uuid=str(created_user.uuid),
-                remna_username=created_user.username,
-                subscription_url=created_user.subscription_url,
+            await _handle_new_purchase(
+                user,
+                plan,
+                billing,
+                remnawave_service,
+                subscription_service,
             )
-            if not user.customer_id:
-                await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
-
-            new_subscription = SubscriptionDto(
-                user_remna_id=created_user.uuid,
-                status=created_user.status,
-                traffic_limit=plan.traffic_limit,
-                device_limit=plan.device_limit,
-                traffic_limit_strategy=plan.traffic_limit_strategy,
-                tag=plan.tag,
-                internal_squads=plan.internal_squads,
-                external_squad=plan.external_squad,
-                expire_at=created_user.expire_at,
-                url=created_user.subscription_url,
-                plan=plan,
-            )
-            await subscription_service.create(user, new_subscription)
-            logger.debug(f"Created new subscription for user '{user.telegram_id}'")
-
         elif purchase_type == PurchaseType.RENEW and not has_trial:
             if not subscription:
                 raise ValueError(f"No subscription found for renewal for user '{user.telegram_id}'")
-
-            base_date = max(subscription.expire_at, datetime_now())
-            new_expire = base_date + timedelta(days=transaction.plan.duration)
-            subscription.expire_at = new_expire
-
-            updated_user = await remnawave_service.updated_user(
-                user=user,
-                uuid=subscription.user_remna_id,
-                subscription=subscription,
+            await _handle_renew_purchase(
+                user,
+                plan,
+                subscription,
+                transaction,
+                remnawave_service,
+                subscription_service,
             )
-
-            subscription.expire_at = updated_user.expire_at
-            subscription.plan = plan
-            await subscription_service.update(subscription)
-            logger.debug(f"Renewed subscription for user '{user.telegram_id}'")
-
         elif purchase_type == PurchaseType.CHANGE or has_trial:
             if not subscription:
                 raise ValueError(f"No subscription found for change for user '{user.telegram_id}'")
-
-            subscription.status = SubscriptionStatus.DISABLED
-            await subscription_service.update(subscription)
-
-            # Stack remaining days on top of the new plan duration
-            remaining = subscription.expire_at - datetime_now()
-            remaining_days = max(remaining.total_seconds() / 86400, 0)
-            total_days = plan.duration + remaining_days
-            new_expire = datetime_now() + timedelta(days=total_days)
-
-            # Build a temporary subscription to pass the stacked expiry to remnawave
-            temp_subscription = SubscriptionDto(
-                user_remna_id=subscription.user_remna_id,
-                status=SubscriptionStatus.ACTIVE,
-                traffic_limit=plan.traffic_limit,
-                device_limit=plan.device_limit,
-                traffic_limit_strategy=plan.traffic_limit_strategy,
-                tag=plan.tag,
-                internal_squads=plan.internal_squads,
-                external_squad=plan.external_squad,
-                expire_at=new_expire,
-                url=subscription.url,
-                plan=plan,
+            await _handle_change_purchase(
+                user,
+                plan,
+                subscription,
+                remnawave_service,
+                subscription_service,
             )
-
-            updated_user = await remnawave_service.updated_user(
-                user=user,
-                uuid=subscription.user_remna_id,
-                subscription=temp_subscription,
-                reset_traffic=True,
-            )
-            new_subscription = SubscriptionDto(
-                user_remna_id=updated_user.uuid,
-                status=updated_user.status,
-                traffic_limit=plan.traffic_limit,
-                device_limit=plan.device_limit,
-                traffic_limit_strategy=plan.traffic_limit_strategy,
-                tag=plan.tag,
-                internal_squads=plan.internal_squads,
-                external_squad=plan.external_squad,
-                expire_at=updated_user.expire_at,
-                url=updated_user.subscription_url,
-                plan=plan,
-            )
-            await subscription_service.create(user, new_subscription)
-            logger.debug(f"Changed subscription for user '{user.telegram_id}'")
-
         else:
             raise Exception(
                 f"Unknown purchase type '{purchase_type}' for user '{user.telegram_id}'"
@@ -312,7 +357,9 @@ async def purchase_subscription_task(
         if purchase_type == PurchaseType.NEW and not has_trial:
             sub = await subscription_service.get_current(user.telegram_id)
             if sub:
-                connect_url = SubscriptionService.build_connect_url(sub.url, config.remnawave.sub_public_domain)
+                connect_url = SubscriptionService.build_connect_url(
+                    sub.url, config.remnawave.sub_public_domain
+                )
                 await schedule_not_connected_reminder(redis_client, user.telegram_id, connect_url)
 
         await redirect_to_successed_payment_task.kiq(user, purchase_type)

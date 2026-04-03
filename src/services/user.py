@@ -25,10 +25,10 @@ from src.core.utils.types import RemnaUserDto
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.billing.converters import billing_user_to_dto
-from src.models.dto import UserDto
-from src.models.dto.user import BaseUserDto
 from src.infrastructure.redis import RedisRepository, redis_cache
 from src.infrastructure.redis.cache import prepare_for_cache
+from src.models.dto import UserDto
+from src.models.dto.user import BaseUserDto
 
 from .base import BaseService
 
@@ -63,15 +63,17 @@ class UserService(BaseService):
             secret=self.config.crypt_key.get_secret_value(),
         )
 
-        billing_user = await self.billing.create_user({
-            "telegram_id": aiogram_user.id,
-            "username": aiogram_user.username,
-            "referral_code": referral_code,
-            "name": aiogram_user.full_name,
-            "role": role.value,
-            "language": language,
-            "source": source,
-        })
+        billing_user = await self.billing.create_user(
+            {
+                "telegram_id": aiogram_user.id,
+                "username": aiogram_user.username,
+                "referral_code": referral_code,
+                "name": aiogram_user.full_name,
+                "role": role.value,
+                "language": language,
+                "source": source,
+            }
+        )
 
         await self.clear_user_cache(aiogram_user.id)
         logger.info(f"Created new user '{aiogram_user.id}'")
@@ -83,13 +85,15 @@ class UserService(BaseService):
             secret=self.config.crypt_key.get_secret_value(),
         )
 
-        billing_user = await self.billing.create_user({
-            "telegram_id": remna_user.telegram_id,
-            "referral_code": referral_code,
-            "name": str(remna_user.telegram_id),
-            "role": UserRole.USER.value,
-            "language": self.config.default_locale,
-        })
+        billing_user = await self.billing.create_user(
+            {
+                "telegram_id": remna_user.telegram_id,
+                "referral_code": referral_code,
+                "name": str(remna_user.telegram_id),
+                "role": UserRole.USER.value,
+                "language": self.config.default_locale,
+            }
+        )
 
         await self.clear_user_cache(remna_user.telegram_id)
         logger.info(f"Created new user '{remna_user.telegram_id}' from panel")
@@ -316,11 +320,15 @@ class UserService(BaseService):
 
     async def _remove_from_recent_activity(self, telegram_id: int) -> None:
         await self.redis_repository.list_remove(
-            key=RecentActivityUsersKey(), value=telegram_id, count=0,
+            key=RecentActivityUsersKey(),
+            value=telegram_id,
+            count=0,
         )
 
     async def _get_recent_activity(self) -> list[int]:
         telegram_ids_str = await self.redis_repository.list_range(
-            key=RecentActivityUsersKey(), start=0, end=RECENT_ACTIVITY_MAX_COUNT - 1,
+            key=RecentActivityUsersKey(),
+            start=0,
+            end=RECENT_ACTIVITY_MAX_COUNT - 1,
         )
         return [int(uid) for uid in telegram_ids_str]

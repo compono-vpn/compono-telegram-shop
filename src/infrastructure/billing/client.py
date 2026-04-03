@@ -11,7 +11,6 @@ import httpx
 from loguru import logger
 
 from .models import (
-    BillingAudienceCount,
     BillingBroadcast,
     BillingBroadcastMessage,
     BillingCustomer,
@@ -98,7 +97,9 @@ class BillingClient:
                 error_body = error_data.get("error", error_body)
             except Exception:
                 pass
-            logger.error(f"Billing API error: {method} {path} -> {response.status_code}: {error_body}")
+            logger.error(
+                f"Billing API error: {method} {path} -> {response.status_code}: {error_body}"
+            )
             raise BillingClientError(response.status_code, error_body)
 
         if response.status_code == 204:
@@ -180,22 +181,31 @@ class BillingClient:
         return data.get("used", False) if data else False
 
     async def link_subscription(self, telegram_id: int, subscription_token: str) -> None:
-        await self._post("/subscription/link", json={
-            "telegram_id": telegram_id,
-            "subscription_token": subscription_token,
-        })
+        await self._post(
+            "/subscription/link",
+            json={
+                "telegram_id": telegram_id,
+                "subscription_token": subscription_token,
+            },
+        )
 
     async def create_trial_subscription(self, telegram_id: int, plan_id: int) -> None:
-        await self._post("/subscription/create-trial", json={
-            "telegram_id": telegram_id,
-            "plan_id": plan_id,
-        })
+        await self._post(
+            "/subscription/create-trial",
+            json={
+                "telegram_id": telegram_id,
+                "plan_id": plan_id,
+            },
+        )
 
     async def delete_subscription(self, telegram_id: int, subscription_id: int) -> None:
-        await self._post("/subscription/delete", json={
-            "telegram_id": telegram_id,
-            "subscription_id": subscription_id,
-        })
+        await self._post(
+            "/subscription/delete",
+            json={
+                "telegram_id": telegram_id,
+                "subscription_id": subscription_id,
+            },
+        )
 
     # ------------------------------------------------------------------ #
     # Transactions
@@ -204,10 +214,13 @@ class BillingClient:
     async def create_transaction(
         self, telegram_id: int, transaction_data: dict[str, Any]
     ) -> BillingTransaction:
-        data = await self._post("/transactions", json={
-            "telegram_id": telegram_id,
-            **transaction_data,
-        })
+        data = await self._post(
+            "/transactions",
+            json={
+                "telegram_id": telegram_id,
+                **transaction_data,
+            },
+        )
         return BillingTransaction.model_validate(data)
 
     async def list_transactions(self, telegram_id: int) -> list[BillingTransaction]:
@@ -237,10 +250,13 @@ class BillingClient:
         self, payment_id: UUID, from_status: str, to_status: str
     ) -> Optional[BillingTransaction]:
         try:
-            data = await self._put(f"/transactions/{payment_id}/transition", json={
-                "from_status": from_status,
-                "to_status": to_status,
-            })
+            data = await self._put(
+                f"/transactions/{payment_id}/transition",
+                json={
+                    "from_status": from_status,
+                    "to_status": to_status,
+                },
+            )
             return BillingTransaction.model_validate(data) if data else None
         except BillingClientError as e:
             if e.status_code == 404 or e.status_code == 409:
@@ -323,10 +339,13 @@ class BillingClient:
         return True
 
     async def activate_promocode(self, code: str, telegram_id: int) -> None:
-        await self._post("/promocode/activate", json={
-            "code": code,
-            "telegram_id": telegram_id,
-        })
+        await self._post(
+            "/promocode/activate",
+            json={
+                "code": code,
+                "telegram_id": telegram_id,
+            },
+        )
 
     async def validate_promocode(self, code: str) -> Optional[dict[str, Any]]:
         """Validate a promocode via the public endpoint."""
@@ -395,7 +414,9 @@ class BillingClient:
         return BillingSubscription.model_validate(data)
 
     async def update_subscription(
-        self, subscription_id: int, subscription_data: dict[str, Any],
+        self,
+        subscription_id: int,
+        subscription_data: dict[str, Any],
     ) -> BillingSubscription:
         data = await self._put(f"/subscriptions/{subscription_id}", json=subscription_data)
         return BillingSubscription.model_validate(data)
@@ -432,10 +453,13 @@ class BillingClient:
     # ------------------------------------------------------------------ #
 
     async def claim_web_order(self, telegram_id: int, short_id: str) -> BillingWebOrderResult:
-        data = await self._post("/web-order/claim", json={
-            "telegram_id": telegram_id,
-            "short_id": short_id,
-        })
+        data = await self._post(
+            "/web-order/claim",
+            json={
+                "telegram_id": telegram_id,
+                "short_id": short_id,
+            },
+        )
         return BillingWebOrderResult.model_validate(data)
 
     async def get_web_order_by_short_id(self, short_id: str) -> Optional[BillingWebOrder]:
@@ -491,12 +515,13 @@ class BillingClient:
                 return None
             raise
 
-    async def get_or_create_customer_by_telegram_id(
-        self, telegram_id: int
-    ) -> BillingCustomer:
-        data = await self._post("/customers/get-or-create", json={
-            "telegram_id": telegram_id,
-        })
+    async def get_or_create_customer_by_telegram_id(self, telegram_id: int) -> BillingCustomer:
+        data = await self._post(
+            "/customers/get-or-create",
+            json={
+                "telegram_id": telegram_id,
+            },
+        )
         return BillingCustomer.model_validate(data)
 
     async def update_customer(self, customer_id: int, **kwargs: Any) -> BillingCustomer:
@@ -592,10 +617,13 @@ class BillingClient:
     async def create_test_payment(
         self, telegram_id: int, gateway_type: str
     ) -> BillingPaymentResult:
-        data = await self._post("/gateways/test-payment", json={
-            "telegram_id": telegram_id,
-            "gateway_type": gateway_type,
-        })
+        data = await self._post(
+            "/gateways/test-payment",
+            json={
+                "telegram_id": telegram_id,
+                "gateway_type": gateway_type,
+            },
+        )
         return BillingPaymentResult.model_validate(data)
 
     # ------------------------------------------------------------------ #
@@ -609,12 +637,15 @@ class BillingClient:
         duration_days: int,
         currency: str,
     ) -> BillingPriceDetails:
-        data = await self._post("/pricing/calculate", json={
-            "telegram_id": telegram_id,
-            "plan_id": plan_id,
-            "duration_days": duration_days,
-            "currency": currency,
-        })
+        data = await self._post(
+            "/pricing/calculate",
+            json={
+                "telegram_id": telegram_id,
+                "plan_id": plan_id,
+                "duration_days": duration_days,
+                "currency": currency,
+            },
+        )
         return BillingPriceDetails.model_validate(data)
 
     # ------------------------------------------------------------------ #
@@ -622,10 +653,13 @@ class BillingClient:
     # ------------------------------------------------------------------ #
 
     async def link_referral(self, referrer_code: str, referred_telegram_id: int) -> None:
-        await self._post("/referral/link", json={
-            "referrer_code": referrer_code,
-            "referred_telegram_id": referred_telegram_id,
-        })
+        await self._post(
+            "/referral/link",
+            json={
+                "referrer_code": referrer_code,
+                "referred_telegram_id": referred_telegram_id,
+            },
+        )
 
     async def get_referral_info(self, telegram_id: int) -> dict[str, Any]:
         data = await self._get(f"/referral/{telegram_id}")
@@ -637,11 +671,14 @@ class BillingClient:
         referred_telegram_id: int,
         level: str,
     ) -> BillingReferral:
-        data = await self._post("/referrals", json={
-            "referrer_telegram_id": referrer_telegram_id,
-            "referred_telegram_id": referred_telegram_id,
-            "level": level,
-        })
+        data = await self._post(
+            "/referrals",
+            json={
+                "referrer_telegram_id": referrer_telegram_id,
+                "referred_telegram_id": referred_telegram_id,
+                "level": level,
+            },
+        )
         return BillingReferral.model_validate(data)
 
     async def get_referral_by_referred(self, telegram_id: int) -> Optional[BillingReferral]:
@@ -659,19 +696,27 @@ class BillingClient:
         type: str,
         amount: int,
     ) -> BillingReferralReward:
-        data = await self._post("/referral/reward", json={
-            "referral_id": referral_id,
-            "user_telegram_id": user_telegram_id,
-            "type": type,
-            "amount": amount,
-            "is_issued": False,
-        })
+        data = await self._post(
+            "/referral/reward",
+            json={
+                "referral_id": referral_id,
+                "user_telegram_id": user_telegram_id,
+                "type": type,
+                "amount": amount,
+                "is_issued": False,
+            },
+        )
         return BillingReferralReward.model_validate(data)
 
-    async def update_referral_reward(self, reward_id: int, is_issued: bool) -> BillingReferralReward:
-        data = await self._put(f"/referral/reward/{reward_id}", json={
-            "is_issued": is_issued,
-        })
+    async def update_referral_reward(
+        self, reward_id: int, is_issued: bool
+    ) -> BillingReferralReward:
+        data = await self._put(
+            f"/referral/reward/{reward_id}",
+            json={
+                "is_issued": is_issued,
+            },
+        )
         return BillingReferralReward.model_validate(data)
 
     async def get_rewards_by_referral(self, referral_id: int) -> list[BillingReferralReward]:
@@ -708,7 +753,9 @@ class BillingClient:
             raise
 
     async def update_broadcast(
-        self, broadcast_id: int, broadcast_data: dict[str, Any],
+        self,
+        broadcast_id: int,
+        broadcast_data: dict[str, Any],
     ) -> Optional[BillingBroadcast]:
         try:
             data = await self._put(f"/broadcasts/{broadcast_id}", json=broadcast_data)
@@ -722,7 +769,9 @@ class BillingClient:
         await self._delete(f"/broadcasts/{broadcast_id}")
 
     async def create_broadcast_messages(
-        self, broadcast_id: int, messages_data: list[dict[str, Any]],
+        self,
+        broadcast_id: int,
+        messages_data: list[dict[str, Any]],
     ) -> list[BillingBroadcastMessage]:
         data = await self._post(
             f"/broadcasts/{broadcast_id}/messages",
@@ -731,18 +780,22 @@ class BillingClient:
         return [BillingBroadcastMessage.model_validate(m) for m in (data or [])]
 
     async def list_broadcast_messages(
-        self, broadcast_id: int,
+        self,
+        broadcast_id: int,
     ) -> list[BillingBroadcastMessage]:
         data = await self._get(f"/broadcasts/{broadcast_id}/messages")
         return [BillingBroadcastMessage.model_validate(m) for m in (data or [])]
 
     async def update_broadcast_messages(
-        self, messages_data: list[dict[str, Any]],
+        self,
+        messages_data: list[dict[str, Any]],
     ) -> None:
         await self._put("/broadcast-messages", json={"messages": messages_data})
 
     async def bulk_update_broadcast_messages(
-        self, broadcast_id: int, messages_data: list[dict[str, Any]],
+        self,
+        broadcast_id: int,
+        messages_data: list[dict[str, Any]],
     ) -> None:
         await self._put(
             f"/broadcasts/{broadcast_id}/messages/bulk-update",
@@ -750,7 +803,9 @@ class BillingClient:
         )
 
     async def get_broadcast_audience_count(
-        self, audience: str, plan_id: Optional[int] = None,
+        self,
+        audience: str,
+        plan_id: Optional[int] = None,
     ) -> int:
         params: dict[str, Any] = {"audience": audience}
         if plan_id is not None:
@@ -761,7 +816,9 @@ class BillingClient:
         return 0
 
     async def get_broadcast_audience(
-        self, audience: str, plan_id: Optional[int] = None,
+        self,
+        audience: str,
+        plan_id: Optional[int] = None,
     ) -> list[BillingUser]:
         params: dict[str, Any] = {"audience": audience}
         if plan_id is not None:

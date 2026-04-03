@@ -1,18 +1,18 @@
 from dishka import Provider, Scope, provide
 
 from src.services.access import AccessService
-from src.services.email import EmailService
-from src.services.payment_gateway import PaymentGatewayService
-from src.services.transaction import TransactionService
 from src.services.broadcast import BroadcastService
 from src.services.command import CommandService
+from src.services.email import EmailService
 from src.services.importer import ImporterService
 from src.services.notification import NotificationService
+from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
+from src.services.transaction import TransactionService
 from src.services.user import UserService
 from src.services.webhook import WebhookService
 
@@ -32,7 +32,9 @@ class ServicesProvider(Provider):
     settings_service = provide(source=SettingsService, scope=Scope.REQUEST)
     broadcast_service = provide(source=BroadcastService, scope=Scope.REQUEST)
     payment_gateway_service = provide(source=PaymentGatewayService, scope=Scope.REQUEST)
-    transaction_service = provide(source=TransactionService, scope=Scope.REQUEST)  # uses BillingClient (HTTP API)
+    transaction_service = provide(
+        source=TransactionService, scope=Scope.REQUEST
+    )  # uses BillingClient (HTTP API)
     # PricingService removed — billing owns pricing via calculate_price API
     importer_service = provide(source=ImporterService)
     referral_service = provide(source=ReferralService, scope=Scope.REQUEST)

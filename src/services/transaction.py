@@ -9,8 +9,8 @@ from src.core.enums import TransactionStatus
 from src.infrastructure.billing import BillingClient, billing_transaction_to_dto
 from src.infrastructure.billing.converters import billing_user_to_dto
 from src.infrastructure.billing.models import BillingTransaction
-from src.models.dto import TransactionDto, UserDto
 from src.infrastructure.redis import RedisRepository
+from src.models.dto import TransactionDto, UserDto
 
 from .base_billing import BaseBillingService
 
@@ -29,7 +29,9 @@ class TransactionService(BaseBillingService):
         super().__init__(config, redis_client, redis_repository)
         self.billing = billing
 
-    async def _attach_user(self, billing_tx: BillingTransaction, dto: TransactionDto) -> TransactionDto:
+    async def _attach_user(
+        self, billing_tx: BillingTransaction, dto: TransactionDto
+    ) -> TransactionDto:
         """Fetch the user from billing API and attach to the transaction DTO."""
         if billing_tx.UserTelegramID:
             billing_user = await self.billing.get_user(billing_tx.UserTelegramID)
@@ -141,9 +143,7 @@ class TransactionService(BaseBillingService):
         )
 
         if billing_tx:
-            logger.info(
-                f"Transaction '{payment_id}' transitioned {from_status} -> {to_status}"
-            )
+            logger.info(f"Transaction '{payment_id}' transitioned {from_status} -> {to_status}")
             dto = billing_transaction_to_dto(billing_tx)
             await self._attach_user(billing_tx, dto)
             return dto

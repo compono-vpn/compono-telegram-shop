@@ -1,3 +1,4 @@
+import os
 from typing import Final
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -140,8 +141,9 @@ def get_contact_support_keyboard(username: str, text: str) -> InlineKeyboardMark
 
 
 def get_remnashop_keyboard(donate_url: str = "") -> InlineKeyboardMarkup:
-    import os
-    _donate_url = donate_url or os.getenv("APP_YOOKASSA_RECEIPT_URL", "https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l")
+    _donate_url = donate_url or os.getenv(
+        "APP_YOOKASSA_RECEIPT_URL", "https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l"
+    )
 
     builder = InlineKeyboardBuilder()
 

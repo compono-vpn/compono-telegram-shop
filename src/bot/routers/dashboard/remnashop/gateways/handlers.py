@@ -5,7 +5,6 @@ from aiogram_dialog.widgets.kbd import Button, Select
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
-from pydantic import SecretStr
 
 from src.bot.states import RemnashopGateways
 from src.core.constants import USER_KEY

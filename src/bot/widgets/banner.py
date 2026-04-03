@@ -44,10 +44,15 @@ def get_banner(
 
     result = find_in_dirs([banners_dir], [f"{name}.{{format}}", f"{BannerName.DEFAULT}.{{format}}"])
     if result:
-        logger.debug(f"Banner '{name}' not found in locales '{locale}' or '{default_locale}', using global fallback")
+        logger.debug(
+            f"Banner '{name}' not found in locales"
+            f" '{locale}' or '{default_locale}', using global fallback"
+        )
         return result
 
-    raise FileNotFoundError(f"Banner '{name}' not found in locales '{locale}', '{default_locale}', or globally")
+    raise FileNotFoundError(
+        f"Banner '{name}' not found in locales '{locale}', '{default_locale}', or globally"
+    )
 
 
 class Banner(StaticMedia):

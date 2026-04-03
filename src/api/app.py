@@ -28,6 +28,7 @@ def create_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         return response
+
     app.include_router(app_router)
     app.include_router(health_router)
     app.mount("/metrics", make_asgi_app())

@@ -1,8 +1,8 @@
+import hmac
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-import hmac
 import orjson
 from aiogram import Bot
 from fastapi import Request
@@ -127,7 +127,9 @@ class PlategaGateway(BasePaymentGateway):
         secret = request.headers.get("X-Secret", "")
 
         merchant_ok = hmac.compare_digest(merchant_id, settings.merchant_id or "")
-        secret_ok = hmac.compare_digest(secret, settings.api_key.get_secret_value() if settings.api_key else "")  # type: ignore[arg-type]
+        secret_ok = hmac.compare_digest(
+            secret, settings.api_key.get_secret_value() if settings.api_key else ""
+        )  # type: ignore[arg-type]
 
         if not (merchant_ok and secret_ok):
             logger.warning("Platega webhook verification failed: credentials mismatch")

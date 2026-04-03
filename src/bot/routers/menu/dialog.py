@@ -20,7 +20,14 @@ from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import MIDDLEWARE_DATA_KEY, PURCHASE_PREFIX, USER_KEY
 from src.core.enums import BannerName
 
-from .getters import devices_getter, info_getter, invite_about_getter, invite_getter, menu_getter, tg_proxy_getter
+from .getters import (
+    devices_getter,
+    info_getter,
+    invite_about_getter,
+    invite_getter,
+    menu_getter,
+    tg_proxy_getter,
+)
 from .handlers import (
     on_device_delete,
     on_get_trial,

@@ -169,9 +169,7 @@ async def me(
     lookup = await billing.portal_lookup(email)
 
     if not lookup or not lookup.has_subscription or not lookup.subscription_url:
-        return JSONResponse(
-            content=MeResponse(email=email, has_subscription=False).model_dump()
-        )
+        return JSONResponse(content=MeResponse(email=email, has_subscription=False).model_dump())
 
     parsed = urlparse(lookup.subscription_url)
     short_uuid = parsed.path.rstrip("/").split("/")[-1]

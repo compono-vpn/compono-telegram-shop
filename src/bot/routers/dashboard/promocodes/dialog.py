@@ -1,6 +1,15 @@
 from aiogram_dialog import Dialog, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
-from aiogram_dialog.widgets.kbd import Button, Column, Group, Row, ScrollingGroup, Select, Start, SwitchTo
+from aiogram_dialog.widgets.kbd import (
+    Button,
+    Column,
+    Group,
+    Row,
+    ScrollingGroup,
+    Select,
+    Start,
+    SwitchTo,
+)
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 

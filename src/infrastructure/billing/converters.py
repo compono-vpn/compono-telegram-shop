@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
+from remnapy.enums.users import TrafficLimitStrategy
+
 from src.core.enums import (
     AccessMode,
     BroadcastAudience,
@@ -20,18 +22,20 @@ from src.core.enums import (
     PlanType,
     PromocodeAvailability,
     PromocodeRewardType,
+    PurchaseType,
     ReferralAccrualStrategy,
     ReferralLevel,
     ReferralRewardStrategy,
     ReferralRewardType,
     SubscriptionStatus,
     TransactionStatus,
-    PurchaseType,
+    UserRole,
 )
-
-from remnapy.enums.users import TrafficLimitStrategy
-
+from src.core.utils.message_payload import MessagePayload
 from src.models.dto import (
+    BroadcastDto,
+    BroadcastMessageDto,
+    PaymentGatewayDto,
     PlanDto,
     PlanDurationDto,
     PlanPriceDto,
@@ -41,27 +45,19 @@ from src.models.dto import (
     PromocodeDto,
     ReferralDto,
     ReferralRewardDto,
-    SettingsDto,
     ReferralSettingsDto,
-    SystemNotificationDto,
-    UserNotificationDto,
+    SettingsDto,
     SubscriptionDto,
+    SystemNotificationDto,
     TransactionDto,
-    PaymentGatewayDto,
-    BaseTransactionDto,
+    UserNotificationDto,
 )
 from src.models.dto.settings import ReferralRewardSettingsDto
-
-from src.models.dto.user import UserDto
-from src.core.enums import UserRole, Locale
+from src.models.dto.user import BaseUserDto, UserDto
 
 from .models import (
     BillingBroadcast,
     BillingBroadcastMessage,
-    BillingUser,
-    BillingReferral,
-    BillingReferralReward,
-    BillingSettings,
     BillingPaymentGateway,
     BillingPlan,
     BillingPlanDuration,
@@ -70,10 +66,13 @@ from .models import (
     BillingPriceDetails,
     BillingPromocode,
     BillingPromocodeActivation,
+    BillingReferral,
+    BillingReferralReward,
+    BillingSettings,
     BillingSubscription,
     BillingTransaction,
+    BillingUser,
 )
-
 
 # ------------------------------------------------------------------ #
 # Plans
@@ -130,7 +129,9 @@ def billing_plan_to_dto(bp: BillingPlan) -> PlanDto:
         tag=bp.Tag,
         traffic_limit=bp.TrafficLimit,
         device_limit=bp.DeviceLimit,
-        traffic_limit_strategy=TrafficLimitStrategy(bp.TrafficLimitStrategy) if bp.TrafficLimitStrategy else TrafficLimitStrategy.NO_RESET,
+        traffic_limit_strategy=TrafficLimitStrategy(bp.TrafficLimitStrategy)
+        if bp.TrafficLimitStrategy
+        else TrafficLimitStrategy.NO_RESET,
         allowed_user_ids=bp.AllowedUserIDs or [],
         internal_squads=_parse_uuids(bp.InternalSquads),
         external_squad=_parse_uuid(bp.ExternalSquad) if bp.ExternalSquad else None,
@@ -147,7 +148,9 @@ def billing_plan_snapshot_to_dto(bs: BillingPlanSnapshot) -> PlanSnapshotDto:
         traffic_limit=bs.traffic_limit,
         device_limit=bs.device_limit,
         duration=bs.duration,
-        traffic_limit_strategy=TrafficLimitStrategy(bs.traffic_limit_strategy) if bs.traffic_limit_strategy else TrafficLimitStrategy.NO_RESET,
+        traffic_limit_strategy=TrafficLimitStrategy(bs.traffic_limit_strategy)
+        if bs.traffic_limit_strategy
+        else TrafficLimitStrategy.NO_RESET,
         internal_squads=_parse_uuids(bs.internal_squads),
         external_squad=_parse_uuid(bs.external_squad) if bs.external_squad else None,
     )
@@ -167,7 +170,9 @@ def billing_subscription_to_dto(bs: BillingSubscription) -> SubscriptionDto:
         is_trial=bs.IsTrial,
         traffic_limit=bs.TrafficLimit,
         device_limit=bs.DeviceLimit,
-        traffic_limit_strategy=TrafficLimitStrategy(bs.TrafficLimitStrategy) if bs.TrafficLimitStrategy else TrafficLimitStrategy.NO_RESET,
+        traffic_limit_strategy=TrafficLimitStrategy(bs.TrafficLimitStrategy)
+        if bs.TrafficLimitStrategy
+        else TrafficLimitStrategy.NO_RESET,
         tag=bs.Tag,
         internal_squads=_parse_uuids(bs.InternalSquads),
         external_squad=_parse_uuid(bs.ExternalSquad) if bs.ExternalSquad else None,
@@ -201,7 +206,9 @@ def billing_transaction_to_dto(bt: BillingTransaction) -> TransactionDto:
         status=TransactionStatus(bt.Status) if bt.Status else TransactionStatus.PENDING,
         is_test=bt.IsTest,
         purchase_type=PurchaseType(bt.PurchaseType) if bt.PurchaseType else PurchaseType.NEW,
-        gateway_type=PaymentGatewayType(bt.GatewayType) if bt.GatewayType else PaymentGatewayType.TELEGRAM_STARS,
+        gateway_type=PaymentGatewayType(bt.GatewayType)
+        if bt.GatewayType
+        else PaymentGatewayType.TELEGRAM_STARS,
         pricing=pricing,
         currency=Currency(bt.Currency) if bt.Currency else Currency.USD,
         plan=plan_snapshot,
@@ -230,8 +237,12 @@ def billing_promocode_to_dto(bp: BillingPromocode) -> PromocodeDto:
         id=bp.ID if bp.ID else None,
         code=bp.Code,
         is_active=bp.IsActive,
-        availability=PromocodeAvailability(bp.Availability) if bp.Availability else PromocodeAvailability.ALL,
-        reward_type=PromocodeRewardType(bp.RewardType) if bp.RewardType else PromocodeRewardType.PERSONAL_DISCOUNT,
+        availability=PromocodeAvailability(bp.Availability)
+        if bp.Availability
+        else PromocodeAvailability.ALL,
+        reward_type=PromocodeRewardType(bp.RewardType)
+        if bp.RewardType
+        else PromocodeRewardType.PERSONAL_DISCOUNT,
         reward=bp.Reward,
         plan=plan_snapshot,
         purchase_discount_max_days=bp.PurchaseDiscountMaxDays,
@@ -299,44 +310,63 @@ def billing_user_to_dto(bu: BillingUser) -> UserDto:
 # ------------------------------------------------------------------ #
 
 
+def _parse_notification_dto(dto, raw: Optional[dict]) -> None:
+    """Populate a notification DTO from a raw dict, setting matching attrs to bool values."""
+    if not raw or not isinstance(raw, dict):
+        return
+    for k, v in raw.items():
+        key = k.lower() if isinstance(k, str) else k
+        if hasattr(dto, key):
+            setattr(dto, key, bool(v))
+
+
+def _parse_referral_reward(reward_data: dict) -> ReferralRewardSettingsDto:
+    """Parse a referral reward block into a ReferralRewardSettingsDto."""
+    rtype = reward_data.get("Type", reward_data.get("type", "EXTRA_DAYS"))
+    rstrategy = reward_data.get("Strategy", reward_data.get("strategy", "AMOUNT"))
+    rconfig = reward_data.get("Config", reward_data.get("config", {}))
+    parsed_config: dict[ReferralLevel, int] = {}
+    for rk, rv in (rconfig or {}).items():
+        try:
+            parsed_config[ReferralLevel(int(rk))] = int(rv)
+        except (ValueError, TypeError):
+            pass
+    return ReferralRewardSettingsDto(
+        type=ReferralRewardType(rtype) if rtype else ReferralRewardType.EXTRA_DAYS,
+        strategy=ReferralRewardStrategy(rstrategy) if rstrategy else ReferralRewardStrategy.AMOUNT,
+        config=parsed_config or {ReferralLevel.FIRST: 5},
+    )
+
+
+def _parse_referral_settings(raw: Optional[dict]) -> ReferralSettingsDto:
+    """Parse the Referral block from billing settings into a ReferralSettingsDto."""
+    referral = ReferralSettingsDto()
+    if not raw or not isinstance(raw, dict):
+        return referral
+
+    referral.enable = raw.get("Enable", raw.get("enable", True))
+    level_val = raw.get("Level", raw.get("level", "FIRST"))
+    referral.level = ReferralLevel(level_val) if level_val else ReferralLevel.FIRST
+    accrual = raw.get("AccrualStrategy", raw.get("accrual_strategy", "ON_FIRST_PAYMENT"))
+    referral.accrual_strategy = (
+        ReferralAccrualStrategy(accrual) if accrual else ReferralAccrualStrategy.ON_FIRST_PAYMENT
+    )
+
+    reward_data = raw.get("Reward", raw.get("reward"))
+    if reward_data and isinstance(reward_data, dict):
+        referral.reward = _parse_referral_reward(reward_data)
+
+    return referral
+
+
 def billing_settings_to_dto(bs: BillingSettings) -> SettingsDto:
     sys_ntf = SystemNotificationDto()
-    if bs.SystemNotifications and isinstance(bs.SystemNotifications, dict):
-        for k, v in bs.SystemNotifications.items():
-            key = k.lower() if isinstance(k, str) else k
-            if hasattr(sys_ntf, key):
-                setattr(sys_ntf, key, bool(v))
+    _parse_notification_dto(sys_ntf, bs.SystemNotifications)
 
     user_ntf = UserNotificationDto()
-    if bs.UserNotifications and isinstance(bs.UserNotifications, dict):
-        for k, v in bs.UserNotifications.items():
-            key = k.lower() if isinstance(k, str) else k
-            if hasattr(user_ntf, key):
-                setattr(user_ntf, key, bool(v))
+    _parse_notification_dto(user_ntf, bs.UserNotifications)
 
-    referral = ReferralSettingsDto()
-    if bs.Referral and isinstance(bs.Referral, dict):
-        referral.enable = bs.Referral.get("Enable", bs.Referral.get("enable", True))
-        level_val = bs.Referral.get("Level", bs.Referral.get("level", "FIRST"))
-        referral.level = ReferralLevel(level_val) if level_val else ReferralLevel.FIRST
-        accrual = bs.Referral.get("AccrualStrategy", bs.Referral.get("accrual_strategy", "ON_FIRST_PAYMENT"))
-        referral.accrual_strategy = ReferralAccrualStrategy(accrual) if accrual else ReferralAccrualStrategy.ON_FIRST_PAYMENT
-        reward_data = bs.Referral.get("Reward", bs.Referral.get("reward"))
-        if reward_data and isinstance(reward_data, dict):
-            rtype = reward_data.get("Type", reward_data.get("type", "EXTRA_DAYS"))
-            rstrategy = reward_data.get("Strategy", reward_data.get("strategy", "AMOUNT"))
-            rconfig = reward_data.get("Config", reward_data.get("config", {}))
-            parsed_config = {}
-            for rk, rv in (rconfig or {}).items():
-                try:
-                    parsed_config[ReferralLevel(rk)] = int(rv)
-                except (ValueError, TypeError):
-                    pass
-            referral.reward = ReferralRewardSettingsDto(
-                type=ReferralRewardType(rtype) if rtype else ReferralRewardType.EXTRA_DAYS,
-                strategy=ReferralRewardStrategy(rstrategy) if rstrategy else ReferralRewardStrategy.AMOUNT,
-                config=parsed_config or {ReferralLevel.FIRST: 5},
-            )
+    referral = _parse_referral_settings(bs.Referral)
 
     return SettingsDto(
         id=bs.ID if bs.ID else None,
@@ -360,15 +390,13 @@ def billing_settings_to_dto(bs: BillingSettings) -> SettingsDto:
 # ------------------------------------------------------------------ #
 
 
-def _stub_user(telegram_id: int) -> "BaseUserDto":
+def _stub_user(telegram_id: int) -> BaseUserDto:
     """Create a minimal BaseUserDto from just a telegram ID.
 
     The billing API only returns telegram IDs for referrer/referred,
     not full user objects. This stub is sufficient for the referral
     service which only accesses telegram_id on these objects.
     """
-    from src.models.dto.user import BaseUserDto  # noqa: PLC0415
-
     return BaseUserDto(telegram_id=telegram_id, name="")
 
 
@@ -399,9 +427,7 @@ def billing_referral_reward_to_dto(brr: BillingReferralReward) -> ReferralReward
 # ------------------------------------------------------------------ #
 
 
-def billing_broadcast_message_to_dto(bm: BillingBroadcastMessage) -> "BroadcastMessageDto":
-    from src.models.dto import BroadcastMessageDto  # noqa: PLC0415
-
+def billing_broadcast_message_to_dto(bm: BillingBroadcastMessage) -> BroadcastMessageDto:
     return BroadcastMessageDto(
         id=bm.ID if bm.ID else None,
         user_id=bm.UserID,
@@ -410,12 +436,13 @@ def billing_broadcast_message_to_dto(bm: BillingBroadcastMessage) -> "BroadcastM
     )
 
 
-def billing_broadcast_to_dto(bb: BillingBroadcast) -> "BroadcastDto":
-    from src.models.dto import BroadcastDto  # noqa: PLC0415
-    from src.core.utils.message_payload import MessagePayload  # noqa: PLC0415
-
-    payload = MessagePayload.model_validate(bb.Payload) if bb.Payload else MessagePayload(
-        i18n_key="ntf-broadcast-preview",
+def billing_broadcast_to_dto(bb: BillingBroadcast) -> BroadcastDto:
+    payload = (
+        MessagePayload.model_validate(bb.Payload)
+        if bb.Payload
+        else MessagePayload(
+            i18n_key="ntf-broadcast-preview",
+        )
     )
     messages = [billing_broadcast_message_to_dto(m) for m in (bb.Messages or [])]
 

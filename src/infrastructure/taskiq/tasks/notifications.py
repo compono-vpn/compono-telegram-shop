@@ -4,7 +4,6 @@ from typing import Any, Union, cast
 
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
-
 from redis.asyncio import Redis
 
 from src.bot.keyboards import get_buy_keyboard, get_connect_keyboard, get_renew_keyboard
@@ -195,21 +194,29 @@ async def process_pending_not_connected_reminders_task(
         dedup_key = f"{_SENT_NTF_KEY_PREFIX}{user_telegram_id}:{NOT_CONNECTED_NOTIFICATION_KEY}"
         already_sent = await redis_client.exists(dedup_key)
         if already_sent:
-            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already sent (Redis)")
+            logger.debug(
+                f"Skipping not-connected reminder for '{user_telegram_id}': already sent (Redis)"
+            )
             continue
 
         user = await user_service.get(user_telegram_id)
         if not user or not user.current_subscription:
-            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': no user/subscription")
+            logger.debug(
+                f"Skipping not-connected reminder for '{user_telegram_id}': no user/subscription"
+            )
             continue
 
         if not user.current_subscription.is_active:
-            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': subscription inactive")
+            logger.debug(
+                f"Skipping not-connected reminder for '{user_telegram_id}': subscription inactive"
+            )
             continue
 
         devices = await remnawave_service.get_devices_user(user)
         if devices:
-            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': already connected")
+            logger.debug(
+                f"Skipping not-connected reminder for '{user_telegram_id}': already connected"
+            )
             continue
 
         logger.info(f"Sending not-connected reminder to '{user_telegram_id}'")

@@ -55,7 +55,9 @@ async def gateway_getter(
     if not gateway:
         raise ValueError(f"Gateway '{gateway_id}' not found")
 
-    webhook_url = f"https://{config.domain.get_secret_value()}/api/v1/payments/webhook/{gateway.Type.lower()}"
+    webhook_url = (
+        f"https://{config.domain.get_secret_value()}/api/v1/payments/webhook/{gateway.Type.lower()}"
+    )
 
     return {
         "id": gateway.ID,

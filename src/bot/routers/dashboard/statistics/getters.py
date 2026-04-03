@@ -67,7 +67,8 @@ async def statistics_getter(
             stats = await billing.get_statistics()
             statistics = {
                 "total_active_subscriptions": stats.active_subscriptions,
-                "total_expire_subscriptions": stats.total_subscriptions - stats.active_subscriptions,
+                "total_expire_subscriptions": stats.total_subscriptions
+                - stats.active_subscriptions,
                 "active_trial_subscriptions": stats.trial_users,
                 "expiring_subscriptions": 0,
                 "total_unlimited": 0,
@@ -78,9 +79,7 @@ async def statistics_getter(
         case 3:
             billing_plans = await billing.list_plans()
             plans = [billing_plan_to_dto(bp) for bp in billing_plans]
-            statistics = {"plans": "\n\n".join(
-                f"{p.name}: active" for p in plans
-            ) or "-"}
+            statistics = {"plans": "\n\n".join(f"{p.name}: active" for p in plans) or "-"}
             template = "msg-statistics-plans"
         case 4:
             billing_promos = await billing.list_promocodes()

@@ -19,8 +19,8 @@ from src.core.enums import MiddlewareEventType
 from src.core.exceptions import MenuRenderingError
 from src.core.metrics import ERRORS_TOTAL
 from src.core.utils.message_payload import MessagePayload
-from src.models.dto import UserDto
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_main_menu_task
+from src.models.dto import UserDto
 from src.services.notification import NotificationService
 from src.services.user import UserService
 

@@ -25,7 +25,7 @@ from src.infrastructure.billing import (
     billing_promocode_to_dto,
 )
 from src.infrastructure.billing.client import BillingClientError
-from src.models.dto import PlanDto, PlanSnapshotDto, UserDto
+from src.models.dto import PlanDto, UserDto
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
 
@@ -41,7 +41,7 @@ class CachedPaymentData(TypedDict):
 
 
 def _get_cache_key(duration: int, gateway_type) -> str:
-    gt = gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type)
+    gt = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
     return f"{duration}:{gt}"
 
 
@@ -73,8 +73,8 @@ async def _create_payment_and_get_data(
         logger.error(f"{log(user)} Failed to find duration for payment creation")
         return None
 
-    gt_str = gateway_type.value if hasattr(gateway_type, 'value') else str(gateway_type)
-    pt_str = purchase_type.value if hasattr(purchase_type, 'value') else str(purchase_type)
+    gt_str = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
+    pt_str = purchase_type.value if hasattr(purchase_type, "value") else str(purchase_type)
 
     try:
         # Look up gateway currency from billing service
@@ -101,6 +101,7 @@ async def _create_payment_and_get_data(
             pricing = billing_price_details_to_dto(price_details)
         else:
             from src.models.dto import PriceDetailsDto  # noqa: PLC0415
+
             pricing = PriceDetailsDto()
 
         return CachedPaymentData(
@@ -460,6 +461,7 @@ async def on_get_subscription(
     billing: FromDishka[BillingClient],
 ) -> None:
     from uuid import UUID  # noqa: PLC0415
+
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     payment_id = dialog_manager.dialog_data["payment_id"]
     logger.info(f"{log(user)} Getted free subscription '{payment_id}'")
@@ -510,10 +512,14 @@ async def on_promocode_input(
 
         await notification_service.notify_user(
             user=user,
-            payload=MessagePayload(i18n_key="ntf-promocode-activated", i18n_kwargs={"code": code.upper()}),
+            payload=MessagePayload(
+                i18n_key="ntf-promocode-activated", i18n_kwargs={"code": code.upper()}
+            ),
         )
 
-        dialog_manager.dialog_data["promocode_reward_type"] = reward_type.value if reward_type else None
+        dialog_manager.dialog_data["promocode_reward_type"] = (
+            reward_type.value if reward_type else None
+        )
         dialog_manager.dialog_data["promocode_code"] = code.upper()
         await dialog_manager.switch_to(state=Subscription.PROMOCODE_SUCCESS)
 

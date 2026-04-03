@@ -58,7 +58,13 @@ class YookassaGateway(BasePaymentGateway):
             ),
         )
 
-    async def handle_create_payment(self, amount: Decimal, details: str, return_url: str | None = None, failed_url: str | None = None) -> PaymentResult:
+    async def handle_create_payment(
+        self,
+        amount: Decimal,
+        details: str,
+        return_url: str | None = None,
+        failed_url: str | None = None,
+    ) -> PaymentResult:
         payload = await self._create_payment_payload(str(amount), details, return_url=return_url)
         headers = {"Idempotence-Key": str(uuid.uuid4())}
 
@@ -107,7 +113,9 @@ class YookassaGateway(BasePaymentGateway):
 
         return payment_id, transaction_status
 
-    async def _create_payment_payload(self, amount: str, details: str, return_url: str | None = None) -> dict[str, Any]:
+    async def _create_payment_payload(
+        self, amount: str, details: str, return_url: str | None = None
+    ) -> dict[str, Any]:
         redirect_url = return_url or await self._get_bot_redirect_url()
         return {
             "amount": {"value": amount, "currency": self.data.currency},

@@ -5,12 +5,11 @@ from redis.asyncio import Redis
 
 from src.core.config import AppConfig
 from src.core.constants import TIME_10M
-from src.core.enums import PlanAvailability
 from src.core.storage.key_builder import build_key
 from src.infrastructure.billing import BillingClient, billing_plan_to_dto
-from src.models.dto import PlanDto, UserDto
 from src.infrastructure.redis import RedisRepository
 from src.infrastructure.redis.cache import redis_cache
+from src.models.dto import PlanDto, UserDto
 
 from .base_billing import BaseBillingService
 
@@ -135,10 +134,14 @@ def _dto_to_billing_dict(plan: PlanDto) -> dict:
         "tag": plan.tag,
         "is_active": plan.is_active,
         "type": plan.type.value if hasattr(plan.type, "value") else str(plan.type),
-        "availability": plan.availability.value if hasattr(plan.availability, "value") else str(plan.availability),
+        "availability": plan.availability.value
+        if hasattr(plan.availability, "value")
+        else str(plan.availability),
         "traffic_limit": plan.traffic_limit,
         "device_limit": plan.device_limit,
-        "traffic_limit_strategy": plan.traffic_limit_strategy.value if hasattr(plan.traffic_limit_strategy, "value") else str(plan.traffic_limit_strategy),
+        "traffic_limit_strategy": plan.traffic_limit_strategy.value
+        if hasattr(plan.traffic_limit_strategy, "value")
+        else str(plan.traffic_limit_strategy),
         "allowed_user_ids": plan.allowed_user_ids,
         "internal_squads": [str(s) for s in plan.internal_squads],
         "external_squad": str(plan.external_squad) if plan.external_squad else None,
@@ -147,7 +150,9 @@ def _dto_to_billing_dict(plan: PlanDto) -> dict:
                 "days": d.days,
                 "prices": [
                     {
-                        "currency": p.currency.value if hasattr(p.currency, "value") else str(p.currency),
+                        "currency": p.currency.value
+                        if hasattr(p.currency, "value")
+                        else str(p.currency),
                         "price": str(p.price),
                     }
                     for p in d.prices

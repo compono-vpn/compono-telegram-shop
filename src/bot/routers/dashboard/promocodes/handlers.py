@@ -193,8 +193,12 @@ async def on_confirm(
     promo_data = {
         "Code": promocode.code,
         "IsActive": promocode.is_active,
-        "Availability": promocode.availability.value if hasattr(promocode.availability, 'value') else str(promocode.availability),
-        "RewardType": promocode.reward_type.value if hasattr(promocode.reward_type, 'value') else str(promocode.reward_type),
+        "Availability": promocode.availability.value
+        if hasattr(promocode.availability, "value")
+        else str(promocode.availability),
+        "RewardType": promocode.reward_type.value
+        if hasattr(promocode.reward_type, "value")
+        else str(promocode.reward_type),
         "Reward": promocode.reward,
         "Lifetime": promocode.lifetime,
         "MaxActivations": promocode.max_activations,
@@ -206,7 +210,9 @@ async def on_confirm(
         promo_data["Plan"] = {
             "id": promocode.plan.id,
             "name": promocode.plan.name,
-            "type": promocode.plan.type.value if hasattr(promocode.plan.type, 'value') else str(promocode.plan.type),
+            "type": promocode.plan.type.value
+            if hasattr(promocode.plan.type, "value")
+            else str(promocode.plan.type),
             "traffic_limit": promocode.plan.traffic_limit,
             "device_limit": promocode.plan.device_limit,
             "duration": promocode.plan.duration,
@@ -475,5 +481,7 @@ async def on_plan_duration_select(
     plan_snapshot = PlanSnapshotDto.from_plan(plan, selected_duration)
     promocode.plan = plan_snapshot
     adapter.save(promocode)
-    logger.info(f"{log(user)} Set promocode plan to '{plan.name}' with duration '{selected_duration}'")
+    logger.info(
+        f"{log(user)} Set promocode plan to '{plan.name}' with duration '{selected_duration}'"
+    )
     await dialog_manager.switch_to(state=DashboardPromocodes.CONFIGURATOR)

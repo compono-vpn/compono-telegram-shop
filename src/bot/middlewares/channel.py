@@ -76,7 +76,10 @@ class ChannelMiddleware(EventTypedMiddleware):
 
         try:
             member = await self._get_chat_member_cached(
-                container, bot, chat_id, user.telegram_id,
+                container,
+                bot,
+                chat_id,
+                user.telegram_id,
             )
         except Exception as exception:
             traceback_str = traceback.format_exc()

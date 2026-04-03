@@ -39,9 +39,11 @@ async def menu_getter(
         ref_link = await referral_service.get_ref_link(user.referral_code)
         support_link = format_username_to_url(support_username, i18n.get("contact-support-help"))
 
-        is_referral_enable = bool(
-            settings.Referral and settings.Referral.get("enable", False)
-        ) if settings.Referral else False
+        is_referral_enable = (
+            bool(settings.Referral and settings.Referral.get("enable", False))
+            if settings.Referral
+            else False
+        )
 
         base_data = {
             "user_id": str(user.telegram_id),
@@ -71,7 +73,9 @@ async def menu_getter(
 
         plan_id = subscription.plan.id if subscription.plan else 0
         try:
-            tg_proxies = await billing.get_tg_proxies(plan_id) if subscription.is_active and plan_id else []
+            tg_proxies = (
+                await billing.get_tg_proxies(plan_id) if subscription.is_active and plan_id else []
+            )
         except Exception:
             logger.opt(exception=True).warning("Failed to fetch TG proxies, hiding button")
             tg_proxies = []
@@ -91,7 +95,9 @@ async def menu_getter(
                 else False,
                 "connectable": subscription.is_active,
                 "is_app": False,
-                "url": SubscriptionService.build_connect_url(subscription.url, config.remnawave.sub_public_domain),
+                "url": SubscriptionService.build_connect_url(
+                    subscription.url, config.remnawave.sub_public_domain
+                ),
                 "tg_proxy_available": len(tg_proxies) > 0,
             }
         )
@@ -197,21 +203,32 @@ async def tg_proxy_getter(
     billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plan_id = user.current_subscription.plan.id if user.current_subscription and user.current_subscription.plan else 0
+    plan_id = (
+        user.current_subscription.plan.id
+        if user.current_subscription and user.current_subscription.plan
+        else 0
+    )
     try:
         proxies = await billing.get_tg_proxies(plan_id)
     except Exception:
         logger.opt(exception=True).warning("Failed to fetch TG proxies")
         proxies = []
     proxy_list = [
-        {"id": str(p.id), "server": p.server, "port": p.port, "link": p.link}
-        for p in proxies
+        {"id": str(p.id), "server": p.server, "port": p.port, "link": p.link} for p in proxies
     ]
 
     lines = ["<b>📡 Прокси для Telegram</b>\n"]
     if proxy_list:
-        lines.append("Telegram-прокси позволяет пользоваться мессенджером даже без включённого VPN. Полезно, когда VPN недоступен или вы хотите сэкономить трафик.\n")
-        lines.append("⚠️ <b>Важно:</b> подключайте прокси с <b>выключенным VPN</b> — иначе соединение может не установиться.\n")
+        lines.append(
+            "Telegram-прокси позволяет пользоваться мессенджером"
+            " даже без включённого VPN. Полезно, когда VPN"
+            " недоступен или вы хотите сэкономить трафик.\n"
+        )
+        lines.append(
+            "⚠️ <b>Важно:</b> подключайте прокси с"
+            " <b>выключенным VPN</b> — иначе соединение"
+            " может не установиться.\n"
+        )
         for p in proxy_list:
             lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
         lines.append("\nНажмите на ссылку, прокси подключится автоматически.")
