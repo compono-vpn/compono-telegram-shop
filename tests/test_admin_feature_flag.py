@@ -1,11 +1,12 @@
-"""Tests for the SHOP_ADMIN_ENABLED feature flag.
+"""Tests for the admin surface reduction.
 
 Verifies that:
-- Admin buttons are hidden when flag is OFF
-- Admin buttons are visible when flag is ON
+- Removed admin buttons are no longer in the dashboard
+- Emergency flows (statistics, users) still exist
 - End-user flows are unaffected by the flag
-- The AdminGateMiddleware blocks/allows correctly
-- The require_admin_enabled guard works
+- The AdminGateMiddleware still works (preserved for future use)
+- The require_admin_enabled guard still works
+- Removed admin routers are no longer registered
 """
 
 from __future__ import annotations
@@ -48,11 +49,11 @@ def _collect_button_ids(window):
 
 
 class TestDashboardButtonVisibility:
-    """Dashboard buttons gated by SHOP_ADMIN_ENABLED."""
+    """Dashboard buttons after admin surface reduction."""
 
-    # Admin-gated button IDs
-    GATED_IDS = {"broadcast", "promocodes", "access", "remnashop", "remnawave", "importer"}
-    # Always-visible button IDs
+    # Removed admin button IDs (should NOT exist)
+    REMOVED_IDS = {"broadcast", "promocodes", "access", "remnashop", "remnawave", "importer"}
+    # Always-visible button IDs (must still exist)
     ALWAYS_IDS = {"statistics", "users"}
 
     def _find_widget_and_condition(self, window, widget_id: str):
@@ -74,20 +75,12 @@ class TestDashboardButtonVisibility:
         widget, cond = self._find_widget_and_condition(dashboard_window, "users")
         assert widget is not None, "Users button must exist in dashboard"
 
-    def test_broadcast_button_exists(self):
-        widget, cond = self._find_widget_and_condition(dashboard_window, "broadcast")
-        assert widget is not None, "Broadcast button must exist in dashboard"
-
-    def test_promocodes_button_exists(self):
-        widget, cond = self._find_widget_and_condition(dashboard_window, "promocodes")
-        assert widget is not None, "Promocodes button must exist in dashboard"
-
-    def test_gated_buttons_have_condition(self):
-        """All gated buttons must have a condition (from when=) on their parent Row."""
-        for btn_id in self.GATED_IDS:
-            _, cond = self._find_widget_and_condition(dashboard_window, btn_id)
-            assert cond is not None, (
-                f"Button '{btn_id}' must have a when= condition for admin gating"
+    def test_removed_admin_buttons_are_gone(self):
+        """Admin buttons that were gated must no longer exist in the dashboard."""
+        all_ids = set(_collect_button_ids(dashboard_window))
+        for btn_id in self.REMOVED_IDS:
+            assert btn_id not in all_ids, (
+                f"Removed admin button '{btn_id}' should not exist in dashboard"
             )
 
     def test_always_visible_row_has_no_admin_gate(self):
@@ -111,7 +104,7 @@ class TestDashboardButtonVisibility:
 
 
 class TestMenuDialogUnaffected:
-    """Main menu end-user buttons must not be affected by admin flag."""
+    """Main menu end-user buttons must not be affected by admin removal."""
 
     def _find_widget_by_id(self, window, widget_id: str):
         from aiogram_dialog.widgets.kbd import Row
@@ -138,7 +131,7 @@ class TestMenuDialogUnaffected:
     def test_dashboard_button_not_gated_by_admin_flag(self):
         """Dashboard button is gated by is_privileged, NOT by admin flag.
 
-        Admins should still see the dashboard — just with fewer buttons inside.
+        Admins should still see the dashboard -- just with fewer buttons inside.
         """
         from aiogram_dialog.widgets.kbd import Row
 
@@ -153,7 +146,7 @@ class TestMenuDialogUnaffected:
 
 
 # ---------------------------------------------------------------------------
-# AdminGateMiddleware
+# AdminGateMiddleware (preserved for future use)
 # ---------------------------------------------------------------------------
 
 from src.bot.filters.admin_gate import (
@@ -256,20 +249,68 @@ class TestConfigFlag:
 
 
 # ---------------------------------------------------------------------------
-# Enabling flag restores full behavior
+# Router registration: removed admin routers must not be registered
 # ---------------------------------------------------------------------------
 
 
-class TestFlagRestorationBehavior:
-    """When flag is ON, admin middleware allows through."""
+class TestRouterRegistration:
+    """Verify removed admin flows are no longer wired into the bot.
 
-    @pytest.mark.asyncio
-    async def test_admin_gate_passes_when_flag_on(self):
-        gate = AdminGateMiddleware()
-        handler = AsyncMock(return_value="result")
-        event = MagicMock()
-        data = {SHOP_ADMIN_ENABLED_KEY: True}
+    Instead of calling setup_routers (which fails if routers are already
+    attached), we inspect the setup_routers source to verify which routers
+    are referenced.
+    """
 
-        result = await gate(handler, event, data)
-        assert result == "result"
-        handler.assert_awaited_once()
+    def _get_setup_source(self) -> str:
+        import inspect
+        from src.bot.routers import setup_routers
+        return inspect.getsource(setup_routers)
+
+    def test_no_admin_gated_routers_in_setup(self):
+        """setup_routers should not reference any removed admin dialog routers."""
+        source = self._get_setup_source()
+
+        removed_module_fragments = [
+            "access.dialog", "broadcast.dialog", "importer.dialog",
+            "promocodes.dialog", "remnashop.dialog", "remnawave.dialog",
+            "gateways.dialog", "referral.dialog", "notifications.dialog",
+            "plans.dialog",
+        ]
+        for fragment in removed_module_fragments:
+            assert fragment not in source, (
+                f"Removed admin router '{fragment}' is still referenced in setup_routers"
+            )
+
+    def test_emergency_users_router_still_in_setup(self):
+        """Users router must remain in setup_routers for emergency user management."""
+        source = self._get_setup_source()
+        assert "users.dialog.router" in source, "Users router must be in setup_routers"
+        assert "users.user.dialog.router" in source, "User detail router must be in setup_routers"
+
+    def test_statistics_router_still_in_setup(self):
+        """Statistics router must remain in setup_routers."""
+        source = self._get_setup_source()
+        assert "statistics.dialog.router" in source, "Statistics router must be in setup_routers"
+
+    def test_end_user_routers_still_in_setup(self):
+        """End-user routers (menu, subscription, payment, etc.) must remain."""
+        source = self._get_setup_source()
+        for keyword in ["menu.dialog.router", "subscription.dialog.router",
+                         "payment.router", "commands.router"]:
+            assert keyword in source, f"End-user router '{keyword}' must be in setup_routers"
+
+    def test_removed_admin_modules_not_importable(self):
+        """Removed admin modules should not be importable."""
+        import importlib
+
+        removed_modules = [
+            "src.bot.routers.dashboard.access",
+            "src.bot.routers.dashboard.broadcast",
+            "src.bot.routers.dashboard.importer",
+            "src.bot.routers.dashboard.promocodes",
+            "src.bot.routers.dashboard.remnashop",
+            "src.bot.routers.dashboard.remnawave",
+        ]
+        for mod_name in removed_modules:
+            with pytest.raises((ImportError, ModuleNotFoundError)):
+                importlib.import_module(mod_name)
