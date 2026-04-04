@@ -12,9 +12,6 @@ from remnapy.enums.users import TrafficLimitStrategy
 
 from src.core.enums import (
     AccessMode,
-    BroadcastAudience,
-    BroadcastMessageStatus,
-    BroadcastStatus,
     Currency,
     GatewayChannel,
     PaymentGatewayType,
@@ -31,10 +28,7 @@ from src.core.enums import (
     TransactionStatus,
     UserRole,
 )
-from src.core.utils.message_payload import MessagePayload
 from src.models.dto import (
-    BroadcastDto,
-    BroadcastMessageDto,
     PaymentGatewayDto,
     PlanDto,
     PlanDurationDto,
@@ -56,8 +50,6 @@ from src.models.dto.settings import ReferralRewardSettingsDto
 from src.models.dto.user import BaseUserDto, UserDto
 
 from .models import (
-    BillingBroadcast,
-    BillingBroadcastMessage,
     BillingPaymentGateway,
     BillingPlan,
     BillingPlanDuration,
@@ -419,43 +411,4 @@ def billing_referral_reward_to_dto(brr: BillingReferralReward) -> ReferralReward
         is_issued=brr.IsIssued,
         created_at=brr.CreatedAt,
         updated_at=brr.UpdatedAt,
-    )
-
-
-# ------------------------------------------------------------------ #
-# Broadcasts
-# ------------------------------------------------------------------ #
-
-
-def billing_broadcast_message_to_dto(bm: BillingBroadcastMessage) -> BroadcastMessageDto:
-    return BroadcastMessageDto(
-        id=bm.ID if bm.ID else None,
-        user_id=bm.UserID,
-        message_id=bm.MessageID,
-        status=BroadcastMessageStatus(bm.Status) if bm.Status else BroadcastMessageStatus.PENDING,
-    )
-
-
-def billing_broadcast_to_dto(bb: BillingBroadcast) -> BroadcastDto:
-    payload = (
-        MessagePayload.model_validate(bb.Payload)
-        if bb.Payload
-        else MessagePayload(
-            i18n_key="ntf-broadcast-preview",
-        )
-    )
-    messages = [billing_broadcast_message_to_dto(m) for m in (bb.Messages or [])]
-
-    return BroadcastDto(
-        id=bb.ID if bb.ID else None,
-        task_id=UUID(bb.TaskID) if bb.TaskID else UUID(int=0),
-        status=BroadcastStatus(bb.Status) if bb.Status else BroadcastStatus.PROCESSING,
-        audience=BroadcastAudience(bb.Audience) if bb.Audience else BroadcastAudience.ALL,
-        total_count=bb.TotalCount,
-        success_count=bb.SuccessCount,
-        failed_count=bb.FailedCount,
-        payload=payload,
-        messages=messages,
-        created_at=bb.CreatedAt,
-        updated_at=bb.UpdatedAt,
     )

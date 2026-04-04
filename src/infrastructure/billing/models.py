@@ -338,38 +338,3 @@ class BillingTGProxy(BaseModel):
     port: int = Field(0, alias="port")
     secret: str = Field("", alias="secret")
     link: str = Field("", alias="link")
-
-
-# --- Broadcasts ---
-
-
-class BillingBroadcastMessage(BaseModel):
-    """Maps domain.BroadcastMessage from billing API."""
-
-    ID: int = 0
-    BroadcastID: int = 0
-    UserID: int = 0
-    MessageID: Optional[int] = None
-    Status: str = ""
-
-
-class BillingBroadcast(BaseModel):
-    """Maps domain.Broadcast from billing API."""
-
-    ID: int = 0
-    TaskID: str = ""
-    Status: str = ""
-    Audience: str = ""
-    TotalCount: int = 0
-    SuccessCount: int = 0
-    FailedCount: int = 0
-    Payload: Optional[Any] = None
-    Messages: Optional[list[BillingBroadcastMessage]] = Field(default_factory=list)
-    CreatedAt: Optional[datetime] = None
-    UpdatedAt: Optional[datetime] = None
-
-
-class BillingAudienceCount(BaseModel):
-    """Maps the audience-count response from billing API."""
-
-    count: int = 0

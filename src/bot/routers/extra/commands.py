@@ -66,9 +66,8 @@ async def on_help_command(
     )
 
 
-# /delete is NOT gated by SHOP_ADMIN_ENABLED — it's an emergency tool for
-# removing problematic users.  Blocking it would leave admins unable to act
-# on abuse until the Django panel exists.
+# /delete is an emergency tool for removing problematic users.
+# Kept until the Django admin panel covers user deletion.
 @inject
 @router.message(FilterCommand("delete"))
 async def on_delete_command(

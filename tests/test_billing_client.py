@@ -10,8 +10,6 @@ import pytest
 
 from src.infrastructure.billing.client import BillingClient, BillingClientError
 from src.infrastructure.billing.models import (
-    BillingBroadcast,
-    BillingBroadcastMessage,
     BillingCustomer,
     BillingPaymentGateway,
     BillingPaymentResult,
@@ -236,29 +234,6 @@ SAMPLE_PROMOCODE = {
     "UpdatedAt": "2025-06-01T00:00:00Z",
 }
 
-SAMPLE_BROADCAST = {
-    "ID": 20,
-    "TaskID": "550e8400-e29b-41d4-a716-446655440002",
-    "Status": "COMPLETED",
-    "Audience": "ALL",
-    "TotalCount": 100,
-    "SuccessCount": 95,
-    "FailedCount": 5,
-    "Payload": {"i18n_key": "ntf-broadcast-test"},
-    "Messages": [
-        {"ID": 1, "BroadcastID": 20, "UserID": 111, "MessageID": 999, "Status": "SENT"},
-    ],
-    "CreatedAt": "2025-06-01T00:00:00Z",
-    "UpdatedAt": "2025-06-01T00:00:00Z",
-}
-
-SAMPLE_BROADCAST_MESSAGE = {
-    "ID": 1,
-    "BroadcastID": 20,
-    "UserID": 111,
-    "MessageID": 999,
-    "Status": "SENT",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -1186,127 +1161,6 @@ class TestReferrals:
 # ---------------------------------------------------------------------------
 # Broadcasts
 # ---------------------------------------------------------------------------
-
-
-class TestBroadcasts:
-
-    async def test_create_broadcast(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, SAMPLE_BROADCAST)
-
-        broadcast_data = {"Audience": "ALL", "Payload": {"i18n_key": "test"}}
-        result = await client.create_broadcast(broadcast_data)
-
-        assert isinstance(result, BillingBroadcast)
-        assert result.ID == 20
-
-    async def test_list_broadcasts(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, [SAMPLE_BROADCAST])
-
-        result = await client.list_broadcasts()
-
-        assert len(result) == 1
-        assert isinstance(result[0], BillingBroadcast)
-
-    async def test_get_broadcast(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, SAMPLE_BROADCAST)
-
-        result = await client.get_broadcast(20)
-
-        assert isinstance(result, BillingBroadcast)
-        url = mock_http.request.call_args[0][1]
-        assert url.endswith("/broadcasts/20")
-
-    async def test_get_broadcast_not_found(self):
-        client, mock_http = _make_client_with_mock()
-        resp = _make_response(404, text="not found")
-        resp.json.return_value = {"error": "not found"}
-        mock_http.request.return_value = resp
-
-        result = await client.get_broadcast(999)
-        assert result is None
-
-    async def test_update_broadcast(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, SAMPLE_BROADCAST)
-
-        result = await client.update_broadcast(20, {"Status": "CANCELED"})
-
-        assert isinstance(result, BillingBroadcast)
-        assert mock_http.request.call_args[0][0] == "PUT"
-
-    async def test_update_broadcast_not_found(self):
-        client, mock_http = _make_client_with_mock()
-        resp = _make_response(404, text="not found")
-        resp.json.return_value = {"error": "not found"}
-        mock_http.request.return_value = resp
-
-        result = await client.update_broadcast(999, {"Status": "CANCELED"})
-        assert result is None
-
-    async def test_delete_broadcast(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(204)
-
-        await client.delete_broadcast(20)
-
-        call_args = mock_http.request.call_args
-        assert call_args[0][0] == "DELETE"
-        url = call_args[0][1]
-        assert url.endswith("/broadcasts/20")
-
-    async def test_create_broadcast_messages(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, [SAMPLE_BROADCAST_MESSAGE])
-
-        messages = [{"UserID": 111, "Status": "PENDING"}]
-        result = await client.create_broadcast_messages(20, messages)
-
-        assert len(result) == 1
-        assert isinstance(result[0], BillingBroadcastMessage)
-        body = mock_http.request.call_args[1]["json"]
-        assert body == {"messages": messages}
-        url = mock_http.request.call_args[0][1]
-        assert url.endswith("/broadcasts/20/messages")
-
-    async def test_list_broadcast_messages(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, [SAMPLE_BROADCAST_MESSAGE])
-
-        result = await client.list_broadcast_messages(20)
-
-        assert len(result) == 1
-
-    async def test_get_broadcast_audience_count(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, {"count": 50})
-
-        result = await client.get_broadcast_audience_count("ALL")
-
-        assert result == 50
-        call_kwargs = mock_http.request.call_args[1]
-        assert call_kwargs["params"]["audience"] == "ALL"
-
-    async def test_get_broadcast_audience_count_with_plan(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, {"count": 10})
-
-        result = await client.get_broadcast_audience_count("PLAN", plan_id=42)
-
-        assert result == 10
-        call_kwargs = mock_http.request.call_args[1]
-        assert call_kwargs["params"]["plan_id"] == 42
-
-    async def test_get_broadcast_audience(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, [SAMPLE_USER])
-
-        result = await client.get_broadcast_audience("ALL")
-
-        assert len(result) == 1
-        assert isinstance(result[0], BillingUser)
 
 
 # ---------------------------------------------------------------------------

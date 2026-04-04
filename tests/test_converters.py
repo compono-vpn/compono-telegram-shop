@@ -8,9 +8,6 @@ from uuid import UUID
 
 from src.core.enums import (
     AccessMode,
-    BroadcastAudience,
-    BroadcastMessageStatus,
-    BroadcastStatus,
     Currency,
     GatewayChannel,
     PaymentGatewayType,
@@ -30,8 +27,6 @@ from src.core.enums import (
 from remnapy.enums.users import TrafficLimitStrategy
 
 from src.infrastructure.billing.converters import (
-    billing_broadcast_message_to_dto,
-    billing_broadcast_to_dto,
     billing_gateway_to_dto,
     billing_plan_duration_to_dto,
     billing_plan_price_to_dto,
@@ -47,8 +42,6 @@ from src.infrastructure.billing.converters import (
     billing_user_to_dto,
 )
 from src.infrastructure.billing.models import (
-    BillingBroadcast,
-    BillingBroadcastMessage,
     BillingPaymentGateway,
     BillingPlan,
     BillingPlanDuration,
@@ -748,96 +741,3 @@ class TestBillingPromocodeToDto:
         assert dto.activations == []
 
 
-# ---------------------------------------------------------------------------
-# Broadcast converters
-# ---------------------------------------------------------------------------
-
-
-class TestBillingBroadcastMessageToDto:
-
-    def test_full_conversion(self):
-        bm = BillingBroadcastMessage(
-            ID=1,
-            BroadcastID=20,
-            UserID=111,
-            MessageID=999,
-            Status="SENT",
-        )
-        dto = billing_broadcast_message_to_dto(bm)
-
-        assert dto.id == 1
-        assert dto.user_id == 111
-        assert dto.message_id == 999
-        assert dto.status == BroadcastMessageStatus.SENT
-
-    def test_pending_status(self):
-        bm = BillingBroadcastMessage(ID=2, UserID=222, Status="PENDING")
-        dto = billing_broadcast_message_to_dto(bm)
-
-        assert dto.status == BroadcastMessageStatus.PENDING
-        assert dto.message_id is None
-
-    def test_empty_status_defaults(self):
-        bm = BillingBroadcastMessage(ID=1, UserID=111, Status="")
-        dto = billing_broadcast_message_to_dto(bm)
-
-        assert dto.status == BroadcastMessageStatus.PENDING
-
-
-class TestBillingBroadcastToDto:
-
-    def test_full_conversion(self):
-        now = datetime(2025, 6, 1, tzinfo=timezone.utc)
-        bb = BillingBroadcast(
-            ID=20,
-            TaskID="550e8400-e29b-41d4-a716-446655440002",
-            Status="COMPLETED",
-            Audience="ALL",
-            TotalCount=100,
-            SuccessCount=95,
-            FailedCount=5,
-            Payload={"i18n_key": "ntf-broadcast-test"},
-            Messages=[
-                BillingBroadcastMessage(ID=1, BroadcastID=20, UserID=111, MessageID=999, Status="SENT"),
-            ],
-            CreatedAt=now,
-            UpdatedAt=now,
-        )
-        dto = billing_broadcast_to_dto(bb)
-
-        assert dto.id == 20
-        assert dto.task_id == UUID("550e8400-e29b-41d4-a716-446655440002")
-        assert dto.status == BroadcastStatus.COMPLETED
-        assert dto.audience == BroadcastAudience.ALL
-        assert dto.total_count == 100
-        assert dto.success_count == 95
-        assert dto.failed_count == 5
-        assert dto.payload.i18n_key == "ntf-broadcast-test"
-        assert len(dto.messages) == 1
-        assert dto.messages[0].user_id == 111
-        assert dto.created_at == now
-
-    def test_no_payload_gives_default(self):
-        bb = BillingBroadcast(ID=1, Status="PROCESSING", Payload=None)
-        dto = billing_broadcast_to_dto(bb)
-
-        assert dto.payload.i18n_key == "ntf-broadcast-preview"
-
-    def test_no_messages(self):
-        bb = BillingBroadcast(ID=1, Status="PROCESSING", Messages=None)
-        dto = billing_broadcast_to_dto(bb)
-
-        assert dto.messages == []
-
-    def test_empty_task_id_gives_zero_uuid(self):
-        bb = BillingBroadcast(ID=1, TaskID="", Status="PROCESSING")
-        dto = billing_broadcast_to_dto(bb)
-
-        assert dto.task_id == UUID(int=0)
-
-    def test_empty_status_defaults(self):
-        bb = BillingBroadcast(ID=1, Status="", Audience="")
-        dto = billing_broadcast_to_dto(bb)
-
-        assert dto.status == BroadcastStatus.PROCESSING
-        assert dto.audience == BroadcastAudience.ALL

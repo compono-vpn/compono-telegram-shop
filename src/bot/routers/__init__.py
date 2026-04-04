@@ -38,8 +38,8 @@ def setup_routers(router: Router) -> None:
         dashboard.dialog.router,
         statistics.dialog.router,
         #
-        # Users: MUST stay enabled for emergency user management
-        # (block abusers, inspect subscriptions, grant access).
+        # Users: emergency user management (block abusers, inspect
+        # subscriptions, grant access).  Kept until Django admin panel.
         users.dialog.router,
         users.user.dialog.router,
     ]

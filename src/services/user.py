@@ -184,8 +184,8 @@ class UserService(BaseService):
 
     @redis_cache(prefix="get_all", ttl=TIME_10M)
     async def get_all(self) -> list[UserDto]:
-        # Returns users by role for dashboard. Full list not available via API.
-        # Used only by importer — consider removing.
+        # Dead code: was used by importer/sync tasks (now removed).
+        # Returns empty list — full user list is not available via billing API.
         return []
 
     async def get_recent_registered_users(self) -> list[UserDto]:
