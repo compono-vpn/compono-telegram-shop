@@ -9,6 +9,7 @@ from loguru import logger
 from src.bot.keyboards import get_user_keyboard
 from src.core.config import AppConfig
 from src.core.constants import (
+    ADMIN_PORTAL_URL_KEY,
     CONTAINER_KEY,
     IS_SUPER_DEV_KEY,
     SHOP_ADMIN_ENABLED_KEY,
@@ -141,6 +142,7 @@ class UserMiddleware(EventTypedMiddleware):
         data[USER_KEY] = user
         data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
         data[SHOP_ADMIN_ENABLED_KEY] = config.shop_admin_enabled
+        data[ADMIN_PORTAL_URL_KEY] = config.admin_portal_url
 
         return await handler(event, data)
 

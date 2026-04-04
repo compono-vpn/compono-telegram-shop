@@ -58,6 +58,10 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     # "shop is not the admin surface".
     shop_admin_enabled: bool = False
 
+    # URL for the Django web backoffice.  When set and admin features are
+    # disabled, blocked admin flows will direct privileged users here.
+    admin_portal_url: str = ""
+
     @property
     def kafka_notify_topic(self) -> str:
         return f"{self.kafka_topic_env}.compono.notify.user.v1"
