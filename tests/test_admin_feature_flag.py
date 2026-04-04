@@ -158,8 +158,10 @@ class TestMenuDialogUnaffected:
 
 from src.bot.filters.admin_gate import (
     AdminGateMiddleware,
+    get_admin_disabled_message,
     require_admin_enabled,
 )
+from src.core.constants import ADMIN_DISABLED_MESSAGE_WITH_URL, ADMIN_PORTAL_URL_KEY
 
 
 class TestAdminGateMiddleware:
@@ -273,3 +275,115 @@ class TestFlagRestorationBehavior:
         result = await gate(handler, event, data)
         assert result == "result"
         handler.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Admin portal URL handoff
+# ---------------------------------------------------------------------------
+
+
+class TestGetAdminDisabledMessage:
+    """get_admin_disabled_message builds the right message based on portal URL."""
+
+    def test_includes_url_when_configured(self):
+        url = "https://admin.compono.it.com"
+        data = {ADMIN_PORTAL_URL_KEY: url}
+        msg = get_admin_disabled_message(data)
+        assert url in msg
+        assert msg == ADMIN_DISABLED_MESSAGE_WITH_URL.format(url=url)
+
+    def test_fallback_when_url_empty(self):
+        data = {ADMIN_PORTAL_URL_KEY: ""}
+        msg = get_admin_disabled_message(data)
+        assert msg == ADMIN_DISABLED_MESSAGE
+        assert "https://" not in msg
+
+    def test_fallback_when_url_missing(self):
+        data = {}
+        msg = get_admin_disabled_message(data)
+        assert msg == ADMIN_DISABLED_MESSAGE
+
+    def test_fallback_message_mentions_migration(self):
+        msg = get_admin_disabled_message({})
+        assert "migrated" in msg.lower() or "migrating" in msg.lower()
+
+
+class TestAdminGateMiddlewarePortalHandoff:
+    """AdminGateMiddleware shows portal URL in blocked responses."""
+
+    @pytest.fixture
+    def gate(self):
+        return AdminGateMiddleware()
+
+    @pytest.fixture
+    def handler(self):
+        return AsyncMock(return_value="ok")
+
+    @pytest.mark.asyncio
+    async def test_callback_shows_portal_url_when_configured(self, gate, handler):
+        url = "https://admin.compono.it.com"
+        callback = AsyncMock()
+        callback.data = "some_callback"
+        data = {SHOP_ADMIN_ENABLED_KEY: False, ADMIN_PORTAL_URL_KEY: url}
+        await gate(handler, callback, data)
+        handler.assert_not_awaited()
+        expected = ADMIN_DISABLED_MESSAGE_WITH_URL.format(url=url)
+        callback.answer.assert_awaited_once_with(expected, show_alert=True)
+
+    @pytest.mark.asyncio
+    async def test_message_shows_portal_url_when_configured(self, gate, handler):
+        url = "https://admin.compono.it.com"
+        message = AsyncMock()
+        del message.data
+        data = {SHOP_ADMIN_ENABLED_KEY: False, ADMIN_PORTAL_URL_KEY: url}
+        await gate(handler, message, data)
+        handler.assert_not_awaited()
+        expected = ADMIN_DISABLED_MESSAGE_WITH_URL.format(url=url)
+        message.answer.assert_awaited_once_with(expected)
+
+    @pytest.mark.asyncio
+    async def test_callback_shows_fallback_when_no_url(self, gate, handler):
+        callback = AsyncMock()
+        callback.data = "some_callback"
+        data = {SHOP_ADMIN_ENABLED_KEY: False}
+        await gate(handler, callback, data)
+        callback.answer.assert_awaited_once_with(ADMIN_DISABLED_MESSAGE, show_alert=True)
+
+    @pytest.mark.asyncio
+    async def test_emergency_users_flow_not_blocked(self):
+        """Users router is NOT in the admin-gated list — verify the design."""
+        from src.bot.routers import setup_routers
+        from aiogram import Router
+
+        root = Router()
+        setup_routers(root)
+
+        # users.dialog.router and users.user.dialog.router must be included
+        # but must NOT have AdminGateMiddleware attached.
+        from src.bot.routers.dashboard import users
+
+        user_router = users.dialog.router
+        user_user_router = users.user.dialog.router
+
+        for r in [user_router, user_user_router]:
+            for mw in r.message.middleware:
+                assert not isinstance(mw, AdminGateMiddleware), (
+                    f"Users router {r} must NOT have AdminGateMiddleware"
+                )
+
+
+class TestAdminPortalUrlConfig:
+    """ADMIN_PORTAL_URL env var is read correctly."""
+
+    def test_default_is_empty(self):
+        from src.core.config import AppConfig
+
+        config = AppConfig.get()
+        assert config.admin_portal_url == ""
+
+    def test_env_override(self, monkeypatch):
+        monkeypatch.setenv("APP_ADMIN_PORTAL_URL", "https://admin.compono.it.com")
+        from src.core.config.app import AppConfig
+
+        config = AppConfig()
+        assert config.admin_portal_url == "https://admin.compono.it.com"

@@ -49,6 +49,12 @@ BATCH_SIZE: Final[int] = 20
 BATCH_DELAY: Final[int] = 1
 
 SHOP_ADMIN_ENABLED_KEY: Final[str] = "shop_admin_enabled"
+ADMIN_PORTAL_URL_KEY: Final[str] = "admin_portal_url"
+ADMIN_DISABLED_MESSAGE_WITH_URL: Final[str] = (
+    "⚙️ Admin features are being migrated to the web backoffice.\n"
+    "Please use the new admin portal: {url}"
+)
 ADMIN_DISABLED_MESSAGE: Final[str] = (
-    "⚙️ This admin function is temporarily unavailable in the bot.\nPlease use the admin panel."
+    "⚙️ Admin features are being migrated to a new platform. "
+    "The web backoffice will be available soon."
 )
