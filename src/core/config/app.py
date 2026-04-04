@@ -51,6 +51,13 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     kafka_topic_env: str = "stage"
     kafka_group_id: str = "compono-shop"
 
+    # Admin feature flag: when False, admin-only Telegram flows (broadcasts,
+    # promocode management, settings/config, gateway admin, user-editor) are
+    # blocked.  End-user flows (purchase, subscription, referral, support,
+    # promocode *activation*) are unaffected.  Default False to enforce
+    # "shop is not the admin surface".
+    shop_admin_enabled: bool = False
+
     @property
     def kafka_notify_topic(self) -> str:
         return f"{self.kafka_topic_env}.compono.notify.user.v1"
