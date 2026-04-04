@@ -8,7 +8,13 @@ from loguru import logger
 
 from src.bot.keyboards import get_user_keyboard
 from src.core.config import AppConfig
-from src.core.constants import CONTAINER_KEY, IS_SUPER_DEV_KEY, SOURCE_PREFIX, USER_KEY
+from src.core.constants import (
+    CONTAINER_KEY,
+    IS_SUPER_DEV_KEY,
+    SHOP_ADMIN_ENABLED_KEY,
+    SOURCE_PREFIX,
+    USER_KEY,
+)
 from src.core.enums import MiddlewareEventType, SystemNotificationType
 from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
@@ -134,6 +140,7 @@ class UserMiddleware(EventTypedMiddleware):
 
         data[USER_KEY] = user
         data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
+        data[SHOP_ADMIN_ENABLED_KEY] = config.shop_admin_enabled
 
         return await handler(event, data)
 
