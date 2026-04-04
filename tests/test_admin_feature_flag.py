@@ -3,10 +3,9 @@
 Verifies that:
 - Removed admin buttons are no longer in the dashboard
 - Emergency flows (statistics, users) still exist
-- End-user flows are unaffected by the flag
-- The AdminGateMiddleware still works (preserved for future use)
-- The require_admin_enabled guard still works
+- End-user flows are unaffected
 - Removed admin routers are no longer registered
+- Admin gate module has been fully removed
 """
 
 from __future__ import annotations
@@ -26,13 +25,6 @@ from tests.conftest import _TEST_ENV  # noqa: F401
 
 from src.bot.routers.dashboard.dialog import dashboard as dashboard_window
 from src.bot.routers.menu.dialog import menu as menu_window
-from src.core.constants import (
-    ADMIN_DISABLED_MESSAGE,
-    IS_SUPER_DEV_KEY,
-    MIDDLEWARE_DATA_KEY,
-    SHOP_ADMIN_ENABLED_KEY,
-    USER_KEY,
-)
 
 
 def _collect_button_ids(window):
@@ -83,7 +75,7 @@ class TestDashboardButtonVisibility:
                 f"Removed admin button '{btn_id}' should not exist in dashboard"
             )
 
-    def test_always_visible_row_has_no_admin_gate(self):
+    def test_always_visible_row_has_no_condition(self):
         """Statistics and Users row must use the default true_condition (no gate)."""
         from aiogram_dialog.widgets.kbd import Row
 
@@ -146,106 +138,36 @@ class TestMenuDialogUnaffected:
 
 
 # ---------------------------------------------------------------------------
-# AdminGateMiddleware (preserved for future use)
-# ---------------------------------------------------------------------------
-
-from src.bot.filters.admin_gate import (
-    AdminGateMiddleware,
-    require_admin_enabled,
-)
-
-
-class TestAdminGateMiddleware:
-    """AdminGateMiddleware blocks/allows based on SHOP_ADMIN_ENABLED."""
-
-    @pytest.fixture
-    def gate(self):
-        return AdminGateMiddleware()
-
-    @pytest.fixture
-    def handler(self):
-        return AsyncMock(return_value="ok")
-
-    @pytest.mark.asyncio
-    async def test_allows_when_enabled(self, gate, handler):
-        event = MagicMock()
-        data = {SHOP_ADMIN_ENABLED_KEY: True}
-        result = await gate(handler, event, data)
-        handler.assert_awaited_once_with(event, data)
-        assert result == "ok"
-
-    @pytest.mark.asyncio
-    async def test_blocks_callback_when_disabled(self, gate, handler):
-        # Simulate CallbackQuery (has .data attribute)
-        callback = AsyncMock()
-        callback.data = "some_callback"
-        data = {SHOP_ADMIN_ENABLED_KEY: False}
-        result = await gate(handler, callback, data)
-        handler.assert_not_awaited()
-        callback.answer.assert_awaited_once_with(ADMIN_DISABLED_MESSAGE, show_alert=True)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_blocks_when_key_missing(self, gate, handler):
-        callback = AsyncMock()
-        callback.data = "some_callback"
-        data = {}
-        result = await gate(handler, callback, data)
-        handler.assert_not_awaited()
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_blocks_message_event(self, gate, handler):
-        """When event is a Message-like object (no .data), use message.answer()."""
-        message = AsyncMock()
-        # Remove .data attribute so it's treated as a message
-        del message.data
-        data = {SHOP_ADMIN_ENABLED_KEY: False}
-        result = await gate(handler, message, data)
-        handler.assert_not_awaited()
-        message.answer.assert_awaited_once_with(ADMIN_DISABLED_MESSAGE)
-
-
-class TestRequireAdminEnabled:
-    """require_admin_enabled() guard function."""
-
-    def test_returns_true_when_enabled(self):
-        assert require_admin_enabled({SHOP_ADMIN_ENABLED_KEY: True}) is True
-
-    def test_returns_false_when_disabled(self):
-        assert require_admin_enabled({SHOP_ADMIN_ENABLED_KEY: False}) is False
-
-    def test_returns_false_when_missing(self):
-        assert require_admin_enabled({}) is False
-
-
-# ---------------------------------------------------------------------------
-# Config flag
+# Admin gate module fully removed
 # ---------------------------------------------------------------------------
 
 
-class TestConfigFlag:
-    """SHOP_ADMIN_ENABLED env var is read correctly."""
+class TestAdminGateRemoved:
+    """Admin gate module and config flag have been fully removed."""
 
-    def test_default_is_false(self):
+    def test_admin_gate_module_not_importable(self):
+        import importlib
+
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            importlib.import_module("src.bot.filters.admin_gate")
+
+    def test_config_has_no_shop_admin_enabled(self):
         from src.core.config import AppConfig
 
         config = AppConfig.get()
-        assert config.shop_admin_enabled is False
+        assert not hasattr(config, "shop_admin_enabled"), (
+            "shop_admin_enabled config field should be removed"
+        )
 
-    def test_env_override_true(self, monkeypatch):
-        monkeypatch.setenv("APP_SHOP_ADMIN_ENABLED", "true")
-        from src.core.config.app import AppConfig
+    def test_constants_have_no_admin_keys(self):
+        import src.core.constants as constants
 
-        config = AppConfig()
-        assert config.shop_admin_enabled is True
-
-    def test_env_override_false(self, monkeypatch):
-        monkeypatch.setenv("APP_SHOP_ADMIN_ENABLED", "false")
-        from src.core.config.app import AppConfig
-
-        config = AppConfig()
-        assert config.shop_admin_enabled is False
+        assert not hasattr(constants, "SHOP_ADMIN_ENABLED_KEY"), (
+            "SHOP_ADMIN_ENABLED_KEY constant should be removed"
+        )
+        assert not hasattr(constants, "ADMIN_DISABLED_MESSAGE"), (
+            "ADMIN_DISABLED_MESSAGE constant should be removed"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -314,3 +236,37 @@ class TestRouterRegistration:
         for mod_name in removed_modules:
             with pytest.raises((ImportError, ModuleNotFoundError)):
                 importlib.import_module(mod_name)
+
+
+
+# ---------------------------------------------------------------------------
+# Removed services are not importable
+# ---------------------------------------------------------------------------
+
+
+class TestRemovedServices:
+    """Verify removed admin services are no longer importable."""
+
+    def test_broadcast_service_not_importable(self):
+        import importlib
+
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            importlib.import_module("src.services.broadcast")
+
+    def test_importer_service_not_importable(self):
+        import importlib
+
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            importlib.import_module("src.services.importer")
+
+    def test_broadcast_tasks_not_importable(self):
+        import importlib
+
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            importlib.import_module("src.infrastructure.taskiq.tasks.broadcast")
+
+    def test_importer_tasks_not_importable(self):
+        import importlib
+
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            importlib.import_module("src.infrastructure.taskiq.tasks.importer")

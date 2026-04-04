@@ -47,8 +47,3 @@ RECENT_ACTIVITY_MAX_COUNT: Final[int] = 25
 
 BATCH_SIZE: Final[int] = 20
 BATCH_DELAY: Final[int] = 1
-
-SHOP_ADMIN_ENABLED_KEY: Final[str] = "shop_admin_enabled"
-ADMIN_DISABLED_MESSAGE: Final[str] = (
-    "⚙️ This admin function is temporarily unavailable in the bot.\nPlease use the admin panel."
-)

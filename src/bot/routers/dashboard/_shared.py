@@ -1,8 +1,8 @@
-"""Shared admin dialog handlers.
+"""Shared dashboard dialog handlers.
 
-Extracted from broadcast.handlers during admin surface reduction so that
-the user-management dialog can continue using on_content_input / on_preview
-without depending on the removed broadcast module.
+Used by the emergency user-management dialog for on_content_input / on_preview
+(DashboardUser.MESSAGE window), allowing admins to send a message to a
+specific user.
 """
 
 from __future__ import annotations

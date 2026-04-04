@@ -1,5 +1,4 @@
 from .base import BaseDto, TrackableDto
-from .broadcast import BroadcastDto, BroadcastMessageDto
 from .customer import CustomerDto
 from .payment_gateway import (
     AnyGatewaySettingsDto,
@@ -35,8 +34,6 @@ ReferralDto.model_rebuild()
 
 __all__ = [
     "BaseDto",
-    "BroadcastDto",
-    "BroadcastMessageDto",
     "CustomerDto",
     "TrackableDto",
     "AnyGatewaySettingsDto",

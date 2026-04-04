@@ -38,7 +38,6 @@ _TEST_ENV = {
     "APP_API_INTERNAL_SECRET": "testsecret",
     "APP_LOCALES": "en",
     "APP_HYDRA_DOMAINS": "test.example.com",
-    "APP_SHOP_ADMIN_ENABLED": "false",
 }
 
 for k, v in _TEST_ENV.items():
