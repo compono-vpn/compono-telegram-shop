@@ -18,7 +18,7 @@ from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
 from src.bot.keyboards import back_main_menu_button
-from src.bot.routers.dashboard.broadcast.handlers import on_content_input, on_preview
+from src.bot.routers.dashboard._shared import on_content_input, on_preview
 from src.bot.routers.extra.test import show_dev_popup
 from src.bot.states import DashboardUser, DashboardUsers
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate

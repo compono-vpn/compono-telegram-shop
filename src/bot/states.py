@@ -37,40 +37,6 @@ class DashboardStatistics(StatesGroup):
     MAIN = State()
 
 
-class DashboardBroadcast(StatesGroup):
-    MAIN = State()
-    LIST = State()
-    VIEW = State()
-    PLAN = State()
-    SEND = State()
-    CONTENT = State()
-    BUTTONS = State()
-
-
-class DashboardPromocodes(StatesGroup):
-    MAIN = State()
-    LIST = State()
-    CONFIGURATOR = State()
-    CODE = State()
-    TYPE = State()
-    AVAILABILITY = State()
-    REWARD = State()
-    LIFETIME = State()
-    MAX_ACTIVATIONS = State()
-    SEARCH = State()
-    ALLOWED = State()
-    PLAN_SELECT = State()
-    PLAN_DURATION = State()
-    PURCHASE_DISCOUNT_MAX_DAYS = State()
-
-
-class DashboardAccess(StatesGroup):
-    MAIN = State()
-    CONDITIONS = State()
-    RULES = State()
-    CHANNEL = State()
-
-
 class DashboardUsers(StatesGroup):
     MAIN = State()
     SEARCH = State()
@@ -102,72 +68,6 @@ class DashboardUser(StatesGroup):
     SYNC_WAITING = State()
     GIVE_SUBSCRIPTION = State()
     SUBSCRIPTION_DURATION = State()
-
-
-class DashboardRemnashop(StatesGroup):
-    MAIN = State()
-    ADMINS = State()
-    ADVERTISING = State()
-
-
-class RemnashopReferral(StatesGroup):
-    MAIN = State()
-    LEVEL = State()
-    REWARD = State()
-    REWARD_TYPE = State()
-    ACCRUAL_STRATEGY = State()
-    REWARD_STRATEGY = State()
-
-
-class RemnashopGateways(StatesGroup):
-    MAIN = State()
-    SETTINGS = State()
-    FIELD = State()
-    CURRENCY = State()
-    PLACEMENT = State()
-
-
-class RemnashopNotifications(StatesGroup):
-    MAIN = State()
-    USER = State()
-    SYSTEM = State()
-
-
-class RemnashopPlans(StatesGroup):
-    MAIN = State()
-    CONFIGURATOR = State()
-    NAME = State()
-    DESCRIPTION = State()
-    TAG = State()
-    TYPE = State()
-    AVAILABILITY = State()
-    TRAFFIC = State()
-    DEVICES = State()
-    DURATIONS = State()
-    DURATION_ADD = State()
-    PRICES = State()
-    PRICE = State()
-    ALLOWED = State()
-    SQUADS = State()
-    INTERNAL_SQUADS = State()
-    EXTERNAL_SQUADS = State()
-
-
-class DashboardRemnawave(StatesGroup):
-    MAIN = State()
-    USERS = State()
-    HOSTS = State()
-    NODES = State()
-    INBOUNDS = State()
-
-
-class DashboardImporter(StatesGroup):
-    MAIN = State()
-    FROM_XUI = State()
-    SYNC = State()
-    SQUADS = State()
-    IMPORT_COMPLETED = State()
-    SYNC_COMPLETED = State()
 
 
 def state_from_string(state_str: str, sep: Optional[str] = ":") -> Optional[State]:
