@@ -667,7 +667,7 @@ class BillingClient:
         self,
         referrer_telegram_id: int,
         referred_telegram_id: int,
-        level: str,
+        level: int | str,
     ) -> BillingReferral:
         data = await self._post(
             "/referrals",

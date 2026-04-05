@@ -238,7 +238,7 @@ class BillingReferral(BaseModel):
     ID: int = 0
     ReferrerTelegramID: int = 0
     ReferredTelegramID: int = 0
-    Level: str = ""
+    Level: int | str = 0
     CreatedAt: Optional[datetime] = None
     UpdatedAt: Optional[datetime] = None
 
