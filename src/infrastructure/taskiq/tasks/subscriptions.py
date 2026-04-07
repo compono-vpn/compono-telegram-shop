@@ -24,7 +24,7 @@ from src.core.utils.formatters import (
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.types import RemnaUserDto
-from src.infrastructure.billing import BillingClient
+from src.infrastructure.api import ApiIdentityClient
 from src.infrastructure.taskiq.broker import broker
 from src.models.dto import (
     PlanSnapshotDto,
@@ -71,7 +71,7 @@ async def trial_subscription_task(
     plan: PlanSnapshotDto,
     skip_redirect: bool,
     config: FromDishka[AppConfig],
-    billing: FromDishka[BillingClient],
+    api_identity: FromDishka[ApiIdentityClient],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
@@ -80,18 +80,21 @@ async def trial_subscription_task(
     logger.info(f"Started trial for user '{user.telegram_id}'")
 
     try:
+        # Ensure API identity exists before provisioning (no side effects)
+        await api_identity.ensure_with_linkage(
+            telegram_id=user.telegram_id,
+            name=user.name,
+            username=user.username,
+            language=user.language.value if user.language else None,
+        )
+
         created_user = await remnawave_service.create_user(user, plan=plan)
 
-        # Link Customer record via billing API
-        customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
-        await billing.update_customer(
-            customer.ID,
-            remna_user_uuid=str(created_user.uuid),
-            remna_username=created_user.username,
-            subscription_url=created_user.subscription_url,
+        # Update identity with Remnawave linkage after successful provisioning
+        await api_identity.ensure_with_linkage(
+            telegram_id=user.telegram_id,
+            remnawave_user_id=str(created_user.uuid),
         )
-        if not user.customer_id:
-            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
         trial_subscription = SubscriptionDto(
             user_remna_id=created_user.uuid,
@@ -183,22 +186,26 @@ async def trial_subscription_task(
 async def _handle_new_purchase(
     user: UserDto,
     plan: PlanSnapshotDto,
-    billing: BillingClient,
+    api_identity: ApiIdentityClient,
     remnawave_service: RemnawaveService,
     subscription_service: SubscriptionService,
 ) -> None:
     """Handle a NEW purchase type (no existing trial)."""
+    # Ensure API identity exists before provisioning (no side effects)
+    await api_identity.ensure_with_linkage(
+        telegram_id=user.telegram_id,
+        name=user.name,
+        username=user.username,
+        language=user.language.value if user.language else None,
+    )
+
     created_user = await remnawave_service.create_user(user, plan=plan)
 
-    customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
-    await billing.update_customer(
-        customer.ID,
-        remna_user_uuid=str(created_user.uuid),
-        remna_username=created_user.username,
-        subscription_url=created_user.subscription_url,
+    # Update identity with Remnawave linkage after successful provisioning
+    await api_identity.ensure_with_linkage(
+        telegram_id=user.telegram_id,
+        remnawave_user_id=str(created_user.uuid),
     )
-    if not user.customer_id:
-        await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
     new_subscription = SubscriptionDto(
         user_remna_id=created_user.uuid,
@@ -301,7 +308,7 @@ async def purchase_subscription_task(
     transaction: TransactionDto,
     subscription: Optional[SubscriptionDto],
     config: FromDishka[AppConfig],
-    billing: FromDishka[BillingClient],
+    api_identity: FromDishka[ApiIdentityClient],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     transaction_service: FromDishka[TransactionService],
@@ -324,7 +331,7 @@ async def purchase_subscription_task(
             await _handle_new_purchase(
                 user,
                 plan,
-                billing,
+                api_identity,
                 remnawave_service,
                 subscription_service,
             )
