@@ -87,24 +87,29 @@ class ApiIdentityClient:
     async def ensure_with_linkage(
         self,
         telegram_id: int,
-        remnawave_user_id: str,
+        remnawave_user_id: Optional[str] = None,
         *,
         name: Optional[str] = None,
         username: Optional[str] = None,
         language: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Ensure a compono user exists and set Remnawave linkage.
+        """Ensure a compono user exists and optionally set Remnawave linkage.
 
         Calls POST /api/v1/internal/compono-users/ensure-with-linkage.
         This replaces the deprecated billing customer bridge:
         - billing.get_or_create_customer_by_telegram_id
         - billing.update_customer(id, remna_user_uuid=...)
         - billing.update_user(telegram_id, {"customer_id": ...})
+
+        When called without remnawave_user_id, only ensures the identity
+        exists (idempotent get-or-create). When called with remnawave_user_id,
+        also updates the Remnawave linkage.
         """
         payload: dict[str, Any] = {
             "telegram_id": telegram_id,
-            "remnawave_user_id": remnawave_user_id,
         }
+        if remnawave_user_id is not None:
+            payload["remnawave_user_id"] = remnawave_user_id
         if name is not None:
             payload["name"] = name
         if username is not None:

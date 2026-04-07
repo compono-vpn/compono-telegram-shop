@@ -80,9 +80,14 @@ async def trial_subscription_task(
     logger.info(f"Started trial for user '{user.telegram_id}'")
 
     try:
+        # Ensure API identity exists before provisioning (no side effects)
+        await api_identity.ensure_with_linkage(
+            telegram_id=user.telegram_id,
+        )
+
         created_user = await remnawave_service.create_user(user, plan=plan)
 
-        # Ensure API identity with Remnawave linkage (replaces billing customer bridge)
+        # Update identity with Remnawave linkage after successful provisioning
         await api_identity.ensure_with_linkage(
             telegram_id=user.telegram_id,
             remnawave_user_id=str(created_user.uuid),
@@ -183,9 +188,14 @@ async def _handle_new_purchase(
     subscription_service: SubscriptionService,
 ) -> None:
     """Handle a NEW purchase type (no existing trial)."""
+    # Ensure API identity exists before provisioning (no side effects)
+    await api_identity.ensure_with_linkage(
+        telegram_id=user.telegram_id,
+    )
+
     created_user = await remnawave_service.create_user(user, plan=plan)
 
-    # Ensure API identity with Remnawave linkage (replaces billing customer bridge)
+    # Update identity with Remnawave linkage after successful provisioning
     await api_identity.ensure_with_linkage(
         telegram_id=user.telegram_id,
         remnawave_user_id=str(created_user.uuid),

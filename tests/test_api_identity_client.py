@@ -10,7 +10,7 @@ caused 404 errors. They verify:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 from uuid import uuid4
 
 import httpx
@@ -224,6 +224,20 @@ class TestEnsureWithLinkage:
         assert "username" not in payload
         assert "language" not in payload
 
+    async def test_sends_only_telegram_id_when_no_remnawave_user_id(self):
+        """Verify calling without remnawave_user_id sends only telegram_id."""
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(200, SAMPLE_COMPONO_USER)
+
+        await client.ensure_with_linkage(
+            telegram_id=123456789,
+        )
+
+        call_args = mock_http.request.call_args
+        assert call_args[1]["json"] == {
+            "telegram_id": 123456789,
+        }
+
     async def test_returns_compono_user_data(self):
         """Verify the response is returned as dict."""
         client, mock_http = _make_client_with_mock()
@@ -320,7 +334,9 @@ class TestTrialFlowIntegration:
     """
 
     async def test_trial_task_calls_ensure_with_linkage(self):
-        """Mock the full trial task flow and verify ensure_with_linkage is called."""
+        """Mock the full trial task flow and verify ensure_with_linkage is called twice:
+        once before provisioning (without remnawave_user_id) and once after (with it).
+        """
         user = make_user(telegram_id=777888999)
         plan = make_plan_snapshot()
         remna_uuid = uuid4()
@@ -357,11 +373,54 @@ class TestTrialFlowIntegration:
             redis_client,
         )
 
-        # Verify ensure_with_linkage was called with correct args
+        # Verify ensure_with_linkage called twice: before and after provisioning
+        assert api_identity.ensure_with_linkage.call_count == 2
+        api_identity.ensure_with_linkage.assert_has_calls([
+            call(telegram_id=777888999),
+            call(telegram_id=777888999, remnawave_user_id=str(remna_uuid)),
+        ])
+
+    async def test_trial_task_ensures_identity_before_provisioning(self):
+        """Verify ensure_with_linkage is called BEFORE remnawave_service.create_user.
+
+        If ensure_with_linkage fails (404/500/timeout), no Remnawave user
+        should be created -- preventing orphaned users.
+        """
+        user = make_user(telegram_id=777888999)
+        plan = make_plan_snapshot()
+
+        api_identity = AsyncMock(spec=ApiIdentityClient)
+        api_identity.ensure_with_linkage.side_effect = ApiIdentityClientError(500, "Server Error")
+
+        remnawave_service = AsyncMock()
+
+        subscription_service = AsyncMock()
+        notification_service = AsyncMock()
+        redis_client = AsyncMock()
+        config = MagicMock()
+        config.remnawave.sub_public_domain = "componovpn.com"
+
+        fn = _unwrap_taskiq_inject(trial_subscription_task)
+
+        # The task catches all exceptions internally, so we check side effects
+        await fn(
+            user,
+            plan,
+            True,
+            config,
+            api_identity,
+            remnawave_service,
+            subscription_service,
+            notification_service,
+            redis_client,
+        )
+
+        # Identity call was attempted (and failed)
         api_identity.ensure_with_linkage.assert_called_once_with(
             telegram_id=777888999,
-            remnawave_user_id=str(remna_uuid),
         )
+        # Remnawave user must NOT be created when identity fails first
+        remnawave_service.create_user.assert_not_called()
 
     async def test_trial_task_does_not_call_billing_customer_bridge(self):
         """Ensure the old billing customer bridge calls are no longer made.
@@ -420,7 +479,9 @@ class TestPurchaseFlowIntegration:
     """Verify _handle_new_purchase calls ensure_with_linkage with correct args."""
 
     async def test_new_purchase_calls_ensure_with_linkage(self):
-        """Mock the new purchase flow and verify ensure_with_linkage is called."""
+        """Mock the new purchase flow and verify ensure_with_linkage is called twice:
+        once before provisioning (without remnawave_user_id) and once after (with it).
+        """
         user = make_user(telegram_id=111222333)
         plan = make_plan_snapshot()
         remna_uuid = uuid4()
@@ -447,11 +508,12 @@ class TestPurchaseFlowIntegration:
             subscription_service,
         )
 
-        # Verify ensure_with_linkage was called with correct args
-        api_identity.ensure_with_linkage.assert_called_once_with(
-            telegram_id=111222333,
-            remnawave_user_id=str(remna_uuid),
-        )
+        # Verify ensure_with_linkage called twice: before and after provisioning
+        assert api_identity.ensure_with_linkage.call_count == 2
+        api_identity.ensure_with_linkage.assert_has_calls([
+            call(telegram_id=111222333),
+            call(telegram_id=111222333, remnawave_user_id=str(remna_uuid)),
+        ])
 
     async def test_new_purchase_creates_subscription_after_linkage(self):
         """Verify subscription is created after identity linkage succeeds."""
@@ -484,8 +546,8 @@ class TestPurchaseFlowIntegration:
         # Subscription must be created
         subscription_service.create.assert_called_once()
 
-    async def test_new_purchase_propagates_linkage_error(self):
-        """If ensure_with_linkage fails, the error must propagate (fail-fast)."""
+    async def test_new_purchase_propagates_identity_error_before_provisioning(self):
+        """If ensure_with_linkage fails before provisioning, no Remnawave user is created."""
         user = make_user(telegram_id=111222333)
         plan = make_plan_snapshot()
 
@@ -495,14 +557,6 @@ class TestPurchaseFlowIntegration:
         )
 
         remnawave_service = AsyncMock()
-        created_user = MagicMock()
-        created_user.uuid = uuid4()
-        created_user.username = "remna_user"
-        created_user.subscription_url = "https://panel.example.com/sub/def"
-        created_user.status = "ACTIVE"
-        created_user.expire_at = "2026-12-01T00:00:00Z"
-        remnawave_service.create_user.return_value = created_user
-
         subscription_service = AsyncMock()
 
         with pytest.raises(ApiIdentityClientError) as exc_info:
@@ -515,5 +569,7 @@ class TestPurchaseFlowIntegration:
             )
 
         assert exc_info.value.status_code == 404
-        # Subscription must NOT be created if linkage failed
+        # Remnawave user must NOT be created if identity check failed
+        remnawave_service.create_user.assert_not_called()
+        # Subscription must NOT be created either
         subscription_service.create.assert_not_called()
