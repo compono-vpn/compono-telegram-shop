@@ -1,12 +1,12 @@
 import traceback
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional, cast
+from uuid import UUID
 
 from aiogram.utils.formatting import Text
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
 from redis.asyncio import Redis
-from remnapy.exceptions import ConflictError
 
 from src.bot.keyboards import get_connect_keyboard, get_user_keyboard
 from src.core.config import AppConfig
@@ -24,7 +24,7 @@ from src.core.utils.formatters import (
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.core.utils.types import RemnaUserDto
-from src.infrastructure.billing import BillingClient
+from src.infrastructure.api import ApiClient
 from src.infrastructure.taskiq.broker import broker
 from src.models.dto import (
     PlanSnapshotDto,
@@ -71,8 +71,7 @@ async def trial_subscription_task(
     plan: PlanSnapshotDto,
     skip_redirect: bool,
     config: FromDishka[AppConfig],
-    billing: FromDishka[BillingClient],
-    remnawave_service: FromDishka[RemnawaveService],
+    api_client: FromDishka[ApiClient],
     subscription_service: FromDishka[SubscriptionService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
@@ -80,22 +79,18 @@ async def trial_subscription_task(
     logger.info(f"Started trial for user '{user.telegram_id}'")
 
     try:
-        created_user = await remnawave_service.create_user(user, plan=plan)
-
-        # Link Customer record via billing API
-        customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
-        await billing.update_customer(
-            customer.ID,
-            remna_user_uuid=str(created_user.uuid),
-            remna_username=created_user.username,
-            subscription_url=created_user.subscription_url,
+        # Single API call — API owns identity + Remnawave provisioning + linkage
+        result = await api_client.provision_user(
+            telegram_id=user.telegram_id,
+            plan=plan,
+            name=user.name,
+            username=user.username,
+            language=user.language.value if user.language else None,
         )
-        if not user.customer_id:
-            await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
         trial_subscription = SubscriptionDto(
-            user_remna_id=created_user.uuid,
-            status=created_user.status,
+            user_remna_id=UUID(result.remnawave_user_id),
+            status=SubscriptionStatus(result.status),
             is_trial=True,
             traffic_limit=plan.traffic_limit,
             device_limit=plan.device_limit,
@@ -103,8 +98,8 @@ async def trial_subscription_task(
             tag=plan.tag,
             internal_squads=plan.internal_squads,
             external_squad=plan.external_squad,
-            expire_at=created_user.expire_at,
-            url=created_user.subscription_url,
+            expire_at=datetime.fromisoformat(result.expire_at),
+            url=result.subscription_url,
             plan=plan,
         )
         await subscription_service.create(user, trial_subscription)
@@ -128,7 +123,7 @@ async def trial_subscription_task(
             ),
         )
         connect_url = SubscriptionService.build_connect_url(
-            created_user.subscription_url, config.remnawave.sub_public_domain
+            result.subscription_url, config.remnawave.sub_public_domain
         )
         await schedule_not_connected_reminder(redis_client, user.telegram_id, connect_url)
 
@@ -144,13 +139,6 @@ async def trial_subscription_task(
             await redirect_to_successed_trial_task.kiq(user)
 
         logger.info(f"Trial subscription task completed successfully for user '{user.telegram_id}'")
-
-    except ConflictError:
-        logger.warning(
-            "Trial subscription grant skipped: "
-            "user already exists in the panel and likely has an active trial"
-        )
-        return
 
     except Exception as exception:
         logger.exception(
@@ -183,34 +171,30 @@ async def trial_subscription_task(
 async def _handle_new_purchase(
     user: UserDto,
     plan: PlanSnapshotDto,
-    billing: BillingClient,
-    remnawave_service: RemnawaveService,
+    api_client: ApiClient,
     subscription_service: SubscriptionService,
 ) -> None:
     """Handle a NEW purchase type (no existing trial)."""
-    created_user = await remnawave_service.create_user(user, plan=plan)
-
-    customer = await billing.get_or_create_customer_by_telegram_id(user.telegram_id)
-    await billing.update_customer(
-        customer.ID,
-        remna_user_uuid=str(created_user.uuid),
-        remna_username=created_user.username,
-        subscription_url=created_user.subscription_url,
+    # Single API call — API owns identity + Remnawave provisioning + linkage
+    result = await api_client.provision_user(
+        telegram_id=user.telegram_id,
+        plan=plan,
+        name=user.name,
+        username=user.username,
+        language=user.language.value if user.language else None,
     )
-    if not user.customer_id:
-        await billing.update_user(user.telegram_id, {"customer_id": customer.ID})
 
     new_subscription = SubscriptionDto(
-        user_remna_id=created_user.uuid,
-        status=created_user.status,
+        user_remna_id=UUID(result.remnawave_user_id),
+        status=SubscriptionStatus(result.status),
         traffic_limit=plan.traffic_limit,
         device_limit=plan.device_limit,
         traffic_limit_strategy=plan.traffic_limit_strategy,
         tag=plan.tag,
         internal_squads=plan.internal_squads,
         external_squad=plan.external_squad,
-        expire_at=created_user.expire_at,
-        url=created_user.subscription_url,
+        expire_at=datetime.fromisoformat(result.expire_at),
+        url=result.subscription_url,
         plan=plan,
     )
     await subscription_service.create(user, new_subscription)
@@ -301,7 +285,7 @@ async def purchase_subscription_task(
     transaction: TransactionDto,
     subscription: Optional[SubscriptionDto],
     config: FromDishka[AppConfig],
-    billing: FromDishka[BillingClient],
+    api_client: FromDishka[ApiClient],
     remnawave_service: FromDishka[RemnawaveService],
     subscription_service: FromDishka[SubscriptionService],
     transaction_service: FromDishka[TransactionService],
@@ -324,8 +308,7 @@ async def purchase_subscription_task(
             await _handle_new_purchase(
                 user,
                 plan,
-                billing,
-                remnawave_service,
+                api_client,
                 subscription_service,
             )
         elif purchase_type == PurchaseType.RENEW and not has_trial:
