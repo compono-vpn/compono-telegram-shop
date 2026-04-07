@@ -376,7 +376,7 @@ class TestTrialFlowIntegration:
         # Verify ensure_with_linkage called twice: before and after provisioning
         assert api_identity.ensure_with_linkage.call_count == 2
         api_identity.ensure_with_linkage.assert_has_calls([
-            call(telegram_id=777888999),
+            call(telegram_id=777888999, name="Anton", username=None, language="ru"),
             call(telegram_id=777888999, remnawave_user_id=str(remna_uuid)),
         ])
 
@@ -417,7 +417,7 @@ class TestTrialFlowIntegration:
 
         # Identity call was attempted (and failed)
         api_identity.ensure_with_linkage.assert_called_once_with(
-            telegram_id=777888999,
+            telegram_id=777888999, name="Anton", username=None, language="ru",
         )
         # Remnawave user must NOT be created when identity fails first
         remnawave_service.create_user.assert_not_called()
@@ -511,7 +511,7 @@ class TestPurchaseFlowIntegration:
         # Verify ensure_with_linkage called twice: before and after provisioning
         assert api_identity.ensure_with_linkage.call_count == 2
         api_identity.ensure_with_linkage.assert_has_calls([
-            call(telegram_id=111222333),
+            call(telegram_id=111222333, name="Anton", username=None, language="ru"),
             call(telegram_id=111222333, remnawave_user_id=str(remna_uuid)),
         ])
 

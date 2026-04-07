@@ -83,6 +83,9 @@ async def trial_subscription_task(
         # Ensure API identity exists before provisioning (no side effects)
         await api_identity.ensure_with_linkage(
             telegram_id=user.telegram_id,
+            name=user.name,
+            username=user.username,
+            language=user.language.value if user.language else None,
         )
 
         created_user = await remnawave_service.create_user(user, plan=plan)
@@ -191,6 +194,9 @@ async def _handle_new_purchase(
     # Ensure API identity exists before provisioning (no side effects)
     await api_identity.ensure_with_linkage(
         telegram_id=user.telegram_id,
+        name=user.name,
+        username=user.username,
+        language=user.language.value if user.language else None,
     )
 
     created_user = await remnawave_service.create_user(user, plan=plan)
