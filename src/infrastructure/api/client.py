@@ -118,19 +118,19 @@ class ApiClient:
         Returns a ProvisionResult with all fields needed to build a SubscriptionDto.
         """
         payload: dict[str, Any] = {
-            "telegram_id": telegram_id,
+            "telegramId": telegram_id,
             "name": name,
             "plan": {
                 "name": plan.name,
-                "traffic_limit": plan.traffic_limit,
-                "device_limit": plan.device_limit,
-                "traffic_limit_strategy": str(plan.traffic_limit_strategy.value)
+                "trafficLimit": plan.traffic_limit,
+                "deviceLimit": plan.device_limit,
+                "trafficLimitStrategy": str(plan.traffic_limit_strategy.value)
                 if hasattr(plan.traffic_limit_strategy, "value")
                 else str(plan.traffic_limit_strategy),
-                "duration_days": plan.duration,
+                "durationDays": plan.duration,
                 "tag": plan.tag,
-                "internal_squads": [str(s) for s in plan.internal_squads],
-                "external_squad": str(plan.external_squad) if plan.external_squad else None,
+                "internalSquads": [str(s) for s in plan.internal_squads],
+                "externalSquad": str(plan.external_squad) if plan.external_squad else None,
             },
         }
         if username is not None:
@@ -141,10 +141,10 @@ class ApiClient:
         data = await self._request("POST", "/provision-user", json=payload)
 
         return ProvisionResult(
-            compono_user_id=data["compono_user_id"],
-            remnawave_user_id=data["remnawave_user_id"],
-            remnawave_username=data["remnawave_username"],
-            subscription_url=data["subscription_url"],
+            compono_user_id=data["componoUserId"],
+            remnawave_user_id=data["remnawaveUserId"],
+            remnawave_username=data["remnawaveUsername"],
+            subscription_url=data["subscriptionUrl"],
             status=data["status"],
-            expire_at=data["expire_at"],
+            expire_at=data["expireAt"],
         )

@@ -96,12 +96,12 @@ def _make_client_with_mock() -> tuple[ApiClient, AsyncMock]:
 
 
 SAMPLE_PROVISION_RESPONSE = {
-    "compono_user_id": COMPONO_USER_ID,
-    "remnawave_user_id": REMNAWAVE_USER_ID,
-    "remnawave_username": REMNAWAVE_USERNAME,
-    "subscription_url": SUBSCRIPTION_URL,
+    "componoUserId": COMPONO_USER_ID,
+    "remnawaveUserId": REMNAWAVE_USER_ID,
+    "remnawaveUsername": REMNAWAVE_USERNAME,
+    "subscriptionUrl": SUBSCRIPTION_URL,
     "status": "ACTIVE",
-    "expire_at": EXPIRE_AT,
+    "expireAt": EXPIRE_AT,
 }
 
 
@@ -152,17 +152,17 @@ class TestApiClientProvisionUser:
 
         call_args = mock_http.request.call_args
         body = call_args[1]["json"]
-        assert body["telegram_id"] == 123
+        assert body["telegramId"] == 123
         assert body["name"] == "Test User"
         assert body["username"] == "testuser"
         assert body["language"] == "ru"
         assert body["plan"]["name"] == plan.name
-        assert body["plan"]["traffic_limit"] == plan.traffic_limit
-        assert body["plan"]["device_limit"] == plan.device_limit
-        assert body["plan"]["duration_days"] == plan.duration
+        assert body["plan"]["trafficLimit"] == plan.traffic_limit
+        assert body["plan"]["deviceLimit"] == plan.device_limit
+        assert body["plan"]["durationDays"] == plan.duration
         assert body["plan"]["tag"] == plan.tag
-        assert body["plan"]["internal_squads"] == []
-        assert body["plan"]["external_squad"] is None
+        assert body["plan"]["internalSquads"] == []
+        assert body["plan"]["externalSquad"] is None
 
     async def test_omits_optional_fields_when_none(self):
         client, mock_http = _make_client_with_mock()
