@@ -468,6 +468,8 @@ ntf-trial-auto-assigned =
 
 ntf-trial-unavailable = <i>❌ Пробная подписка временно недоступна.</i>
 
+ntf-trial-already-used = <i>❌ Вы уже использовали пробную подписку.</i>
+
 ntf-importer-not-file = <i>⚠️ Отправьте базу данных в виде файла.</i>
 ntf-importer-db-invalid = <i>❌ Этот файл не может быть импортирован.</i>
 ntf-importer-db-failed = <i>❌ Ошибка при импорте базы данных.</i>

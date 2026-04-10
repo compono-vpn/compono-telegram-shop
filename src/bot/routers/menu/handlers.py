@@ -16,6 +16,7 @@ from src.core.i18n.translator import get_translated_kwargs
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
+from src.infrastructure.billing.client import BillingClientError
 from src.models.dto import PlanSnapshotDto, SubscriptionDto, UserDto
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
@@ -586,7 +587,17 @@ async def on_get_trial(
         )
         raise ValueError("Trial plan not exist")
 
-    await billing.create_trial_subscription(user.telegram_id, billing_plan.ID)
+    try:
+        await billing.create_trial_subscription(user.telegram_id, billing_plan.ID)
+    except BillingClientError as e:
+        if e.status_code == 409 or "already used trial" in e.message:
+            logger.warning(f"{log(user)} Trial already used: {e}")
+            await notification_service.notify_user(
+                user=user,
+                payload=MessagePayload(i18n_key="ntf-trial-already-used"),
+            )
+            return
+        raise
 
 
 @inject
