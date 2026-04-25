@@ -14,7 +14,6 @@ from src.infrastructure.billing.models import (
     BillingPaymentGateway,
     BillingPaymentResult,
     BillingPlan,
-    BillingPortalLookup,
     BillingPriceDetails,
     BillingPromocode,
     BillingReferral,
@@ -1263,33 +1262,11 @@ class TestStatisticsAndPricing:
 
 
 # ---------------------------------------------------------------------------
-# Portal & TG Proxies
+# TG Proxies
 # ---------------------------------------------------------------------------
 
 
 class TestPortalAndProxies:
-
-    async def test_portal_lookup(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, {
-            "has_subscription": True,
-            "subscription_url": "https://example.com/sub",
-            "plan_name": "Pro",
-        })
-
-        result = await client.portal_lookup("test@example.com")
-
-        assert isinstance(result, BillingPortalLookup)
-        assert result.has_subscription is True
-
-    async def test_portal_lookup_not_found(self):
-        client, mock_http = _make_client_with_mock()
-        resp = _make_response(404, text="not found")
-        resp.json.return_value = {"error": "not found"}
-        mock_http.request.return_value = resp
-
-        result = await client.portal_lookup("unknown@example.com")
-        assert result is None
 
     async def test_get_tg_proxies(self):
         client, mock_http = _make_client_with_mock()

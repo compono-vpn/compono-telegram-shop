@@ -286,17 +286,6 @@ class BillingCustomer(BaseModel):
     UpdatedAt: Optional[datetime] = None
 
 
-# --- Portal ---
-
-
-class BillingPortalLookup(BaseModel):
-    """Maps the portal lookup response."""
-
-    has_subscription: bool = False
-    subscription_url: Optional[str] = None
-    plan_name: Optional[str] = None
-
-
 # --- TG Proxies ---
 
 

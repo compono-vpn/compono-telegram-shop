@@ -2,7 +2,6 @@ from dishka import Provider, Scope, provide
 
 from src.services.access import AccessService
 from src.services.command import CommandService
-from src.services.email import EmailService
 from src.services.notification import NotificationService
 from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
@@ -32,4 +31,3 @@ class ServicesProvider(Provider):
         source=TransactionService, scope=Scope.REQUEST
     )  # uses BillingClient (HTTP API)
     referral_service = provide(source=ReferralService, scope=Scope.REQUEST)
-    email_service = provide(source=EmailService, scope=Scope.REQUEST)

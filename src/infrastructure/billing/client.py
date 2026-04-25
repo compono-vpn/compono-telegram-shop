@@ -15,7 +15,6 @@ from .models import (
     BillingPaymentGateway,
     BillingPaymentResult,
     BillingPlan,
-    BillingPortalLookup,
     BillingPriceDetails,
     BillingPromocode,
     BillingReferral,
@@ -478,19 +477,6 @@ class BillingClient:
     async def update_customer(self, customer_id: int, **kwargs: Any) -> BillingCustomer:
         data = await self._put(f"/customers/{customer_id}", json=kwargs)
         return BillingCustomer.model_validate(data)
-
-    # ------------------------------------------------------------------ #
-    # Portal
-    # ------------------------------------------------------------------ #
-
-    async def portal_lookup(self, email: str) -> Optional[BillingPortalLookup]:
-        try:
-            data = await self._post("/portal/lookup", json={"email": email})
-            return BillingPortalLookup.model_validate(data) if data else None
-        except BillingClientError as e:
-            if e.status_code == 404:
-                return None
-            raise
 
     # ------------------------------------------------------------------ #
     # Settings
