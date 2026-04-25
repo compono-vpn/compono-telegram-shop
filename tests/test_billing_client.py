@@ -25,8 +25,6 @@ from src.infrastructure.billing.models import (
     BillingTGProxy,
     BillingTransaction,
     BillingUser,
-    BillingWebOrder,
-    BillingWebOrderResult,
 )
 
 
@@ -1161,68 +1159,6 @@ class TestReferrals:
 # ---------------------------------------------------------------------------
 # Broadcasts
 # ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Web Orders
-# ---------------------------------------------------------------------------
-
-
-class TestWebOrders:
-
-    async def test_claim_web_order(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, {
-            "status": "claimed",
-            "order": {"ID": 1, "PaymentID": "abc", "ShortID": "XY12", "Status": "claimed"},
-        })
-
-        result = await client.claim_web_order(123, "XY12")
-
-        assert isinstance(result, BillingWebOrderResult)
-        assert result.status == "claimed"
-        body = mock_http.request.call_args[1]["json"]
-        assert body == {"telegram_id": 123, "short_id": "XY12"}
-
-    async def test_get_web_order_by_short_id(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, {
-            "ID": 1, "ShortID": "XY12", "Status": "pending",
-        })
-
-        result = await client.get_web_order_by_short_id("XY12")
-
-        assert isinstance(result, BillingWebOrder)
-        call_kwargs = mock_http.request.call_args[1]
-        assert call_kwargs["params"] == {"short_id": "XY12"}
-
-    async def test_get_web_order_not_found(self):
-        client, mock_http = _make_client_with_mock()
-        resp = _make_response(404, text="not found")
-        resp.json.return_value = {"error": "not found"}
-        mock_http.request.return_value = resp
-
-        result = await client.get_web_order_by_short_id("NOPE")
-        assert result is None
-
-    async def test_exists_claimed_web_order(self):
-        client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, {"exists": True})
-
-        result = await client.exists_claimed_web_order_by_telegram_id(123)
-
-        assert result is True
-        call_kwargs = mock_http.request.call_args[1]
-        assert call_kwargs["params"] == {"telegram_id": "123"}
-
-    async def test_exists_claimed_web_order_error_returns_false(self):
-        client, mock_http = _make_client_with_mock()
-        resp = _make_response(500, text="server error")
-        resp.json.return_value = {"error": "server error"}
-        mock_http.request.return_value = resp
-
-        result = await client.exists_claimed_web_order_by_telegram_id(123)
-        assert result is False
 
 
 # ---------------------------------------------------------------------------

@@ -151,27 +151,6 @@ ntf-event-subscription-change =
     { hdr-plan }
     { frg-plan-snapshot-comparison }
 
-ntf-event-web-purchase =
-    #EventWebPurchase
-
-    <b>🌐 Веб-покупка!</b>
-
-    📧 Email: <code>{ $email }</code>
-    💰 Сумма: { $amount } { $currency }
-    📦 План: { $plan_name } ({ $plan_duration }д)
-    🔗 <a href="{ $bot_link }">Ссылка для привязки</a>
-
-ntf-event-web-claim =
-    #EventWebClaim
-
-    <b>🔗 Веб-подписка привязана!</b>
-
-    { hdr-user }
-    { frg-user-info }
-
-    📧 Email: <code>{ $email }</code>
-    📦 План: { $plan_name } ({ $plan_duration }д)
-
 ntf-event-node-connection-lost =
     #EventNode
 
