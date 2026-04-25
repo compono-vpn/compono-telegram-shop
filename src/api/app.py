@@ -5,7 +5,6 @@ from starlette.middleware.cors import CORSMiddleware
 
 from src.api.endpoints import (
     TelegramWebhookEndpoint,
-    app_router,
     health_router,
 )
 from src.core.config import AppConfig
@@ -29,7 +28,6 @@ def create_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         return response
 
-    app.include_router(app_router)
     app.include_router(health_router)
     app.mount("/metrics", make_asgi_app())
 

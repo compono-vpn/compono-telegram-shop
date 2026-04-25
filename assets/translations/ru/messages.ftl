@@ -1,5 +1,15 @@
+# Web purchase redirect — bot is TG-native only since the web/TG split.
+# Shown when a user opens a legacy /start web_<token> deep link.
+msg-web-purchase-redirect =
+    🌐 Веб-покупки управляются на <a href="https://app.componovpn.com">app.componovpn.com</a>.
+    Этот бот предназначен только для покупок через Telegram.
+
+    Web purchases are managed at <a href="https://app.componovpn.com">app.componovpn.com</a>.
+    This bot is for Telegram-native purchases only.
+
+
 # Remnashop
-ntf-remnashop-info = 
+ntf-remnashop-info =
     <b>💎 Remnashop v{ $version }</b>
 
     Данный проект был создан и поддерживается всего одним <strike>разработчиком</strike> электриком. Поскольку бот полностью БЕСПЛАТНЫЙ и с открытым исходным кодом, он существует только благодаря вашей поддержке.

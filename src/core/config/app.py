@@ -36,14 +36,6 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     build: BuildConfig = Field(default_factory=BuildConfig)
 
-    resend_api_key: str = ""
-    resend_from_email: str = "Compono VPS <noreply@mail.componovps.com>"
-
-    jwt_secret: SecretStr = SecretStr("")
-    otp_ttl_seconds: int = 300
-    otp_max_attempts: int = 5
-    jwt_expiry_days: int = 30
-
     api_url: str = ""
     api_internal_secret: SecretStr = SecretStr("")
 
@@ -56,7 +48,6 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
         return f"{self.kafka_topic_env}.compono.notify.user.v1"
 
     # External service base URLs (overridable, non-secret)
-    resend_api_base: str = "https://api.resend.com"
     yookassa_api_base: str = "https://api.yookassa.ru"
     yoomoney_api_base: str = "https://yoomoney.ru"
     cryptomus_api_base: str = "https://api.cryptomus.com"
@@ -68,9 +59,6 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     trial_failed_url: str = "https://componovps.com/trial/failed"
     yookassa_receipt_url: str = "https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l"
     portal_url: str = "https://componovpn.org/portal"
-    ios_download_url: str = "https://apps.apple.com/app/streisand/id6450534064"
-    android_download_url: str = "https://play.google.com/store/apps/details?id=com.v2ray.ang"
-    desktop_download_url: str = "https://github.com/hiddify/hiddify-app/releases"
 
     @property
     def hydra_primary_domain(self) -> str:

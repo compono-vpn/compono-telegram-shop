@@ -26,7 +26,6 @@ dependencies = [
     "prometheus-client>=0.22.0",
     "cryptography>=46.0.3",
     "qrcode[pil]>=8.2",
-    "pyjwt>=2.9.0",
 ]
 
 [project.urls]
