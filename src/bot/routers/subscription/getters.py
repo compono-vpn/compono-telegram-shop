@@ -306,16 +306,17 @@ async def success_payment_getter(
 ) -> dict[str, Any]:
     start_data = cast(dict[str, Any], dialog_manager.start_data)
     purchase_type: PurchaseType = start_data["purchase_type"]
-    subscription = user.current_subscription
 
-    if not subscription:
-        # Race condition: notification arrived before subscription was committed.
-        # Fall back to billing API.
-        billing_sub = await billing.get_current_subscription(user.telegram_id)
-        if billing_sub:
-            subscription = billing_subscription_to_dto(billing_sub)
-        else:
-            raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
+    # Always fetch from billing API: user.current_subscription can be stale on
+    # CHANGE-type purchases (the user DTO was loaded before the new sub was
+    # committed, so it returns the previous plan name).
+    billing_sub = await billing.get_current_subscription(user.telegram_id)
+    if billing_sub:
+        subscription = billing_subscription_to_dto(billing_sub)
+    elif user.current_subscription:
+        subscription = user.current_subscription
+    else:
+        raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
 
     return {
         "purchase_type": purchase_type,
