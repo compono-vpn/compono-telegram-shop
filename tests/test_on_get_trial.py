@@ -34,8 +34,10 @@ def _setup(
 
     dm = make_dialog_manager()
     dm.middleware_data[USER_KEY] = user
+    dm.start = AsyncMock()
 
     callback = MagicMock()
+    callback.answer = AsyncMock()
     widget = MagicMock()
 
     return callback, widget, dm, billing, notification_service
@@ -51,6 +53,8 @@ class TestOnGetTrial:
         await raw_fn(callback, widget, dm, billing, ntf)
 
         billing.create_trial_subscription.assert_called_once_with(450987966, 1)
+        callback.answer.assert_awaited_once_with("Пробный период активирован")
+        dm.start.assert_awaited_once()
         ntf.notify_user.assert_not_called()
 
     async def test_trial_plan_not_found(self):

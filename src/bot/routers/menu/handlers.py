@@ -9,7 +9,7 @@ from fluentogram import TranslatorRunner
 from loguru import logger
 
 from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT
-from src.bot.states import MainMenu
+from src.bot.states import MainMenu, Subscription
 from src.core.constants import USER_KEY
 from src.core.enums import MediaType
 from src.core.i18n.translator import get_translated_kwargs
@@ -101,6 +101,12 @@ async def on_get_trial(
 
     try:
         await billing.create_trial_subscription(user.telegram_id, billing_plan.ID)
+        await callback.answer("Пробный период активирован")
+        await dialog_manager.start(
+            state=Subscription.TRIAL,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.EDIT,
+        )
     except BillingClientError as e:
         if e.status_code == 409 or "already used trial" in e.message:
             logger.warning(f"{log(user)} Trial already used: {e}")
