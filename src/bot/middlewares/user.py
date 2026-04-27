@@ -19,7 +19,6 @@ from src.core.metrics import NEW_USERS_TOTAL
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_subscription_to_dto
-from src.infrastructure.taskiq.tasks.subscriptions import auto_assign_trial_task
 from src.models.dto import UserDto
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
@@ -108,11 +107,6 @@ class UserMiddleware(EventTypedMiddleware):
                 referral_code = await referral_service.get_ref_code_by_event(event)
                 logger.info(f"Registered with referral code: '{referral_code}'")
                 await referral_service.handle_referral(user, referral_code)
-
-            # Web purchases are handled by the web portal; the bot is
-            # TG-native only, so all newly registered users get the
-            # auto-trial regardless of the /start payload.
-            await auto_assign_trial_task.kiq(user)
 
         elif not isinstance(aiogram_user, FakeUser):
             await user_service.compare_and_update(user, aiogram_user)
