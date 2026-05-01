@@ -8,10 +8,12 @@ from src.core.config import AppConfig
 from src.core.logger import setup_logger
 from src.infrastructure.di import create_container
 from src.infrastructure.kafka.consumer import UserNotificationConsumer
+from src.infrastructure.kafka.trial_reminder_consumer import TrialReminderConsumer
 
 from .broker import broker
 
 _notification_consumer: UserNotificationConsumer | None = None
+_trial_reminder_consumer: TrialReminderConsumer | None = None
 
 
 def worker() -> RedisStreamBroker:
@@ -28,13 +30,17 @@ def worker() -> RedisStreamBroker:
 
     @broker.on_event(TaskiqEvents.WORKER_STARTUP)
     async def on_startup(state: TaskiqState) -> None:
-        global _notification_consumer  # noqa: PLW0603
+        global _notification_consumer, _trial_reminder_consumer  # noqa: PLW0603
         _notification_consumer = UserNotificationConsumer(config, container)
         await _notification_consumer.start()
+        _trial_reminder_consumer = TrialReminderConsumer(config, container)
+        await _trial_reminder_consumer.start()
 
     @broker.on_event(TaskiqEvents.WORKER_SHUTDOWN)
     async def on_shutdown(state: TaskiqState) -> None:
         if _notification_consumer:
             await _notification_consumer.stop()
+        if _trial_reminder_consumer:
+            await _trial_reminder_consumer.stop()
 
     return broker
