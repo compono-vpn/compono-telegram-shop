@@ -103,17 +103,16 @@ class TestNotificationDedupKey:
 async def _simulate_reminder_processing(
     redis: AsyncMock,
     user_service: AsyncMock,
+    subscription_service: AsyncMock,
     remnawave_service: AsyncMock,
     notification_service: AsyncMock,
 ) -> None:
     """Replicate the core dedup flow from process_pending_not_connected_reminders_task.
 
-    This avoids needing to unwrap the taskiq decorator. The logic matches
-    the task implementation exactly:
-    1. Get due items from sorted set
-    2. For each item, check dedup key
-    3. If dedup key exists, skip
-    4. Otherwise check user/subscription/devices, send, mark dedup
+    Matches the task implementation: get due items, dedup-check each one,
+    fetch user + subscription separately (subscription via SubscriptionService
+    because UserDto.current_subscription is not populated in this code path),
+    check device count, then send + mark dedup.
     """
     now = time.time()
     key = _PENDING_KEY.pack()
@@ -136,10 +135,14 @@ async def _simulate_reminder_processing(
             continue
 
         user = await user_service.get(user_telegram_id)
-        if not user or not user.current_subscription:
+        if not user:
             continue
 
-        if not user.current_subscription.is_active:
+        subscription = await subscription_service.get_current(user_telegram_id)
+        if not subscription:
+            continue
+
+        if not subscription.is_active:
             continue
 
         devices = await remnawave_service.get_devices_user(user)
@@ -161,16 +164,24 @@ class TestNotificationDedup:
         redis.setex.return_value = True
         return redis
 
+    def _make_subscription_service(self, subscription=None):
+        sub_service = AsyncMock()
+        sub_service.get_current.return_value = subscription
+        return sub_service
+
     async def test_already_sent_notification_is_skipped(self):
         """When dedup key exists in Redis, the notification is not sent."""
         member = b"12345:https://panel.example.com/sub/abc"
 
         redis = self._make_redis(due_items=[member], already_sent=True)
         user_service = AsyncMock()
+        subscription_service = self._make_subscription_service()
         remnawave_service = AsyncMock()
         notification_service = AsyncMock()
 
-        await _simulate_reminder_processing(redis, user_service, remnawave_service, notification_service)
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
 
         # Item should be removed from sorted set
         redis.zrem.assert_awaited_once()
@@ -185,17 +196,20 @@ class TestNotificationDedup:
 
     async def test_new_notification_sends_and_sets_dedup_key(self):
         """When dedup key does not exist, notification is sent and dedup key is written with TTL."""
-        user = make_user(telegram_id=12345, subscription=make_subscription(active=True))
+        user = make_user(telegram_id=12345)
         member = b"12345:https://panel.example.com/sub/abc"
 
         redis = self._make_redis(due_items=[member], already_sent=False)
         user_service = AsyncMock()
         user_service.get.return_value = user
+        subscription_service = self._make_subscription_service(make_subscription(active=True))
         remnawave_service = AsyncMock()
         remnawave_service.get_devices_user.return_value = []  # not connected
         notification_service = AsyncMock()
 
-        await _simulate_reminder_processing(redis, user_service, remnawave_service, notification_service)
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
 
         # Notification should be sent
         notification_service.notify_user.assert_awaited_once()
@@ -209,51 +223,84 @@ class TestNotificationDedup:
         assert ttl == _SENT_NTF_TTL
         assert value == "1"
 
+    async def test_billing_driven_trial_user_not_connected_dto_field(self):
+        """Regression: UserDto.current_subscription is None for users hydrated by
+        UserService.get() because it is only populated in the bot middleware.
+        The cron must rely on SubscriptionService.get_current() instead.
+        Without the fix, every reminder silently skipped with no/subscription."""
+        user = make_user(telegram_id=5608858053)
+        assert user.current_subscription is None  # baseline assumption
+        member = b"5608858053:https://getfastlink.online/connect/abc"
+
+        redis = self._make_redis(due_items=[member], already_sent=False)
+        user_service = AsyncMock()
+        user_service.get.return_value = user
+        subscription_service = self._make_subscription_service(make_subscription(active=True))
+        remnawave_service = AsyncMock()
+        remnawave_service.get_devices_user.return_value = []
+        notification_service = AsyncMock()
+
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
+
+        notification_service.notify_user.assert_awaited_once()
+        redis.setex.assert_awaited_once()
+
     async def test_skips_user_without_subscription(self):
-        """If user has no subscription, reminder is skipped."""
-        user = make_user(telegram_id=12345)  # no subscription
+        """If subscription_service returns no current sub, reminder is skipped."""
+        user = make_user(telegram_id=12345)
         member = b"12345:https://panel.example.com/sub/abc"
 
         redis = self._make_redis(due_items=[member], already_sent=False)
         user_service = AsyncMock()
         user_service.get.return_value = user
+        subscription_service = self._make_subscription_service(None)
         remnawave_service = AsyncMock()
         notification_service = AsyncMock()
 
-        await _simulate_reminder_processing(redis, user_service, remnawave_service, notification_service)
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
 
         notification_service.notify_user.assert_not_awaited()
         redis.setex.assert_not_awaited()
 
     async def test_skips_user_with_inactive_subscription(self):
         """If subscription is inactive, reminder is skipped."""
-        user = make_user(telegram_id=12345, subscription=make_subscription(active=False))
+        user = make_user(telegram_id=12345)
         member = b"12345:https://panel.example.com/sub/abc"
 
         redis = self._make_redis(due_items=[member], already_sent=False)
         user_service = AsyncMock()
         user_service.get.return_value = user
+        subscription_service = self._make_subscription_service(make_subscription(active=False))
         remnawave_service = AsyncMock()
         notification_service = AsyncMock()
 
-        await _simulate_reminder_processing(redis, user_service, remnawave_service, notification_service)
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
 
         notification_service.notify_user.assert_not_awaited()
         redis.setex.assert_not_awaited()
 
     async def test_skips_already_connected_user(self):
         """If user already has devices, reminder is skipped."""
-        user = make_user(telegram_id=12345, subscription=make_subscription(active=True))
+        user = make_user(telegram_id=12345)
         member = b"12345:https://panel.example.com/sub/abc"
 
         redis = self._make_redis(due_items=[member], already_sent=False)
         user_service = AsyncMock()
         user_service.get.return_value = user
+        subscription_service = self._make_subscription_service(make_subscription(active=True))
         remnawave_service = AsyncMock()
         remnawave_service.get_devices_user.return_value = [MagicMock()]  # has devices
         notification_service = AsyncMock()
 
-        await _simulate_reminder_processing(redis, user_service, remnawave_service, notification_service)
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
 
         notification_service.notify_user.assert_not_awaited()
         redis.setex.assert_not_awaited()
@@ -262,17 +309,20 @@ class TestNotificationDedup:
         """When there are no due items, the task returns immediately."""
         redis = self._make_redis(due_items=[])
         user_service = AsyncMock()
+        subscription_service = self._make_subscription_service()
         remnawave_service = AsyncMock()
         notification_service = AsyncMock()
 
-        await _simulate_reminder_processing(redis, user_service, remnawave_service, notification_service)
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
 
         user_service.get.assert_not_awaited()
         notification_service.notify_user.assert_not_awaited()
 
     async def test_multiple_due_items_processed_independently(self):
         """Each due member is processed independently; one dedup skip does not affect others."""
-        user_ok = make_user(telegram_id=11111, subscription=make_subscription(active=True))
+        user_ok = make_user(telegram_id=11111)
         member_skip = b"22222:https://panel.example.com/sub/skip"
         member_send = b"11111:https://panel.example.com/sub/send"
 
@@ -285,11 +335,14 @@ class TestNotificationDedup:
 
         user_service = AsyncMock()
         user_service.get.return_value = user_ok
+        subscription_service = self._make_subscription_service(make_subscription(active=True))
         remnawave_service = AsyncMock()
         remnawave_service.get_devices_user.return_value = []
         notification_service = AsyncMock()
 
-        await _simulate_reminder_processing(redis, user_service, remnawave_service, notification_service)
+        await _simulate_reminder_processing(
+            redis, user_service, subscription_service, remnawave_service, notification_service
+        )
 
         # Only one notification should be sent (the non-deduped one)
         notification_service.notify_user.assert_awaited_once()

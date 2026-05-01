@@ -16,6 +16,7 @@ from src.core.utils.types import RemnaUserDto
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
+from src.services.subscription import SubscriptionService
 from src.services.user import UserService
 
 NOT_CONNECTED_REMINDER_DELAY = 2 * 60 * 60  # 2 hours
@@ -168,6 +169,7 @@ async def schedule_not_connected_reminder(
 @inject
 async def process_pending_not_connected_reminders_task(
     user_service: FromDishka[UserService],
+    subscription_service: FromDishka[SubscriptionService],
     remnawave_service: FromDishka[RemnawaveService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
@@ -200,13 +202,18 @@ async def process_pending_not_connected_reminders_task(
             continue
 
         user = await user_service.get(user_telegram_id)
-        if not user or not user.current_subscription:
+        if not user:
+            logger.debug(f"Skipping not-connected reminder for '{user_telegram_id}': no user")
+            continue
+
+        subscription = await subscription_service.get_current(user_telegram_id)
+        if not subscription:
             logger.debug(
-                f"Skipping not-connected reminder for '{user_telegram_id}': no user/subscription"
+                f"Skipping not-connected reminder for '{user_telegram_id}': no subscription"
             )
             continue
 
-        if not user.current_subscription.is_active:
+        if not subscription.is_active:
             logger.debug(
                 f"Skipping not-connected reminder for '{user_telegram_id}': subscription inactive"
             )
