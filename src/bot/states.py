@@ -23,6 +23,7 @@ class Subscription(StatesGroup):
     PLANS = State()
     DURATION = State()
     PAYMENT_METHOD = State()
+    CRYPTO_ASSET = State()
     CONFIRM = State()
     SUCCESS = State()
     FAILED = State()

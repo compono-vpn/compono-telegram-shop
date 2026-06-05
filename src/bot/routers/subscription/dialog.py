@@ -1,6 +1,6 @@
 from aiogram_dialog import Dialog, Window
 from aiogram_dialog.widgets.input import MessageInput
-from aiogram_dialog.widgets.kbd import Button, Column, Group, Row, Select, SwitchTo, Url
+from aiogram_dialog.widgets.kbd import Button, Column, Group, Row, Select, SwitchTo, Url, WebApp
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
@@ -12,6 +12,7 @@ from src.core.enums import BannerName, PaymentGatewayType, PurchaseType
 
 from .getters import (
     confirm_getter,
+    crypto_asset_getter,
     duration_getter,
     getter_connect,
     payment_method_getter,
@@ -21,6 +22,7 @@ from .getters import (
     success_payment_getter,
 )
 from .handlers import (
+    on_crypto_asset_select,
     on_duration_select,
     on_get_subscription,
     on_payment_method_select,
@@ -160,14 +162,47 @@ payment_method = Window(
     getter=payment_method_getter,
 )
 
+crypto_asset = Window(
+    Banner(BannerName.SUBSCRIPTION),
+    I18nFormat("msg-subscription-crypto-asset"),
+    Group(
+        Select(
+            text=Format("{item[label]}"),
+            id=f"{PURCHASE_PREFIX}select_crypto_asset",
+            item_id_getter=lambda item: item["id"],
+            items="crypto_assets",
+            type_factory=str,
+            on_click=on_crypto_asset_select,
+        ),
+        width=2,
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-subscription-back-payment-method"),
+            id=f"{PURCHASE_PREFIX}back_crypto",
+            state=Subscription.PAYMENT_METHOD,
+        ),
+    ),
+    *back_main_menu_button,
+    IgnoreUpdate(),
+    state=Subscription.CRYPTO_ASSET,
+    getter=crypto_asset_getter,
+)
+
 confirm = Window(
     Banner(BannerName.SUBSCRIPTION),
     I18nFormat("msg-subscription-confirm"),
     Row(
+        WebApp(
+            text=I18nFormat("btn-subscription-pay"),
+            url=Format("{url}"),
+            id=f"{PURCHASE_PREFIX}pay_webapp",
+            when=F["url"] & F["is_webapp"],
+        ),
         Url(
             text=I18nFormat("btn-subscription-pay"),
             url=Format("{url}"),
-            when=F["url"],
+            when=F["url"] & ~F["is_webapp"],
         ),
         Button(
             text=I18nFormat("btn-subscription-get"),
@@ -178,10 +213,16 @@ confirm = Window(
     ),
     Row(
         SwitchTo(
+            text=I18nFormat("btn-subscription-back-crypto-asset"),
+            id=f"{PURCHASE_PREFIX}back_crypto_asset",
+            state=Subscription.CRYPTO_ASSET,
+            when=F["is_plaidly"] & ~F["is_free"],
+        ),
+        SwitchTo(
             text=I18nFormat("btn-subscription-back-payment-method"),
             id=f"{PURCHASE_PREFIX}back_payment_method",
             state=Subscription.PAYMENT_METHOD,
-            when=~F["only_single_gateway"] & ~F["is_free"],
+            when=~F["only_single_gateway"] & ~F["is_free"] & ~F["is_plaidly"],
         ),
         SwitchTo(
             text=I18nFormat("btn-subscription-back-duration"),
@@ -264,6 +305,7 @@ router = Dialog(
     plans,
     duration,
     payment_method,
+    crypto_asset,
     confirm,
     success_payment,
     success_trial,

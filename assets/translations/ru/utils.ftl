@@ -273,6 +273,7 @@ gateway-type = { $gateway_type ->
     [HELEKET] Heleket
     [URLPAY] UrlPay
     [PLATEGA] Platega
+    [PLAIDLY] 🪙 Криптовалюта
     *[OTHER] { $gateway_type }
 }
 

@@ -421,6 +421,7 @@ btn-subscription-get = 🎁 Получить бесплатно
 btn-subscription-back-plans = ⬅️ Назад к выбору плана
 btn-subscription-back-duration = ⬅️ Изменить длительность
 btn-subscription-back-payment-method = ⬅️ Изменить способ оплаты
+btn-subscription-back-crypto-asset = ⬅️ Изменить криптовалюту
 btn-subscription-connect = 🚀 Подключиться
 btn-subscription-duration = { $period } | { $final_amount ->
     [0] 🎁
