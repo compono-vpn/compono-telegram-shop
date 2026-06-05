@@ -1,4 +1,5 @@
 from typing import Any, cast
+from urllib.parse import urlparse
 
 from aiogram_dialog import DialogManager
 from dishka import FromDishka
@@ -6,7 +7,8 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 
 from src.core.config import AppConfig
-from src.core.enums import PromocodeRewardType, PurchaseType
+from src.core.crypto_assets import CRYPTO_ASSETS, CRYPTO_ASSETS_BY_ID
+from src.core.enums import PaymentGatewayType, PromocodeRewardType, PurchaseType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import (
     i18n_format_days,
@@ -176,6 +178,15 @@ async def payment_method_getter(
     }
 
 
+async def crypto_asset_getter(
+    dialog_manager: DialogManager,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    return {
+        "crypto_assets": [{"id": asset.id, "label": asset.label} for asset in CRYPTO_ASSETS],
+    }
+
+
 @inject
 async def confirm_getter(
     dialog_manager: DialogManager,
@@ -217,6 +228,13 @@ async def confirm_getter(
         g for g in await billing.list_active_gateways() if g.Channel in ("BOT", "ALL")
     ]
 
+    is_plaidly = selected_payment_method == PaymentGatewayType.PLAIDLY
+    crypto_asset_id = dialog_manager.dialog_data.get("selected_crypto_asset")
+    crypto_asset = CRYPTO_ASSETS_BY_ID.get(crypto_asset_id) if crypto_asset_id else None
+    is_webapp = bool(
+        is_plaidly and result_url and urlparse(result_url).hostname == "checkout.plaidly.io"
+    )
+
     return {
         "purchase_type": purchase_type,
         "plan": plan.name,
@@ -234,6 +252,9 @@ async def confirm_getter(
         "only_single_gateway": len(billing_active_gateways) == 1,
         "only_single_duration": only_single_duration,
         "is_free": is_free,
+        "is_plaidly": is_plaidly,
+        "is_webapp": is_webapp,
+        "crypto_asset": crypto_asset.label if crypto_asset else False,
     }
 
 

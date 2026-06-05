@@ -979,6 +979,11 @@ msg-subscription-payment-method =
 
     { msg-subscription-details }
 
+msg-subscription-crypto-asset =
+    <b>🪙 Выберите криптовалюту</b>
+
+    <i>Выберите монету и сеть для оплаты. Курс будет зафиксирован на странице оплаты.</i>
+
 msg-subscription-confirm =
     { $purchase_type ->
     [RENEW] <b>🛒 Подтверждение продления подписки</b>
@@ -987,6 +992,11 @@ msg-subscription-confirm =
     }
 
     { msg-subscription-details }
+
+    { $crypto_asset ->
+    [0] { empty }
+    *[HAS] • <b>Оплата в</b>: { $crypto_asset }
+    }
 
     { $purchase_type ->
     [RENEW] <i>⚠️ Текущая подписка будет <u>продлена</u> на выбранный срок.</i>

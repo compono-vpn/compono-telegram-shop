@@ -204,6 +204,7 @@ class PaymentGatewayType(UpperStrEnum):
     CRYPTOPAY = auto()
     ROBOKASSA = auto()
     PLATEGA = auto()
+    PLAIDLY = auto()
 
 
 class GatewayChannel(UpperStrEnum):
@@ -241,6 +242,7 @@ class Currency(UpperStrEnum):
             PaymentGatewayType.HELEKET: cls.USD,
             PaymentGatewayType.CRYPTOPAY: cls.USD,
             PaymentGatewayType.PLATEGA: cls.RUB,
+            PaymentGatewayType.PLAIDLY: cls.USD,
         }
 
         try:

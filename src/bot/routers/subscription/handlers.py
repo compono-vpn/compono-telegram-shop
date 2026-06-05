@@ -13,6 +13,7 @@ from loguru import logger
 from src.bot.keyboards import get_user_keyboard
 from src.bot.states import Subscription
 from src.core.constants import PURCHASE_PREFIX, USER_KEY
+from src.core.crypto_assets import get_crypto_asset
 from src.core.enums import PaymentGatewayType, PurchaseType, SystemNotificationType
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
@@ -32,6 +33,7 @@ from src.services.subscription import SubscriptionService
 PAYMENT_CACHE_KEY = "payment_cache"
 CURRENT_DURATION_KEY = "selected_duration"
 CURRENT_METHOD_KEY = "selected_payment_method"
+CRYPTO_ASSET_KEY = "selected_crypto_asset"
 
 
 class CachedPaymentData(TypedDict):
@@ -64,6 +66,7 @@ async def _create_payment_and_get_data(
     gateway_type: PaymentGatewayType,
     billing: BillingClient,
     notification_service: NotificationService,
+    gateway_metadata: Optional[dict[str, str]] = None,
 ) -> Optional[CachedPaymentData]:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     duration = plan.get_duration(duration_days)
@@ -90,6 +93,7 @@ async def _create_payment_and_get_data(
             gateway_type=gt_str,
             purchase_type=pt_str,
             is_test=user.is_dev,
+            gateway_metadata=gateway_metadata,
         )
         if billing_gateway:
             price_details = await billing.calculate_price(
@@ -420,6 +424,12 @@ async def on_payment_method_select(
 
     selected_duration = dialog_manager.dialog_data[CURRENT_DURATION_KEY]
     dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
+
+    if selected_payment_method == PaymentGatewayType.PLAIDLY:
+        logger.info(f"{log(user)} Plaidly selected, choosing crypto asset")
+        await dialog_manager.switch_to(state=Subscription.CRYPTO_ASSET)
+        return
+
     cache = _load_payment_data(dialog_manager)
     cache_key = _get_cache_key(selected_duration, selected_payment_method)
 
@@ -444,6 +454,57 @@ async def on_payment_method_select(
         gateway_type=selected_payment_method,
         billing=billing,
         notification_service=notification_service,
+    )
+
+    if payment_data:
+        cache[cache_key] = payment_data
+        _save_payment_data(dialog_manager, payment_data)
+
+    await dialog_manager.switch_to(state=Subscription.CONFIRM)
+
+
+@inject
+async def on_crypto_asset_select(
+    callback: CallbackQuery,
+    widget: Select,
+    dialog_manager: DialogManager,
+    selected_asset_id: str,
+    billing: FromDishka[BillingClient],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    asset = get_crypto_asset(selected_asset_id)
+    logger.info(f"{log(user)} Selected crypto asset '{asset.id}' ({asset.chain}/{asset.token})")
+
+    selected_duration = dialog_manager.dialog_data[CURRENT_DURATION_KEY]
+    dialog_manager.dialog_data[CURRENT_METHOD_KEY] = PaymentGatewayType.PLAIDLY
+    dialog_manager.dialog_data[CRYPTO_ASSET_KEY] = asset.id
+
+    cache = _load_payment_data(dialog_manager)
+    cache_key = f"{_get_cache_key(selected_duration, PaymentGatewayType.PLAIDLY)}:{asset.id}"
+
+    if cache_key in cache:
+        logger.info(f"{log(user)} Re-selected same crypto asset and duration")
+        _save_payment_data(dialog_manager, cache[cache_key])
+        await dialog_manager.switch_to(state=Subscription.CONFIRM)
+        return
+
+    logger.info(f"{log(user)} New crypto combination. Creating new payment")
+
+    adapter = DialogDataAdapter(dialog_manager)
+    plan = adapter.load(PlanDto)
+
+    if not plan:
+        raise ValueError("PlanDto not found in dialog data")
+
+    payment_data = await _create_payment_and_get_data(
+        dialog_manager=dialog_manager,
+        plan=plan,
+        duration_days=selected_duration,
+        gateway_type=PaymentGatewayType.PLAIDLY,
+        billing=billing,
+        notification_service=notification_service,
+        gateway_metadata={"chain": asset.chain, "token": asset.token},
     )
 
     if payment_data:

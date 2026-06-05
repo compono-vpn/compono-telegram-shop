@@ -276,6 +276,7 @@ class BillingClient:
         purchase_type: str,
         is_test: bool = False,
         promocode_id: Optional[int] = None,
+        gateway_metadata: Optional[dict[str, Any]] = None,
     ) -> BillingPaymentResult:
         payload: dict[str, Any] = {
             "telegram_id": telegram_id,
@@ -288,6 +289,8 @@ class BillingClient:
         }
         if promocode_id is not None:
             payload["promocode_id"] = promocode_id
+        if gateway_metadata is not None:
+            payload["gateway_metadata"] = gateway_metadata
 
         data = await self._post("/payment/create", json=payload)
         return BillingPaymentResult.model_validate(data)

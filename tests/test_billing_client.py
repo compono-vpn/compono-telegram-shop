@@ -781,6 +781,43 @@ class TestPayments:
         body = mock_http.request.call_args[1]["json"]
         assert body["promocode_id"] == 15
 
+    async def test_create_payment_with_gateway_metadata(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(
+            200, {"ID": "pay-789", "URL": "https://checkout.plaidly.io/sess-1"}
+        )
+
+        result = await client.create_payment(
+            telegram_id=123,
+            plan_id=42,
+            duration_days=30,
+            currency="USD",
+            gateway_type="PLAIDLY",
+            purchase_type="NEW",
+            gateway_metadata={"chain": "tron", "token": "USDT"},
+        )
+
+        assert result.URL == "https://checkout.plaidly.io/sess-1"
+        body = mock_http.request.call_args[1]["json"]
+        assert body["gateway_type"] == "PLAIDLY"
+        assert body["gateway_metadata"] == {"chain": "tron", "token": "USDT"}
+
+    async def test_create_payment_omits_gateway_metadata_when_none(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(200, {"ID": "pay-123", "URL": None})
+
+        await client.create_payment(
+            telegram_id=1,
+            plan_id=1,
+            duration_days=30,
+            currency="RUB",
+            gateway_type="PLATEGA",
+            purchase_type="NEW",
+        )
+
+        body = mock_http.request.call_args[1]["json"]
+        assert "gateway_metadata" not in body
+
     async def test_handle_free_payment(self):
         client, mock_http = _make_client_with_mock()
         mock_http.request.return_value = _make_response(204)
