@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - stage/**
 
 concurrency:
   group: build-${{ github.ref }}
@@ -101,6 +102,7 @@ jobs:
   release:
     name: Create Release
     needs: [generate-tag, build]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -132,6 +134,7 @@ jobs:
   dispatch-update:
     name: Dispatch Tag to ArgoCD
     needs: [generate-tag, build]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch prod tag update
