@@ -22,7 +22,10 @@ from src.infrastructure.billing import (
     billing_plan_to_dto,
     billing_price_details_to_dto,
 )
-from src.infrastructure.billing.converters import billing_subscription_to_dto
+from src.infrastructure.billing.converters import (
+    billing_subscription_to_dto,
+    billing_transaction_to_dto,
+)
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.subscription import SubscriptionService
 
@@ -339,13 +342,22 @@ async def success_payment_getter(
     else:
         raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
 
+    billing_transactions = await billing.list_transactions(user.telegram_id)
+    transactions = [billing_transaction_to_dto(t) for t in billing_transactions]
+    completed = sorted(
+        ((t.created_at, t) for t in transactions if t.is_completed and t.created_at is not None),
+        key=lambda pair: pair[0],
+        reverse=True,
+    )
+    added_duration = completed[0][1].plan.duration if completed else subscription.plan.duration
+
     return {
         "purchase_type": purchase_type,
         "plan_name": subscription.plan.name,
         "traffic_limit": i18n_format_traffic_limit(subscription.traffic_limit),
         "device_limit": i18n_format_device_limit(subscription.device_limit),
         "expire_time": i18n_format_expire_time(subscription.expire_at),
-        "added_duration": i18n_format_days(subscription.plan.duration),
+        "added_duration": i18n_format_days(added_duration),
         "is_app": False,
         "url": SubscriptionService.build_connect_url(
             subscription.url, config.remnawave.sub_public_domain
