@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -23,8 +24,32 @@ from src.infrastructure.billing import (
     billing_price_details_to_dto,
 )
 from src.infrastructure.billing.converters import billing_subscription_to_dto
+from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.subscription import SubscriptionService
+
+
+async def _await_billing_subscription(
+    billing: BillingClient,
+    telegram_id: int,
+    attempts: int = 6,
+    delay: float = 0.5,
+) -> BillingSubscription | None:
+    """Poll billing for a just-purchased subscription.
+
+    Subscription creation is async (driven by a Kafka event), so the connect and
+    success screens can render before billing has committed the new row — the raw
+    API then returns None and the screen would hard-fail with "no active
+    subscription after purchase". Retry briefly (first check is immediate) so the
+    screen waits for the subscription to become visible instead of throwing.
+    """
+    for attempt in range(attempts):
+        sub = await billing.get_current_subscription(telegram_id)
+        if sub:
+            return sub
+        if attempt < attempts - 1:
+            await asyncio.sleep(delay)
+    return None
 
 
 @inject
@@ -302,8 +327,8 @@ async def getter_connect(
     subscription = user.current_subscription
     if not subscription:
         # Race condition: notification arrived before subscription was committed.
-        # Fall back to billing API.
-        billing_sub = await billing.get_current_subscription(user.telegram_id)
+        # Poll the billing API briefly before giving up.
+        billing_sub = await _await_billing_subscription(billing, user.telegram_id)
         if not billing_sub:
             raise ValueError(f"User '{user.telegram_id}' has no active subscription after purchase")
         url = billing_sub.URL
@@ -330,8 +355,9 @@ async def success_payment_getter(
 
     # Always fetch from billing API: user.current_subscription can be stale on
     # CHANGE-type purchases (the user DTO was loaded before the new sub was
-    # committed, so it returns the previous plan name).
-    billing_sub = await billing.get_current_subscription(user.telegram_id)
+    # committed, so it returns the previous plan name). Creation is async, so poll
+    # briefly — the success screen can render before billing commits the new sub.
+    billing_sub = await _await_billing_subscription(billing, user.telegram_id)
     if billing_sub:
         subscription = billing_subscription_to_dto(billing_sub)
     elif user.current_subscription:
