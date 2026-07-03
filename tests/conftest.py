@@ -50,6 +50,7 @@ from src.infrastructure.billing.models import BillingPlan, BillingSettings, Bill
 from src.models.dto.plan import PlanSnapshotDto
 from src.models.dto.subscription import BaseSubscriptionDto
 from src.models.dto.user import UserDto
+from src.services.experiment import ExperimentService
 
 from remnapy.enums import TrafficLimitStrategy
 
@@ -158,6 +159,15 @@ def make_i18n() -> MagicMock:
     i18n = MagicMock()
     i18n.get.side_effect = lambda key, **kwargs: f"[{key}]"
     return i18n
+
+
+def make_experiment_service(*, trial_enabled: bool = True, trial_on_weight: int = 100):
+    config = MagicMock()
+    config.experiments.trial_enabled = trial_enabled
+    config.experiments.trial_on_weight = trial_on_weight
+    redis_client = AsyncMock()
+    redis_client.set.return_value = True
+    return ExperimentService(config, redis_client)
 
 
 def unwrap_inject(fn):

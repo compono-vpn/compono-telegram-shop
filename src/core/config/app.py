@@ -12,6 +12,7 @@ from src.core.utils.types import LocaleList, StringList
 from .base import BaseConfig
 from .bot import BotConfig
 from .build import BuildConfig
+from .experiments import ExperimentsConfig
 from .redis import RedisConfig
 from .remnawave import RemnawaveConfig
 from .validators import validate_not_change_me
@@ -35,6 +36,7 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     remnawave: RemnawaveConfig = Field(default_factory=RemnawaveConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     build: BuildConfig = Field(default_factory=BuildConfig)
+    experiments: ExperimentsConfig = Field(default_factory=ExperimentsConfig)
 
     api_url: str = ""
     api_internal_secret: SecretStr = SecretStr("")

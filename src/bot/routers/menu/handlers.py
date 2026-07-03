@@ -18,6 +18,7 @@ from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.client import BillingClientError
 from src.models.dto import UserDto
+from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
@@ -88,8 +89,18 @@ async def on_get_trial(
     dialog_manager: DialogManager,
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
+    experiment_service: FromDishka[ExperimentService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
+
+    if not await experiment_service.is_trial_offer_enabled(user.telegram_id):
+        logger.info(f"{log(user)} Trial suppressed by experiment variant")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-trial-unavailable"),
+        )
+        return
+
     billing_plan = await billing.get_trial_plan()
 
     if not billing_plan:
@@ -101,6 +112,9 @@ async def on_get_trial(
 
     try:
         await billing.create_trial_subscription(user.telegram_id, billing_plan.ID)
+        experiment_service.record_conversion(
+            TRIAL_EXPERIMENT_KEY, user.telegram_id, "trial_activated"
+        )
         await callback.answer("Пробный период активирован")
         await dialog_manager.start(
             state=Subscription.TRIAL,
