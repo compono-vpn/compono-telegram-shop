@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, ROUND_UP, Decimal
 from re import Match
 from urllib.parse import quote
 
-from src.core.constants import T_ME
+from src.core.constants import AFFILIATE_PREFIX, SOURCE_PREFIX, T_ME
 from src.core.enums import PlanType
 from src.core.i18n.keys import ByteUnitKey, TimeUnitKey, UtilKey
 from src.core.utils.time import datetime_now
@@ -63,6 +63,15 @@ def format_user_name(name: Optional[str]) -> str:
         cleaned = f"{cleaned[:31]}"
 
     return cleaned
+
+
+def affiliate_slug(affiliate_id: str) -> str:
+    return f"{AFFILIATE_PREFIX}{affiliate_id}"
+
+
+def affiliate_link(bot_username: str, affiliate_id: str) -> str:
+    clean_username = bot_username.lstrip("@")
+    return f"{T_ME}{clean_username}?start={SOURCE_PREFIX}{affiliate_slug(affiliate_id)}"
 
 
 def format_username_to_url(username: str, text: Optional[str]) -> str:
