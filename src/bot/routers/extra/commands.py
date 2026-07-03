@@ -1,3 +1,5 @@
+import re
+
 from aiogram import Router
 from aiogram.filters import Command as FilterCommand
 from aiogram.types import Message
@@ -9,6 +11,7 @@ from loguru import logger
 from src.bot.keyboards import get_contact_support_keyboard
 from src.core.config.app import AppConfig
 from src.core.enums import Command
+from src.core.utils.formatters import affiliate_link
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.models.dto import UserDto
@@ -112,3 +115,31 @@ async def on_delete_command(
 
     await message.answer(f"Deleted user {target_telegram_id} ({target_user.name})")
     logger.info(f"{log(user)} Deleted user '{target_telegram_id}' via /delete command")
+
+
+@router.message(FilterCommand("afflink"))
+async def on_afflink_command(
+    message: Message,
+    user: UserDto,
+) -> None:
+    if not user.is_privileged:
+        return
+
+    args = message.text.split(maxsplit=1) if message.text else []
+    affiliate_id = re.sub(r"[^A-Za-z0-9_]", "", args[1].strip()) if len(args) > 1 else ""
+    if not affiliate_id:
+        await message.answer("Usage: /afflink <affiliate_id> (letters, digits, _)")
+        return
+
+    if message.bot is None:
+        return
+
+    me = await message.bot.get_me()
+    link = affiliate_link(me.username or "compono_bot", affiliate_id)
+
+    await message.answer(
+        f"Affiliate link for <code>aff-{affiliate_id}</code>:\n{link}\n\n"
+        f"Paid conversions land under source <code>aff-{affiliate_id}</code> "
+        f"in the funnel report (compono-billing analytics/funnel.sql)."
+    )
+    logger.info(f"{log(user)} Minted affiliate link for '{affiliate_id}'")

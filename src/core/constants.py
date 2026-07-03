@@ -28,6 +28,7 @@ GOTO_PREFIX: Final[str] = "gt_"
 ENCRYPTED_PREFIX: Final[str] = "enc_"
 REFERRAL_PREFIX: Final[str] = "ref_"
 SOURCE_PREFIX: Final[str] = "source-"
+AFFILIATE_PREFIX: Final[str] = "aff-"
 
 IMPORTED_TAG: Final[str] = "IMPORTED"
 
