@@ -13,6 +13,7 @@ from tests.conftest import (
     make_billing_client,
     make_config,
     make_dialog_manager,
+    make_experiment_service,
     make_i18n,
     make_referral_service,
     make_subscription,
@@ -35,6 +36,7 @@ async def _call_menu_getter(
     config=None,
     i18n=None,
     referral_service=None,
+    experiment_service=None,
 ):
     return await menu_getter(
         dialog_manager=make_dialog_manager(),
@@ -43,6 +45,7 @@ async def _call_menu_getter(
         i18n=i18n or make_i18n(),
         billing=billing or make_billing_client(),
         referral_service=referral_service or make_referral_service(),
+        experiment_service=experiment_service or make_experiment_service(),
     )
 
 

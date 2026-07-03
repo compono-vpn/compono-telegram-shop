@@ -67,3 +67,15 @@ BOT_INFO = Gauge(
     "Bot version information",
     ["version"],
 )
+
+EXPERIMENT_EXPOSURES_TOTAL = Counter(
+    "bot_experiment_exposures_total",
+    "Distinct users first exposed to an experiment variant",
+    ["experiment", "variant"],
+)
+
+EXPERIMENT_CONVERSIONS_TOTAL = Counter(
+    "bot_experiment_conversions_total",
+    "Experiment conversion events by variant",
+    ["experiment", "variant", "event"],
+)

@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.conftest import make_user, make_dialog_manager, unwrap_inject
+from tests.conftest import (
+    make_dialog_manager,
+    make_experiment_service,
+    make_user,
+    unwrap_inject,
+)
 from src.bot.routers.menu.handlers import on_get_trial
 from src.core.constants import USER_KEY
 from src.infrastructure.billing.client import BillingClientError
@@ -40,17 +45,19 @@ def _setup(
     callback.answer = AsyncMock()
     widget = MagicMock()
 
-    return callback, widget, dm, billing, notification_service
+    experiment_service = make_experiment_service()
+
+    return callback, widget, dm, billing, notification_service, experiment_service
 
 
 class TestOnGetTrial:
     """Test the on_get_trial handler."""
 
     async def test_trial_success(self):
-        callback, widget, dm, billing, ntf = _setup(trial_plan=_make_trial_plan())
+        callback, widget, dm, billing, ntf, exp = _setup(trial_plan=_make_trial_plan())
         raw_fn = unwrap_inject(on_get_trial)
 
-        await raw_fn(callback, widget, dm, billing, ntf)
+        await raw_fn(callback, widget, dm, billing, ntf, exp)
 
         billing.create_trial_subscription.assert_called_once_with(450987966, 1)
         callback.answer.assert_awaited_once_with("Пробный период активирован")
@@ -58,24 +65,24 @@ class TestOnGetTrial:
         ntf.notify_user.assert_not_called()
 
     async def test_trial_plan_not_found(self):
-        callback, widget, dm, billing, ntf = _setup(trial_plan=None)
+        callback, widget, dm, billing, ntf, exp = _setup(trial_plan=None)
         raw_fn = unwrap_inject(on_get_trial)
 
         with pytest.raises(ValueError, match="Trial plan not exist"):
-            await raw_fn(callback, widget, dm, billing, ntf)
+            await raw_fn(callback, widget, dm, billing, ntf, exp)
 
         ntf.notify_user.assert_called_once()
         payload = ntf.notify_user.call_args[1]["payload"]
         assert payload.i18n_key == "ntf-trial-unavailable"
 
     async def test_trial_already_used_409(self):
-        callback, widget, dm, billing, ntf = _setup(
+        callback, widget, dm, billing, ntf, exp = _setup(
             trial_plan=_make_trial_plan(),
             create_side_effect=BillingClientError(409, "user 450987966 has already used trial"),
         )
         raw_fn = unwrap_inject(on_get_trial)
 
-        await raw_fn(callback, widget, dm, billing, ntf)
+        await raw_fn(callback, widget, dm, billing, ntf, exp)
 
         ntf.notify_user.assert_called_once()
         payload = ntf.notify_user.call_args[1]["payload"]
@@ -83,26 +90,26 @@ class TestOnGetTrial:
 
     async def test_trial_already_used_500_backwards_compat(self):
         """Billing may still return 500 with 'already used trial' message."""
-        callback, widget, dm, billing, ntf = _setup(
+        callback, widget, dm, billing, ntf, exp = _setup(
             trial_plan=_make_trial_plan(),
             create_side_effect=BillingClientError(500, "user 450987966 has already used trial"),
         )
         raw_fn = unwrap_inject(on_get_trial)
 
-        await raw_fn(callback, widget, dm, billing, ntf)
+        await raw_fn(callback, widget, dm, billing, ntf, exp)
 
         ntf.notify_user.assert_called_once()
         payload = ntf.notify_user.call_args[1]["payload"]
         assert payload.i18n_key == "ntf-trial-already-used"
 
     async def test_other_billing_error_propagates(self):
-        callback, widget, dm, billing, ntf = _setup(
+        callback, widget, dm, billing, ntf, exp = _setup(
             trial_plan=_make_trial_plan(),
             create_side_effect=BillingClientError(500, "database connection refused"),
         )
         raw_fn = unwrap_inject(on_get_trial)
 
         with pytest.raises(BillingClientError):
-            await raw_fn(callback, widget, dm, billing, ntf)
+            await raw_fn(callback, widget, dm, billing, ntf, exp)
 
         ntf.notify_user.assert_not_called()

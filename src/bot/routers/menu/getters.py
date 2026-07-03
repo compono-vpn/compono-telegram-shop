@@ -16,6 +16,7 @@ from src.core.utils.formatters import (
 )
 from src.infrastructure.billing import BillingClient
 from src.models.dto import UserDto
+from src.services.experiment import ExperimentService
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
@@ -29,11 +30,13 @@ async def menu_getter(
     i18n: FromDishka[TranslatorRunner],
     billing: FromDishka[BillingClient],
     referral_service: FromDishka[ReferralService],
+    experiment_service: FromDishka[ExperimentService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     try:
         trial_plan = await billing.get_trial_plan()
         has_used_trial = await billing.has_used_trial(user.telegram_id)
+        trial_offer_enabled = await experiment_service.is_trial_offer_enabled(user.telegram_id)
         settings = await billing.get_settings()
         support_username = config.bot.support_username.get_secret_value()
         ref_link = await referral_service.get_ref_link(user.referral_code)
@@ -63,7 +66,9 @@ async def menu_getter(
                 {
                     "status": None,
                     "is_trial": False,
-                    "trial_available": not has_used_trial and trial_plan,
+                    "trial_available": bool(
+                        not has_used_trial and trial_plan and trial_offer_enabled
+                    ),
                     "has_device_limit": False,
                     "connectable": False,
                     "tg_proxy_available": False,
