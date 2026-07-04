@@ -1,0 +1,44 @@
+{
+  "ID": 1,
+  "RulesRequired": true,
+  "ChannelRequired": false,
+  "RulesLink": "https://componovpn.com/rules",
+  "ChannelID": -100123456789,
+  "ChannelLink": "https://t.me/compono",
+  "AccessMode": "PUBLIC",
+  "PurchasesAllowed": true,
+  "RegistrationAllowed": true,
+  "DefaultCurrency": "RUB",
+  "UserNotifications": {
+    "expires_in_3_days": true,
+    "expires_in_2_days": true,
+    "expires_in_1_days": true,
+    "expired": true,
+    "limited": true,
+    "expired_1_day_ago": true,
+    "referral_attached": true,
+    "referral_reward": true,
+    "not_connected": true
+  },
+  "SystemNotifications": {
+    "bot_lifetime": true,
+    "bot_update": true,
+    "user_registered": true,
+    "subscription": true,
+    "promocode_activated": true,
+    "trial_getted": true,
+    "node_status": true,
+    "user_first_connected": true,
+    "user_hwid": true
+  },
+  "Referral": {
+    "enable": true,
+    "level": 2,
+    "accrual_strategy": "ON_FIRST_PAYMENT",
+    "reward": {
+      "type": "POINTS",
+      "strategy": "AMOUNT",
+      "config": {"amount": 10}
+    }
+  }
+}

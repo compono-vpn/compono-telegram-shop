@@ -1,0 +1,8 @@
+{
+  "ID": 1,
+  "ReferrerTelegramID": 123456789,
+  "ReferredTelegramID": 987654321,
+  "Level": 1,
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}

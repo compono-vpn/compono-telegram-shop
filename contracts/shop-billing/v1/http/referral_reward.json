@@ -1,0 +1,10 @@
+{
+  "ID": 1,
+  "ReferralID": 1,
+  "UserTelegramID": 123456789,
+  "Type": "EXTRA_DAYS",
+  "Amount": 7,
+  "IsIssued": false,
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}

@@ -1,0 +1,20 @@
+{
+  "ID": 7,
+  "TelegramID": 123456789,
+  "Username": "johndoe",
+  "ReferralCode": "ABC123",
+  "Name": "John Doe",
+  "Role": "USER",
+  "Language": "EN",
+  "PersonalDiscount": 10,
+  "PurchaseDiscount": 5,
+  "PurchaseDiscountMaxDays": 30,
+  "Points": 100,
+  "Source": "organic",
+  "IsBlocked": false,
+  "IsBotBlocked": false,
+  "IsRulesAccepted": true,
+  "CurrentSubscriptionID": 55,
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}

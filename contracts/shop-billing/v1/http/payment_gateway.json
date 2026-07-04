@@ -1,0 +1,9 @@
+{
+  "ID": 3,
+  "OrderIndex": 1,
+  "Type": "YOOKASSA",
+  "Channel": "ALL",
+  "Currency": "RUB",
+  "IsActive": true,
+  "Settings": {"shop_id": "12345"}
+}

@@ -1,0 +1,28 @@
+{
+  "ID": 42,
+  "OrderIndex": 1,
+  "IsActive": true,
+  "Type": "BOTH",
+  "Availability": "ALL",
+  "Name": "Pro",
+  "Description": "Pro plan",
+  "Tag": "popular",
+  "TrafficLimit": 300,
+  "DeviceLimit": 6,
+  "TrafficLimitStrategy": "MONTH",
+  "AllowedUserIDs": [111111111],
+  "InternalSquads": ["b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a01"],
+  "ExternalSquad": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a02",
+  "Durations": [
+    {
+      "ID": 1,
+      "PlanID": 42,
+      "Days": 30,
+      "Prices": [
+        {"ID": 1, "DurationID": 1, "Currency": "RUB", "Price": "119"}
+      ]
+    }
+  ],
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}

@@ -1,0 +1,29 @@
+{
+  "ID": 99,
+  "PaymentID": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a04",
+  "UserTelegramID": 123456789,
+  "Status": "COMPLETED",
+  "IsTest": false,
+  "PurchaseType": "NEW",
+  "GatewayType": "YOOKASSA",
+  "Pricing": {
+    "original_amount": "119",
+    "discount_percent": 10,
+    "final_amount": "107.1"
+  },
+  "Currency": "RUB",
+  "Plan": {
+    "id": 42,
+    "name": "Pro",
+    "tag": "popular",
+    "type": "BOTH",
+    "traffic_limit": 300,
+    "device_limit": 6,
+    "duration": 30,
+    "traffic_limit_strategy": "MONTH",
+    "internal_squads": ["b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a01"],
+    "external_squad": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a02"
+  },
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}
