@@ -248,6 +248,7 @@ class TestTrialSubscriptionTask:
         subscription_service = AsyncMock()
         notification_service = AsyncMock()
         redis_client = AsyncMock()
+        redis_client.exists.return_value = False
         config = MagicMock()
         config.remnawave.sub_public_domain = "componovpn.com"
 
@@ -289,6 +290,7 @@ class TestTrialSubscriptionTask:
         subscription_service = AsyncMock()
         notification_service = AsyncMock()
         redis_client = AsyncMock()
+        redis_client.exists.return_value = False
         config = MagicMock()
         config.remnawave.sub_public_domain = "componovpn.com"
 
@@ -327,6 +329,7 @@ class TestTrialSubscriptionTask:
         subscription_service = AsyncMock()
         notification_service = AsyncMock()
         redis_client = AsyncMock()
+        redis_client.exists.return_value = False
         config = MagicMock()
         config.remnawave.sub_public_domain = "componovpn.com"
 
@@ -373,12 +376,16 @@ class TestHandleNewPurchase:
         api_client.provision_user.return_value = _make_provision_result()
 
         subscription_service = AsyncMock()
+        redis_client = AsyncMock()
+        redis_client.exists.return_value = False
 
         await _handle_new_purchase(
             user=user,
             plan=plan,
             api_client=api_client,
             subscription_service=subscription_service,
+            redis_client=redis_client,
+            payment_id=uuid4(),
         )
 
         api_client.provision_user.assert_called_once()
@@ -392,12 +399,16 @@ class TestHandleNewPurchase:
         api_client.provision_user.return_value = _make_provision_result()
 
         subscription_service = AsyncMock()
+        redis_client = AsyncMock()
+        redis_client.exists.return_value = False
 
         await _handle_new_purchase(
             user=user,
             plan=plan,
             api_client=api_client,
             subscription_service=subscription_service,
+            redis_client=redis_client,
+            payment_id=uuid4(),
         )
 
         created_sub = subscription_service.create.call_args[0][1]
@@ -414,6 +425,8 @@ class TestHandleNewPurchase:
         api_client.provision_user.side_effect = ApiClientError(500, "internal error")
 
         subscription_service = AsyncMock()
+        redis_client = AsyncMock()
+        redis_client.exists.return_value = False
 
         with pytest.raises(ApiClientError):
             await _handle_new_purchase(
@@ -421,6 +434,8 @@ class TestHandleNewPurchase:
                 plan=plan,
                 api_client=api_client,
                 subscription_service=subscription_service,
+                redis_client=redis_client,
+                payment_id=uuid4(),
             )
 
         # No subscription created on failure
@@ -445,6 +460,7 @@ class TestFailureHandling:
         subscription_service = AsyncMock()
         notification_service = AsyncMock()
         redis_client = AsyncMock()
+        redis_client.exists.return_value = False
         config = MagicMock()
 
         raw_fn = unwrap_task(trial_subscription_task)
@@ -483,6 +499,7 @@ class TestFailureHandling:
         subscription_service = AsyncMock()
         notification_service = AsyncMock()
         redis_client = AsyncMock()
+        redis_client.exists.return_value = False
         config = MagicMock()
 
         raw_fn = unwrap_task(trial_subscription_task)

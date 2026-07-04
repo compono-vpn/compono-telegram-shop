@@ -16,6 +16,7 @@ from src.core.enums import (
     SystemNotificationType,
     TransactionStatus,
 )
+from src.core.storage.keys import PurchaseIdempotencyKey, TrialIdempotencyKey
 from src.core.utils.formatters import (
     i18n_format_days,
     i18n_format_device_limit,
@@ -26,6 +27,7 @@ from src.core.utils.time import datetime_now
 from src.core.utils.types import RemnaUserDto
 from src.infrastructure.api import ApiClient
 from src.infrastructure.taskiq.broker import broker
+from src.infrastructure.taskiq.idempotency import already_applied, mark_applied
 from src.models.dto import (
     PlanSnapshotDto,
     SubscriptionDto,
@@ -78,6 +80,13 @@ async def trial_subscription_task(
 ) -> None:
     logger.info(f"Started trial for user '{user.telegram_id}'")
 
+    idempotency_key = TrialIdempotencyKey(telegram_id=user.telegram_id)
+    if await already_applied(redis_client, idempotency_key):
+        logger.info(
+            f"Trial already provisioned for user '{user.telegram_id}', skipping duplicate task run"
+        )
+        return
+
     try:
         # Single API call — API owns identity + Remnawave provisioning + linkage
         result = await api_client.provision_user(
@@ -87,6 +96,7 @@ async def trial_subscription_task(
             username=user.username,
             language=user.language.value if user.language else None,
         )
+        await mark_applied(redis_client, idempotency_key)
 
         trial_subscription = SubscriptionDto(
             user_remna_id=UUID(result.remnawave_user_id),
@@ -173,8 +183,18 @@ async def _handle_new_purchase(
     plan: PlanSnapshotDto,
     api_client: ApiClient,
     subscription_service: SubscriptionService,
+    redis_client: Redis,
+    payment_id: UUID,
 ) -> None:
     """Handle a NEW purchase type (no existing trial)."""
+    idempotency_key = PurchaseIdempotencyKey(payment_id=payment_id)
+    if await already_applied(redis_client, idempotency_key):
+        logger.info(
+            f"Purchase '{payment_id}' already provisioned for user "
+            f"'{user.telegram_id}', skipping duplicate task run"
+        )
+        return
+
     # Single API call — API owns identity + Remnawave provisioning + linkage
     result = await api_client.provision_user(
         telegram_id=user.telegram_id,
@@ -183,6 +203,7 @@ async def _handle_new_purchase(
         username=user.username,
         language=user.language.value if user.language else None,
     )
+    await mark_applied(redis_client, idempotency_key)
 
     new_subscription = SubscriptionDto(
         user_remna_id=UUID(result.remnawave_user_id),
@@ -208,8 +229,17 @@ async def _handle_renew_purchase(
     transaction: TransactionDto,
     remnawave_service: RemnawaveService,
     subscription_service: SubscriptionService,
+    redis_client: Redis,
 ) -> None:
     """Handle a RENEW purchase type."""
+    idempotency_key = PurchaseIdempotencyKey(payment_id=transaction.payment_id)
+    if await already_applied(redis_client, idempotency_key):
+        logger.info(
+            f"Renewal '{transaction.payment_id}' already applied for user "
+            f"'{user.telegram_id}', skipping duplicate task run"
+        )
+        return
+
     base_date = max(subscription.expire_at, datetime_now())
     new_expire = base_date + timedelta(days=transaction.plan.duration)
     subscription.expire_at = new_expire
@@ -219,6 +249,7 @@ async def _handle_renew_purchase(
         uuid=subscription.user_remna_id,
         subscription=subscription,
     )
+    await mark_applied(redis_client, idempotency_key)
 
     subscription.expire_at = updated_user.expire_at
     subscription.plan = plan
@@ -232,8 +263,18 @@ async def _handle_change_purchase(
     subscription: SubscriptionDto,
     remnawave_service: RemnawaveService,
     subscription_service: SubscriptionService,
+    redis_client: Redis,
+    payment_id: UUID,
 ) -> None:
     """Handle a CHANGE purchase type (or upgrade from trial)."""
+    idempotency_key = PurchaseIdempotencyKey(payment_id=payment_id)
+    if await already_applied(redis_client, idempotency_key):
+        logger.info(
+            f"Change '{payment_id}' already applied for user "
+            f"'{user.telegram_id}', skipping duplicate task run"
+        )
+        return
+
     subscription.status = SubscriptionStatus.DISABLED
     await subscription_service.update(subscription)
 
@@ -262,6 +303,8 @@ async def _handle_change_purchase(
         subscription=temp_subscription,
         reset_traffic=True,
     )
+    await mark_applied(redis_client, idempotency_key)
+
     new_subscription = SubscriptionDto(
         user_remna_id=updated_user.uuid,
         status=updated_user.status,
@@ -310,6 +353,8 @@ async def purchase_subscription_task(
                 plan,
                 api_client,
                 subscription_service,
+                redis_client,
+                transaction.payment_id,
             )
         elif purchase_type == PurchaseType.RENEW and not has_trial:
             if not subscription:
@@ -321,6 +366,7 @@ async def purchase_subscription_task(
                 transaction,
                 remnawave_service,
                 subscription_service,
+                redis_client,
             )
         elif purchase_type == PurchaseType.CHANGE or has_trial:
             if not subscription:
@@ -331,6 +377,8 @@ async def purchase_subscription_task(
                 subscription,
                 remnawave_service,
                 subscription_service,
+                redis_client,
+                transaction.payment_id,
             )
         else:
             raise Exception(
