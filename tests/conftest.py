@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -105,7 +105,6 @@ def make_user(
     telegram_id: int = 1750352084,
     name: str = "Anton",
     subscription: Optional[BaseSubscriptionDto] = None,
-    created_at: Optional[datetime] = None,
 ) -> UserDto:
     return UserDto(
         telegram_id=telegram_id,
@@ -114,7 +113,6 @@ def make_user(
         language=Locale.RU,
         referral_code="abc123",
         current_subscription=subscription,
-        created_at=created_at if created_at is not None else datetime(2024, 1, 1),
     )
 
 
@@ -163,16 +161,10 @@ def make_i18n() -> MagicMock:
     return i18n
 
 
-def make_experiment_service(
-    *,
-    trial_enabled: bool = True,
-    trial_on_weight: int = 100,
-    trial_start_date: Optional[date] = date(2020, 1, 1),
-):
+def make_experiment_service(*, trial_enabled: bool = True, trial_on_weight: int = 100):
     config = MagicMock()
     config.experiments.trial_enabled = trial_enabled
     config.experiments.trial_on_weight = trial_on_weight
-    config.experiments.trial_start_date = trial_start_date
     redis_client = AsyncMock()
     redis_client.set.return_value = True
     return ExperimentService(config, redis_client)
