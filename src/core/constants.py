@@ -48,3 +48,5 @@ RECENT_ACTIVITY_MAX_COUNT: Final[int] = 25
 
 BATCH_SIZE: Final[int] = 20
 BATCH_DELAY: Final[int] = 1
+
+TASKIQ_WORKER_METRICS_PORT: Final[int] = 9090

@@ -1,68 +1,32 @@
-import asyncio
-import json
-
-from aiokafka import AIOKafkaConsumer
 from dishka import AsyncContainer
 from loguru import logger
 from redis.asyncio import Redis
 
 from src.core.config import AppConfig
+from src.infrastructure.kafka.base_consumer import SupervisedKafkaConsumer
 from src.infrastructure.taskiq.tasks.notifications import schedule_not_connected_reminder
 from src.services.subscription import SubscriptionService
 
 
-class TrialReminderConsumer:
+class TrialReminderConsumer(SupervisedKafkaConsumer):
     """Consumes subscription.created events and schedules a 2h not-connected
     reminder when is_trial=true. Runs alongside UserNotificationConsumer.
     """
 
+    consumer_name = "trial_reminder"
+
     def __init__(self, config: AppConfig, container: AsyncContainer) -> None:
-        self._brokers = config.kafka_brokers
-        self._group_id = f"{config.kafka_group_id}-trial-reminder"
+        super().__init__(config, container)
         self._topic = config.kafka_subscription_created_topic
-        self._container = container
-        self._consumer: AIOKafkaConsumer | None = None
-        self._task: asyncio.Task | None = None
+        self._group_id = f"{config.kafka_group_id}-trial-reminder"
 
-    async def start(self) -> None:
-        if not self._brokers:
-            logger.warning("Kafka brokers not configured, skipping trial reminder consumer")
-            return
+    @property
+    def topic(self) -> str:
+        return self._topic
 
-        self._consumer = AIOKafkaConsumer(
-            self._topic,
-            bootstrap_servers=self._brokers,
-            group_id=self._group_id,
-            auto_offset_reset="latest",
-            enable_auto_commit=True,
-            value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-        )
-        await self._consumer.start()
-        logger.info(f"Trial reminder consumer started, topic={self._topic}")
-        self._task = asyncio.create_task(self._consume_loop())
-
-    async def stop(self) -> None:
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        if self._consumer:
-            await self._consumer.stop()
-            logger.info("Trial reminder consumer stopped")
-
-    async def _consume_loop(self) -> None:
-        try:
-            async for msg in self._consumer:
-                try:
-                    await self._handle_message(msg.value)
-                except Exception:
-                    logger.exception("Failed to handle subscription.created event")
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("Trial reminder consumer loop crashed, will not restart")
+    @property
+    def group_id(self) -> str:
+        return self._group_id
 
     async def _handle_message(self, payload: dict) -> None:
         if not payload.get("is_trial"):

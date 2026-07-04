@@ -1,4 +1,5 @@
-from prometheus_client import Counter, Gauge, Histogram
+from loguru import logger
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 UPDATE_PROCESSING_TIME = Histogram(
     "bot_update_processing_seconds",
@@ -79,3 +80,31 @@ EXPERIMENT_CONVERSIONS_TOTAL = Counter(
     "Experiment conversion events by variant",
     ["experiment", "variant", "event"],
 )
+
+KAFKA_CONSUMER_UP = Gauge(
+    "kafka_consumer_up",
+    "Whether a Kafka consumer's consume loop is currently running (1) or down/restarting (0)",
+    ["consumer"],
+)
+
+KAFKA_CONSUMER_RESTARTS_TOTAL = Counter(
+    "kafka_consumer_restarts_total",
+    "Total number of times a Kafka consumer's consume loop crashed and was restarted",
+    ["consumer"],
+)
+
+
+def start_metrics_server(port: int) -> None:
+    """Expose the process-local Prometheus registry over HTTP.
+
+    The taskiq worker process (where the Kafka consumers run) has no other
+    HTTP surface, so consumer liveness metrics would otherwise be registered
+    but never scrapeable. Safe to call unconditionally: failures (e.g. the
+    port already bound) are logged, never raised, so they can't block worker
+    startup.
+    """
+    try:
+        start_http_server(port)
+        logger.info(f"Metrics HTTP server listening on port {port}")
+    except OSError:
+        logger.warning(f"Could not start metrics HTTP server on port {port}")

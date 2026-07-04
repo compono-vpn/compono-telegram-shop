@@ -5,7 +5,9 @@ from taskiq_redis import RedisStreamBroker
 
 from src.bot.dispatcher import create_bg_manager_factory, create_dispatcher, setup_dispatcher
 from src.core.config import AppConfig
+from src.core.constants import TASKIQ_WORKER_METRICS_PORT
 from src.core.logger import setup_logger
+from src.core.metrics import start_metrics_server
 from src.infrastructure.di import create_container
 from src.infrastructure.kafka.consumer import UserNotificationConsumer
 from src.infrastructure.kafka.trial_reminder_consumer import TrialReminderConsumer
@@ -31,6 +33,7 @@ def worker() -> RedisStreamBroker:
     @broker.on_event(TaskiqEvents.WORKER_STARTUP)
     async def on_startup(state: TaskiqState) -> None:
         global _notification_consumer, _trial_reminder_consumer  # noqa: PLW0603
+        start_metrics_server(TASKIQ_WORKER_METRICS_PORT)
         _notification_consumer = UserNotificationConsumer(config, container)
         await _notification_consumer.start()
         _trial_reminder_consumer = TrialReminderConsumer(config, container)
