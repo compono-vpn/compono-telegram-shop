@@ -120,7 +120,9 @@ def _service_estimand(
         estimand_client.track_exposure = MagicMock()
         estimand_client.track_conversion = MagicMock()
 
-    return ExperimentService(config, redis_client, estimand_client=estimand_client), estimand_client, payload
+    service = ExperimentService(config, redis_client)
+    service.estimand_client = estimand_client
+    return service, estimand_client, payload
 
 
 class TestExperimentModel:
