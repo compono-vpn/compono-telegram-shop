@@ -316,6 +316,7 @@ class EstimandClient:
     ) -> dict[str, Any]:
         full_headers = {
             "Accept": "application/json",
+            "User-Agent": "estimand-python-sdk/0.1",
         }
         if headers:
             full_headers.update(headers)
