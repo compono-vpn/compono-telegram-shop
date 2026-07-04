@@ -1,0 +1,6 @@
+{
+  "telegram_id": 123456789,
+  "type": "redirect",
+  "redirect_to": "subscription_success",
+  "purchase_type": "NEW"
+}

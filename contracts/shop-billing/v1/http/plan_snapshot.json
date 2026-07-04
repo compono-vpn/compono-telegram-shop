@@ -1,0 +1,12 @@
+{
+  "id": 42,
+  "name": "Pro",
+  "tag": "popular",
+  "type": "BOTH",
+  "traffic_limit": 300,
+  "device_limit": 6,
+  "duration": 30,
+  "traffic_limit_strategy": "MONTH",
+  "internal_squads": ["b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a01"],
+  "external_squad": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a02"
+}

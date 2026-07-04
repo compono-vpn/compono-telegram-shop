@@ -1,0 +1,10 @@
+{
+  "ID": 1,
+  "Email": "user@example.com",
+  "TelegramID": 123456789,
+  "RemnaUserUUID": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a06",
+  "RemnaUsername": "johndoe",
+  "SubscriptionURL": "https://sub.componovpn.com/abc",
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}

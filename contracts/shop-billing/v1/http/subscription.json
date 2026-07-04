@@ -1,0 +1,29 @@
+{
+  "ID": 55,
+  "UserRemnaID": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a03",
+  "UserTelegramID": 123456789,
+  "Status": "ACTIVE",
+  "IsTrial": false,
+  "TrafficLimit": 300,
+  "DeviceLimit": 6,
+  "TrafficLimitStrategy": "MONTH",
+  "Tag": "popular",
+  "InternalSquads": ["b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a01"],
+  "ExternalSquad": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a02",
+  "ExpireAt": "2026-02-01T00:00:00Z",
+  "URL": "https://sub.componovpn.com/abc",
+  "Plan": {
+    "id": 42,
+    "name": "Pro",
+    "tag": "popular",
+    "type": "BOTH",
+    "traffic_limit": 300,
+    "device_limit": 6,
+    "duration": 30,
+    "traffic_limit_strategy": "MONTH",
+    "internal_squads": ["b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a01"],
+    "external_squad": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a02"
+  },
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}

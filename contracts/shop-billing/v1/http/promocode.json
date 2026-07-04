@@ -1,0 +1,29 @@
+{
+  "ID": 5,
+  "Code": "WELCOME10",
+  "IsActive": true,
+  "Availability": "ALL",
+  "RewardType": "PERSONAL_DISCOUNT",
+  "Reward": 10,
+  "Plan": {
+    "id": 42,
+    "name": "Pro",
+    "tag": "popular",
+    "type": "BOTH",
+    "traffic_limit": 300,
+    "device_limit": 6,
+    "duration": 30,
+    "traffic_limit_strategy": "MONTH",
+    "internal_squads": ["b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a01"],
+    "external_squad": "b6f8f6b2-8b7e-4b0e-9e2b-6a2a2f7e0a02"
+  },
+  "PurchaseDiscountMaxDays": 30,
+  "Lifetime": 30,
+  "MaxActivations": 100,
+  "AllowedTelegramIDs": [123456789],
+  "Activations": [
+    {"ID": 1, "PromocodeID": 5, "UserTelegramID": 123456789, "ActivatedAt": "2026-01-01T00:00:00Z"}
+  ],
+  "CreatedAt": "2026-01-01T00:00:00Z",
+  "UpdatedAt": "2026-01-02T00:00:00Z"
+}
