@@ -93,7 +93,9 @@ async def on_get_trial(
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
 
-    if not await experiment_service.is_trial_offer_enabled(user.telegram_id):
+    if not await experiment_service.is_trial_offer_enabled(
+        user.telegram_id, created_at=user.created_at
+    ):
         logger.info(f"{log(user)} Trial suppressed by experiment variant")
         await notification_service.notify_user(
             user=user,
@@ -113,7 +115,7 @@ async def on_get_trial(
     try:
         await billing.create_trial_subscription(user.telegram_id, billing_plan.ID)
         experiment_service.record_conversion(
-            TRIAL_EXPERIMENT_KEY, user.telegram_id, "trial_activated"
+            TRIAL_EXPERIMENT_KEY, user.telegram_id, "trial_activated", created_at=user.created_at
         )
         await callback.answer("Пробный период активирован")
         await dialog_manager.start(
