@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from loguru import logger
 from redis.asyncio import Redis
 
@@ -27,14 +29,40 @@ class ExperimentService:
             weights=(cfg.trial_on_weight, 100 - cfg.trial_on_weight),
             salt="trial_offer_v1",
             enabled=cfg.trial_enabled,
+            start_date=cfg.trial_start_date,
         )
         return {trial.key: trial}
 
-    def variant(self, experiment_key: str, telegram_id: int) -> str:
-        return assign_variant(self._experiments[experiment_key], telegram_id)
+    @staticmethod
+    def _is_new_user(experiment: Experiment, created_at: datetime | None) -> bool:
+        if experiment.start_date is None or created_at is None:
+            return False
+        return created_at.date() >= experiment.start_date
 
-    async def expose(self, experiment_key: str, telegram_id: int) -> str:
-        variant = self.variant(experiment_key, telegram_id)
+    def variant(
+        self,
+        experiment_key: str,
+        telegram_id: int,
+        *,
+        created_at: datetime | None = None,
+    ) -> str:
+        experiment = self._experiments[experiment_key]
+        if not self._is_new_user(experiment, created_at):
+            return experiment.variants[0]
+        return assign_variant(experiment, telegram_id)
+
+    async def expose(
+        self,
+        experiment_key: str,
+        telegram_id: int,
+        *,
+        created_at: datetime | None = None,
+    ) -> str:
+        experiment = self._experiments[experiment_key]
+        if not self._is_new_user(experiment, created_at):
+            return experiment.variants[0]
+
+        variant = assign_variant(experiment, telegram_id)
         try:
             first_time = await self.redis_client.set(
                 name=f"exp_exposed:{experiment_key}:{telegram_id}",
@@ -48,12 +76,24 @@ class ExperimentService:
             logger.opt(exception=True).warning("Failed to record experiment exposure")
         return variant
 
-    def record_conversion(self, experiment_key: str, telegram_id: int, event: str) -> None:
-        variant = self.variant(experiment_key, telegram_id)
+    def record_conversion(
+        self,
+        experiment_key: str,
+        telegram_id: int,
+        event: str,
+        *,
+        created_at: datetime | None = None,
+    ) -> None:
+        variant = self.variant(experiment_key, telegram_id, created_at=created_at)
         EXPERIMENT_CONVERSIONS_TOTAL.labels(
             experiment=experiment_key, variant=variant, event=event
         ).inc()
 
-    async def is_trial_offer_enabled(self, telegram_id: int) -> bool:
-        variant = await self.expose(TRIAL_EXPERIMENT_KEY, telegram_id)
+    async def is_trial_offer_enabled(
+        self,
+        telegram_id: int,
+        *,
+        created_at: datetime | None = None,
+    ) -> bool:
+        variant = await self.expose(TRIAL_EXPERIMENT_KEY, telegram_id, created_at=created_at)
         return variant == TRIAL_VARIANT_ON

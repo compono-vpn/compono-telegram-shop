@@ -1,5 +1,6 @@
 import hashlib
 from dataclasses import dataclass
+from datetime import date
 
 
 @dataclass(frozen=True)
@@ -9,6 +10,7 @@ class Experiment:
     weights: tuple[int, ...]
     salt: str
     enabled: bool = True
+    start_date: date | None = None
 
     def __post_init__(self) -> None:
         if not self.variants:
