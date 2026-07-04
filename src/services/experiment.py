@@ -63,12 +63,11 @@ class ExperimentService:
         self,
         config: AppConfig,
         redis_client: Redis,
-        estimand_client: Any | None = None,
     ) -> None:
         self.config = config
         self.redis_client = redis_client
         self.estimand_config = self._resolve_estimand_config()
-        self.estimand_client = estimand_client or self._build_estimand_client()
+        self.estimand_client = self._build_estimand_client()
         self._experiments = self._build_experiments(config)
         self._fetched_config = None
         self._estimand_disabled = False
