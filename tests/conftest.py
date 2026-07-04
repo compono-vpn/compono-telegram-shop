@@ -165,6 +165,10 @@ def make_experiment_service(*, trial_enabled: bool = True, trial_on_weight: int 
     config = MagicMock()
     config.experiments.trial_enabled = trial_enabled
     config.experiments.trial_on_weight = trial_on_weight
+    config.experiments.estimand = MagicMock()
+    config.experiments.estimand.enabled = False
+    config.experiments.estimand.on_variant = "trial_on"
+    config.experiments.estimand.off_variant = "trial_off"
     redis_client = AsyncMock()
     redis_client.set.return_value = True
     return ExperimentService(config, redis_client)

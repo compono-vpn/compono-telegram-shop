@@ -31,6 +31,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/opt/compono-shop
 
 COPY ./src ./src
+COPY ./estimand_sdk ./estimand_sdk
 COPY ./assets /opt/compono-shop/assets.default
 COPY ./docker-entrypoint.sh ./docker-entrypoint.sh
 
