@@ -130,6 +130,5 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await telegram_webhook_endpoint.shutdown()
     await command_service.delete()
-    await webhook_service.delete()
 
     await container.close()
