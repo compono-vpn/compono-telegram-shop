@@ -1,5 +1,4 @@
-from datetime import date
-from typing import Optional, Self
+from typing import Self
 
 from pydantic import model_validator
 
@@ -9,7 +8,6 @@ from .base import BaseConfig
 class ExperimentsConfig(BaseConfig, env_prefix="APP_EXPERIMENT_"):
     trial_enabled: bool = False
     trial_on_weight: int = 50
-    trial_start_date: Optional[date] = None
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
