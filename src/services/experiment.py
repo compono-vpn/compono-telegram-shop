@@ -34,7 +34,7 @@ _EXPOSURE_TTL = 60 * 60 * 24 * 30
 @dataclass(frozen=True)
 class _ResolvedEstimandConfig:
     enabled: bool = False
-    base_url: str = "https://api.estimand.app"
+    base_url: str = "https://estimand.app"
     api_key: str = ""
     organization_id: str = ""
     project_id: str = ""
@@ -104,7 +104,7 @@ class ExperimentService:
             enabled=bool(getattr(estimand_cfg, "enabled", False)),
             base_url=self._as_str(
                 getattr(estimand_cfg, "base_url", None),
-                "https://api.estimand.app",
+                "https://estimand.app",
             ),
             api_key=self._resolve_secret(raw_api_key),
             organization_id=self._as_str(getattr(estimand_cfg, "organization_id", None), ""),

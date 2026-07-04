@@ -383,7 +383,6 @@ def _extract_etag(headers: Mapping[str, str], revision: str) -> str:
     if etag:
         return etag
     return f'W/"{revision}"'
-
 def _parse_json(payload: str) -> Any:
     if not payload:
         return None
@@ -391,4 +390,3 @@ def _parse_json(payload: str) -> Any:
         return json.loads(payload)
     except json.JSONDecodeError:
         return None
-
