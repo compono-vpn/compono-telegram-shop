@@ -1,9 +1,25 @@
+from uuid import UUID
+
 from src.core.storage.key_builder import StorageKey
 
 
 class WebhookLockKey(StorageKey, prefix="webhook_lock"):
     bot_id: int
-    webhook_hash: str
+
+
+class PurchaseIdempotencyKey(StorageKey, prefix="purchase_idem"):
+    """Guards purchase/renew/change taskiq tasks against re-mutating
+    Remnawave (or re-applying renew/change expiry) when a task for the
+    same payment is retried or re-delivered after a mid-task crash."""
+
+    payment_id: UUID
+
+
+class TrialIdempotencyKey(StorageKey, prefix="trial_idem"):
+    """Guards trial_subscription_task against provisioning a second
+    Remnawave user when retried/re-delivered for the same telegram user."""
+
+    telegram_id: int
 
 
 class SyncRunningKey(StorageKey, prefix="sync_running"): ...

@@ -70,21 +70,16 @@ class WebhookService(BaseService):
         return time_difference <= timedelta(seconds=tolerance)
 
     async def _is_set(self, bot_id: int, webhook_hash: str) -> bool:
-        key: WebhookLockKey = WebhookLockKey(bot_id=bot_id, webhook_hash=webhook_hash)
-        return await self.redis_repository.exists(key)
+        key: WebhookLockKey = WebhookLockKey(bot_id=bot_id)
+        stored_hash = await self.redis_repository.get(key, validator=str)
+        return stored_hash == webhook_hash
 
     async def _set(self, bot_id: int, webhook_hash: str) -> None:
-        key: WebhookLockKey = WebhookLockKey(bot_id=bot_id, webhook_hash=webhook_hash)
-        await self.redis_repository.set(key, value=None)
+        key: WebhookLockKey = WebhookLockKey(bot_id=bot_id)
+        await self.redis_repository.set(key, value=webhook_hash)
         logger.debug(f"Set webhook lock key '{key.pack()}' in Redis")
 
     async def _clear(self, bot_id: int) -> None:
-        key: WebhookLockKey = WebhookLockKey(bot_id=bot_id, webhook_hash="*")
-        keys: list[bytes] = await self.redis_repository.client.keys(key.pack())
-
-        if not keys:
-            logger.debug(f"No webhook lock keys to clear for bot '{bot_id}'")
-            return
-
-        await self.redis_repository.client.delete(*keys)
-        logger.debug(f"Cleared '{len(keys)}' webhook lock keys for bot '{bot_id}'")
+        key: WebhookLockKey = WebhookLockKey(bot_id=bot_id)
+        await self.redis_repository.delete(key)
+        logger.debug(f"Cleared webhook lock key '{key.pack()}' for bot '{bot_id}'")

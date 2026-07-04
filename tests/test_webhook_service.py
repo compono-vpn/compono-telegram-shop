@@ -47,12 +47,39 @@ def _make_service() -> tuple[WebhookService, MagicMock, AsyncMock, AsyncMock]:
 # setup()
 # ---------------------------------------------------------------------------
 
+class TestClearNeverUsesKeysGlob:
+    @patch("src.services.webhook.get_webhook_hash", return_value="hash_abc")
+    async def test_setup_never_calls_keys_glob_on_shared_redis(self, mock_hash):
+        svc, config, bot, redis_repo = _make_service()
+        config.bot.reset_webhook = False
+        redis_repo.exists.return_value = False
+        redis_repo.get.return_value = None
+
+        bot.return_value = True
+
+        webhook_info = MagicMock()
+        bot.get_webhook_info.return_value = webhook_info
+
+        await svc.setup(allowed_updates=["message"])
+
+        redis_repo.client.keys.assert_not_called()
+
+    async def test_delete_never_calls_keys_glob_on_shared_redis(self):
+        svc, config, bot, redis_repo = _make_service()
+        config.bot.reset_webhook = True
+        bot.delete_webhook.return_value = True
+
+        await svc.delete()
+
+        redis_repo.client.keys.assert_not_called()
+
+
 class TestSetup:
     @patch("src.services.webhook.get_webhook_hash", return_value="hash_abc")
     async def test_skips_setup_when_already_configured(self, mock_hash):
         svc, config, bot, redis_repo = _make_service()
         config.bot.reset_webhook = False
-        redis_repo.exists.return_value = True
+        redis_repo.get.return_value = "hash_abc"
 
         webhook_info = MagicMock()
         bot.get_webhook_info.return_value = webhook_info
@@ -68,10 +95,9 @@ class TestSetup:
     async def test_sets_webhook_when_not_configured(self, mock_hash):
         svc, config, bot, redis_repo = _make_service()
         config.bot.reset_webhook = False
-        redis_repo.exists.return_value = False  # Not yet set
+        redis_repo.get.return_value = None  # Not yet set
 
         bot.return_value = True  # bot(webhook) succeeds
-        redis_repo.client.keys.return_value = []
 
         webhook_info = MagicMock()
         bot.get_webhook_info.return_value = webhook_info
@@ -86,7 +112,7 @@ class TestSetup:
     async def test_raises_when_set_webhook_fails(self, mock_hash):
         svc, config, bot, redis_repo = _make_service()
         config.bot.reset_webhook = False
-        redis_repo.exists.return_value = False
+        redis_repo.get.return_value = None
 
         bot.return_value = False  # bot(webhook) fails
 
@@ -97,10 +123,9 @@ class TestSetup:
     async def test_forces_setup_when_reset_webhook_enabled(self, mock_hash):
         svc, config, bot, redis_repo = _make_service()
         config.bot.reset_webhook = True
-        redis_repo.exists.return_value = True  # Already configured, but reset=True
+        redis_repo.get.return_value = "hash_abc"  # Already configured, but reset=True
 
         bot.return_value = True
-        redis_repo.client.keys.return_value = []
 
         webhook_info = MagicMock()
         bot.get_webhook_info.return_value = webhook_info
@@ -111,21 +136,21 @@ class TestSetup:
         bot.assert_awaited_once()  # Still sets webhook
 
     @patch("src.services.webhook.get_webhook_hash", return_value="hash_abc")
-    async def test_clears_old_keys_before_setting_new(self, mock_hash):
+    async def test_clears_lock_key_before_setting_new(self, mock_hash):
         svc, config, bot, redis_repo = _make_service()
         config.bot.reset_webhook = False
-        redis_repo.exists.return_value = False
+        redis_repo.get.return_value = None
 
         bot.return_value = True
-        old_keys = [b"webhook_lock:12345:old_hash"]
-        redis_repo.client.keys.return_value = old_keys
 
         webhook_info = MagicMock()
         bot.get_webhook_info.return_value = webhook_info
 
         await svc.setup(allowed_updates=["message"])
 
-        redis_repo.client.delete.assert_awaited_once_with(*old_keys)
+        redis_repo.delete.assert_awaited_once()
+        (cleared_key,), _ = redis_repo.delete.call_args
+        assert cleared_key.pack() == f"webhook_lock:{bot.id}"
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +162,6 @@ class TestDelete:
         svc, config, bot, redis_repo = _make_service()
         config.bot.reset_webhook = True
         bot.delete_webhook.return_value = True
-        redis_repo.client.keys.return_value = []
 
         await svc.delete()
 
@@ -160,7 +184,7 @@ class TestDelete:
 
         bot.delete_webhook.assert_awaited_once()
         # No clear should happen on failure
-        redis_repo.client.keys.assert_not_awaited()
+        redis_repo.delete.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
