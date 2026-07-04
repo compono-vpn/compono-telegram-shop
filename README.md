@@ -237,6 +237,19 @@ Now, open the .env file and update the variables:
 - **`REMNAWAVE_HOST`** : The domain or Docker container name.
 - **`REMNAWAVE_TOKEN`** : Remnawave API token, created in the panel.
 - **`REMNAWAVE_WEBHOOK_SECRET`** : Must match the value of `WEBHOOK_SECRET_HEADER` from `.env` the panel.
+- **`APP_EXPERIMENT_TRIAL_ENABLED`** : Enable local trial A/B (default `false`).
+- **`APP_EXPERIMENT_TRIAL_ON_WEIGHT`** : Trial-on percentage when local experiment is enabled.
+- **`APP_EXPERIMENT_ESTIMAND_ENABLED`** : Enable Estimand-driven assignment/events for production (default `false`).
+- **`APP_EXPERIMENT_ESTIMAND_BASE_URL`** : Estimand API base URL.
+- **`APP_EXPERIMENT_ESTIMAND_ORGANIZATION_ID`** : Estimand organization id used for config fetch.
+- **`APP_EXPERIMENT_ESTIMAND_PROJECT_ID`** : Estimand project id used for config fetch.
+- **`APP_EXPERIMENT_ESTIMAND_ENVIRONMENT_ID`** : Estimand environment id used for config fetch.
+- **`APP_EXPERIMENT_ESTIMAND_FEATURE_KEY`** : Feature key from Estimand (set to `trial_offer`).
+- **`APP_EXPERIMENT_ESTIMAND_FEATURE_ID`** : UUID of that feature (required to send events).
+- **`APP_EXPERIMENT_ESTIMAND_ON_VARIANT`** : Name of the enabled trial variant.
+- **`APP_EXPERIMENT_ESTIMAND_OFF_VARIANT`** : Name of the disabled trial variant.
+- **`APP_EXPERIMENT_ESTIMAND_CONVERSION_EVENT`** : Name of conversion event sent to Estimand (`trial_activated`).
+- **`APP_EXPERIMENT_ESTIMAND_REQUEST_TIMEOUT`** : Estimand client request timeout in seconds.
 
 > [!WARNING]
 > Depending on your configuration, also pay attention to the following variables: **`BOT_MINI_APP`**, **`REMNAWAVE_CADDY_TOKEN`**, **`REMNAWAVE_COOKIE`**.
@@ -330,4 +343,3 @@ Any support helps me dedicate more time to development and accelerate project pr
 > SBP, ЮMoney, SberPay, T-Pay - [**ЮKassa**](https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l)
 
 > USDT TRC-20 - **`TPnpmwD4P9znKs3Hp4Hrh9rhJ7u1m6UA1B`**
-
