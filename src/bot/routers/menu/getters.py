@@ -7,6 +7,7 @@ from fluentogram import TranslatorRunner
 from loguru import logger
 
 from src.core.config import AppConfig
+from src.core.enums import ReferralLevel
 from src.core.exceptions import MenuRenderingError
 from src.core.utils.formatters import (
     format_username_to_url,
@@ -15,6 +16,7 @@ from src.core.utils.formatters import (
     i18n_format_traffic_limit,
 )
 from src.infrastructure.billing import BillingClient
+from src.infrastructure.billing.converters import billing_settings_to_dto
 from src.models.dto import UserDto
 from src.services.experiment import ExperimentService
 from src.services.referral import ReferralService
@@ -37,16 +39,12 @@ async def menu_getter(
         trial_plan = await billing.get_trial_plan()
         has_used_trial = await billing.has_used_trial(user.telegram_id)
         trial_offer_enabled = await experiment_service.is_trial_offer_enabled(user)
-        settings = await billing.get_settings()
+        settings = billing_settings_to_dto(await billing.get_settings())
         support_username = config.bot.support_username.get_secret_value()
         ref_link = await referral_service.get_ref_link(user.referral_code)
         support_link = format_username_to_url(support_username, i18n.get("contact-support-help"))
 
-        is_referral_enable = (
-            bool(settings.Referral and settings.Referral.get("enable", False))
-            if settings.Referral
-            else False
-        )
+        is_referral_enable = settings.referral.enable
 
         base_data = {
             "user_id": str(user.telegram_id),
@@ -165,11 +163,10 @@ async def invite_getter(
     referral_service: FromDishka[ReferralService],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    settings = await billing.get_settings()
-    referral_settings = settings.Referral or {}
-    reward_config = referral_settings.get("reward", {})
-    reward_type = reward_config.get("type", "EXTRA_DAYS")
-    is_points = reward_type == "POINTS"
+    settings = billing_settings_to_dto(await billing.get_settings())
+    referral_settings = settings.referral
+    reward_type = referral_settings.reward.type.value
+    is_points = referral_settings.reward.is_points
 
     referrals = await referral_service.get_referral_count(user.telegram_id)
     payments = await referral_service.get_reward_count(user.telegram_id)
@@ -187,8 +184,17 @@ async def invite_getter(
         "is_points_reward": is_points,
         "has_points": True if user.points > 0 else False,
         "referral_link": ref_link,
-        "invite": i18n.get("referral-invite-message", url=ref_link),
+        "invite": i18n.get(
+            "referral-invite-message",
+            url=ref_link,
+            invitee_discount=referral_settings.invitee_reward.amount,
+            referrer_days=referral_settings.reward.config.get(ReferralLevel.FIRST, 14),
+            long_referrer_days=referral_settings.reward.long_purchase_amount or 30,
+        ),
         "withdraw": support_link,
+        "invitee_discount": referral_settings.invitee_reward.amount,
+        "long_reward_amount": referral_settings.reward.long_purchase_amount or 30,
+        "long_reward_min_days": referral_settings.reward.long_purchase_min_days,
     }
 
 
@@ -254,24 +260,21 @@ async def invite_about_getter(
     billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    settings = await billing.get_settings()
-    referral_settings = settings.Referral or {}
-    reward_config_raw = referral_settings.get("reward", {})
-    reward_strategy = reward_config_raw.get("strategy", "AMOUNT")
-    reward_type = reward_config_raw.get("type", "EXTRA_DAYS")
-    config_levels = reward_config_raw.get("config", {})
-    accrual_strategy = referral_settings.get("accrual_strategy", "ON_FIRST_PAYMENT")
-
-    max_level_raw = referral_settings.get("level", 1)
-    max_level = int(max_level_raw) if max_level_raw else 1
+    settings = billing_settings_to_dto(await billing.get_settings())
+    referral_settings = settings.referral
+    reward_strategy = referral_settings.reward.strategy.value
+    reward_type = referral_settings.reward.type.value
+    config_levels = referral_settings.reward.config
+    accrual_strategy = referral_settings.accrual_strategy.value
+    max_level = referral_settings.level.value
 
     # Check if all reward values are identical
     values = list(config_levels.values())
     identical_reward = len(values) <= 1 or all(v == values[0] for v in values)
 
     reward_levels: dict[str, str] = {}
-    for lvl_str, val in config_levels.items():
-        lvl_int = int(lvl_str) if isinstance(lvl_str, str) else lvl_str
+    for level, val in config_levels.items():
+        lvl_int = level.value
         if lvl_int <= max_level:
             reward_levels[f"reward_level_{lvl_int}"] = i18n.get(
                 "msg-invite-reward",
@@ -287,4 +290,7 @@ async def invite_about_getter(
         "accrual_strategy": accrual_strategy,
         "identical_reward": identical_reward,
         "max_level": max_level,
+        "invitee_discount": referral_settings.invitee_reward.amount,
+        "long_reward_amount": referral_settings.reward.long_purchase_amount or 30,
+        "long_reward_min_days": referral_settings.reward.long_purchase_min_days,
     }

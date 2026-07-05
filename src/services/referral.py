@@ -17,6 +17,7 @@ from src.core.enums import (
     MessageEffect,
     PurchaseType,
     ReferralAccrualStrategy,
+    ReferralInviteeRewardType,
     ReferralLevel,
     ReferralRewardStrategy,
     ReferralRewardType,
@@ -125,6 +126,15 @@ class ReferralService(BaseService):
         config_value = settings_reward.config.get(level)
         if config_value is None:
             return None
+        if (
+            level == ReferralLevel.FIRST
+            and reward_type == ReferralRewardType.EXTRA_DAYS
+            and settings_reward.strategy == ReferralRewardStrategy.AMOUNT
+            and settings_reward.long_purchase_amount
+            and transaction.plan
+            and transaction.plan.duration >= settings_reward.long_purchase_min_days
+        ):
+            config_value = settings_reward.long_purchase_amount
 
         if settings_reward.strategy == ReferralRewardStrategy.AMOUNT:
             reward_amount = config_value
@@ -230,7 +240,9 @@ class ReferralService(BaseService):
             f"Referral linked: {referrer.telegram_id} -> {user.telegram_id}, level {level.name}"
         )
 
-        if await self.settings_service.is_referral_enable():
+        settings = await self.settings_service.get_referral_settings()
+        if settings.enable:
+            invitee_reward_applied = await self._apply_invitee_reward(user, settings)
             await self.notification_service.notify_user(
                 user=referrer,
                 ntf_type=UserNotificationType.REFERRAL_ATTACHED,
@@ -240,6 +252,17 @@ class ReferralService(BaseService):
                     message_effect=MessageEffect.CONFETTI,
                 ),
             )
+            if invitee_reward_applied:
+                await self.notification_service.notify_user(
+                    user=user,
+                    payload=MessagePayload.not_deleted(
+                        i18n_key="ntf-event-user-referral-invitee-reward",
+                        i18n_kwargs={
+                            "discount": settings.invitee_reward.amount,
+                        },
+                        message_effect=MessageEffect.CONFETTI,
+                    ),
+                )
 
     async def get_ref_link(self, referral_code: str) -> str:
         return f"{await self._get_bot_redirect_url()}?start={REFERRAL_PREFIX}{referral_code}"
@@ -340,3 +363,31 @@ class ReferralService(BaseService):
             logger.warning(f"Invalid referral code '{code}' or self-referral by '{user_id}'")
             return None
         return referrer
+
+    async def _apply_invitee_reward(self, user: UserDto, settings) -> bool:
+        reward = settings.invitee_reward
+        if (
+            not reward.enable
+            or reward.type != ReferralInviteeRewardType.PURCHASE_DISCOUNT
+            or reward.amount <= 0
+        ):
+            return False
+
+        new_discount = max(user.purchase_discount or 0, reward.amount)
+        new_max_days = max(user.purchase_discount_max_days or 0, reward.purchase_discount_max_days)
+        if (
+            new_discount == user.purchase_discount
+            and new_max_days == user.purchase_discount_max_days
+        ):
+            return False
+
+        user.purchase_discount = new_discount
+        user.purchase_discount_max_days = new_max_days
+        await self.user_service.update(user)
+        logger.info(
+            "Applied referral invitee purchase discount '{}' max days '{}' to user '{}'",
+            new_discount,
+            new_max_days,
+            user.telegram_id,
+        )
+        return True

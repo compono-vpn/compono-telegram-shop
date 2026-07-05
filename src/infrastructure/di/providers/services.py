@@ -6,6 +6,7 @@ from src.services.access import AccessService
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.command import CommandService
 from src.services.experiment import ExperimentService
+from src.services.loyalty_reward import LoyaltyRewardService
 from src.services.notification import NotificationService
 from src.services.payment_gateway import PaymentGatewayService
 from src.services.plan import PlanService
@@ -41,3 +42,4 @@ class ServicesProvider(Provider):
     )  # uses BillingClient (HTTP API)
     referral_service = provide(source=ReferralService, scope=Scope.REQUEST)
     channel_incentive_service = provide(source=ChannelIncentiveService, scope=Scope.REQUEST)
+    loyalty_reward_service = provide(source=LoyaltyRewardService, scope=Scope.REQUEST)

@@ -16,6 +16,11 @@ class ReferralRewardType(UpperStrEnum):
     EXTRA_DAYS = auto()
 
 
+class ReferralInviteeRewardType(UpperStrEnum):
+    NONE = auto()
+    PURCHASE_DISCOUNT = auto()
+
+
 class ReferralLevel(IntEnum):
     FIRST = auto()
     SECOND = auto()

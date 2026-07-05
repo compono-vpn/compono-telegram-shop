@@ -7,6 +7,7 @@ from src.core.enums import (
     AccessMode,
     Currency,
     ReferralAccrualStrategy,
+    ReferralInviteeRewardType,
     ReferralLevel,
     ReferralRewardStrategy,
     ReferralRewardType,
@@ -52,7 +53,9 @@ class UserNotificationDto(TrackableDto):  # == UserNotificationType
 class ReferralRewardSettingsDto(BaseDto):
     type: ReferralRewardType = ReferralRewardType.EXTRA_DAYS
     strategy: ReferralRewardStrategy = ReferralRewardStrategy.AMOUNT
-    config: dict[ReferralLevel, int] = {ReferralLevel.FIRST: 5}
+    config: dict[ReferralLevel, int] = {ReferralLevel.FIRST: 14}
+    long_purchase_min_days: int = 90
+    long_purchase_amount: Optional[int] = 30
 
     @property
     def is_identical(self) -> bool:
@@ -68,11 +71,19 @@ class ReferralRewardSettingsDto(BaseDto):
         return self.type == ReferralRewardType.EXTRA_DAYS
 
 
+class ReferralInviteeRewardSettingsDto(BaseDto):
+    enable: bool = True
+    type: ReferralInviteeRewardType = ReferralInviteeRewardType.PURCHASE_DISCOUNT
+    amount: int = 10
+    purchase_discount_max_days: int = 365
+
+
 class ReferralSettingsDto(TrackableDto):
     enable: bool = True
     level: ReferralLevel = ReferralLevel.FIRST
     accrual_strategy: ReferralAccrualStrategy = ReferralAccrualStrategy.ON_FIRST_PAYMENT
     reward: ReferralRewardSettingsDto = ReferralRewardSettingsDto()
+    invitee_reward: ReferralInviteeRewardSettingsDto = ReferralInviteeRewardSettingsDto()
 
 
 class SettingsDto(TrackableDto):
