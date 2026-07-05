@@ -26,6 +26,7 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
+from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
 from src.services.subscription import SubscriptionService
 
@@ -99,6 +100,7 @@ async def duration_getter(
     i18n: FromDishka[TranslatorRunner],
     billing: FromDishka[BillingClient],
     experiment_service: FromDishka[ExperimentService],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -122,12 +124,14 @@ async def duration_getter(
             duration_days=duration.days,
             purchase_type=purchase_type,
         )
+        channel_discount = await channel_incentive_service.discount_context(user)
         price_details = await billing.calculate_price(
             telegram_id=user.telegram_id,
             plan_id=plan.id,
             duration_days=duration.days,
             currency=default_currency,
             experiment=experiment_context.billing_experiment if experiment_context else None,
+            channel_discount=channel_discount,
         )
         pricing = billing_price_details_to_dto(price_details)
         from src.core.enums import Currency  # noqa: PLC0415
@@ -166,6 +170,7 @@ async def payment_method_getter(
     billing: FromDishka[BillingClient],
     i18n: FromDishka[TranslatorRunner],
     experiment_service: FromDishka[ExperimentService],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -192,6 +197,7 @@ async def payment_method_getter(
         duration_days=duration.days,
         purchase_type=purchase_type,
     )
+    channel_discount = await channel_incentive_service.discount_context(user)
 
     for gateway in gateways:
         price_details = await billing.calculate_price(
@@ -200,6 +206,7 @@ async def payment_method_getter(
             duration_days=duration.days,
             currency=gateway.currency.value,
             experiment=experiment_context.billing_experiment if experiment_context else None,
+            channel_discount=channel_discount,
         )
         pricing = billing_price_details_to_dto(price_details)
         payment_methods.append(

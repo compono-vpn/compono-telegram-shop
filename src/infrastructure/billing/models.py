@@ -127,6 +127,9 @@ class BillingPriceDetails(BaseModel):
     original_amount: str = "0"
     discount_percent: int = 0
     final_amount: str = "0"
+    base_discount_percent: int = 0
+    channel_discount_percent: int = 0
+    channel_discount_source: str = ""
 
 
 class BillingTransaction(BaseModel):

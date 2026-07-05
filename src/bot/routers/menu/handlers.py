@@ -8,7 +8,7 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 from loguru import logger
 
-from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT
+from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT, get_channel_keyboard
 from src.bot.states import MainMenu, Subscription
 from src.core.constants import USER_KEY
 from src.core.enums import MediaType
@@ -18,6 +18,7 @@ from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.client import BillingClientError
 from src.models.dto import UserDto
+from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
@@ -55,6 +56,28 @@ async def on_start_dialog(
     )
 
 
+async def _maybe_prompt_channel_incentive(
+    user: UserDto,
+    channel_incentive_service: ChannelIncentiveService,
+    notification_service: NotificationService,
+) -> None:
+    channel_url = channel_incentive_service.channel_url
+    if not channel_url:
+        return
+    if not await channel_incentive_service.should_prompt(user):
+        return
+    await notification_service.notify_user(
+        user=user,
+        payload=MessagePayload(
+            i18n_key="ntf-channel-incentive",
+            i18n_kwargs={"percent": channel_incentive_service.discount_percent},
+            reply_markup=get_channel_keyboard(channel_url),
+            auto_delete_after=None,
+            add_close_button=False,
+        ),
+    )
+
+
 @inject
 @router.message(CommandStart(ignore_case=True))
 async def on_start_command(
@@ -62,6 +85,8 @@ async def on_start_command(
     user: UserDto,
     dialog_manager: DialogManager,
     i18n: FromDishka[TranslatorRunner],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
+    notification_service: FromDishka[NotificationService],
 ) -> None:
     # Web purchases are managed at the web portal — this bot is TG-native only.
     # If the user arrives via a legacy /start web_<token> deep link, send a
@@ -77,6 +102,11 @@ async def on_start_command(
             await message.answer(i18n.get("msg-web-purchase-redirect"))
 
     await on_start_dialog(user, dialog_manager)
+    await _maybe_prompt_channel_incentive(
+        user=user,
+        channel_incentive_service=channel_incentive_service,
+        notification_service=notification_service,
+    )
 
 
 @router.callback_query(F.data == CALLBACK_RULES_ACCEPT)

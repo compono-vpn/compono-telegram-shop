@@ -261,6 +261,11 @@ Now, open the .env file and update the variables:
 - **`APP_EXPERIMENT_ESTIMAND_OFF_VARIANT`** : Name of the disabled trial variant.
 - **`APP_EXPERIMENT_ESTIMAND_CONVERSION_EVENT`** : Name of conversion event sent to Estimand (`trial_activated`).
 - **`APP_EXPERIMENT_ESTIMAND_REQUEST_TIMEOUT`** : Estimand client request timeout in seconds.
+- **`APP_CHANNEL_INCENTIVE_ENABLED`** : Enable the non-blocking Telegram channel subscription prompt and extra checkout discount.
+- **`APP_CHANNEL_INCENTIVE_ADDRESS`** : Channel username/chat id checked through `getChatMember`; falls back to `BOT_CHANNEL_ADDRESS` when empty.
+- **`APP_CHANNEL_INCENTIVE_URL`** : Public channel URL shown in the prompt; falls back to the URL derived from `BOT_CHANNEL_ADDRESS`.
+- **`APP_CHANNEL_INCENTIVE_DISCOUNT_PERCENT`** : Extra billing-side discount for subscribed users (default `5`).
+- **`APP_CHANNEL_INCENTIVE_PROMPT_COOLDOWN_SECONDS`** : Redis cooldown for repeated prompt messages.
 
 > [!WARNING]
 > Depending on your configuration, also pay attention to the following variables: **`BOT_MINI_APP`**, **`REMNAWAVE_CADDY_TOKEN`**, **`REMNAWAVE_COOKIE`**.

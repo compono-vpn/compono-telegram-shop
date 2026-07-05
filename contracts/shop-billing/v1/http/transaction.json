@@ -8,8 +8,11 @@
   "GatewayType": "YOOKASSA",
   "Pricing": {
     "original_amount": "119",
-    "discount_percent": 10,
-    "final_amount": "107.1"
+    "discount_percent": 15,
+    "final_amount": "101",
+    "base_discount_percent": 10,
+    "channel_discount_percent": 5,
+    "channel_discount_source": "compono_channel"
   },
   "Currency": "RUB",
   "Plan": {
