@@ -3,11 +3,12 @@ from __future__ import annotations
 from unittest import TestCase
 
 from estimand_sdk import (
-    ConfigPayload,
     REASON_FEATURE_DISABLED,
+    REASON_FEATURE_UNPUBLISHED,
     REASON_NO_MATCHING_RULE,
     REASON_RULE_MATCHED,
     REASON_VARIANT_FORCED,
+    ConfigPayload,
     evaluate_feature_from_payload,
     evaluate_features,
 )
@@ -80,6 +81,27 @@ class EvaluatorTestCase(TestCase):
             unit_id="user-1",
         )
         self.assertEqual(result.reason, REASON_FEATURE_DISABLED)
+        self.assertIsNone(result.variation_key)
+
+    def test_feature_unpublished_returns_expected_reason(self) -> None:
+        unpublished = self._feature()
+        unpublished = FeatureConfig(
+            type=unpublished.type,
+            default_value=unpublished.default_value,
+            seed=unpublished.seed,
+            unit_type=unpublished.unit_type,
+            enabled=True,
+            published=False,
+            variations=unpublished.variations,
+            rules=unpublished.rules,
+        )
+        payload = ConfigPayload(revision="rev-1", features={"checkout": unpublished})
+        result = evaluate_feature_from_payload(
+            config=payload,
+            feature_key="checkout",
+            unit_id="user-1",
+        )
+        self.assertEqual(result.reason, REASON_FEATURE_UNPUBLISHED)
         self.assertIsNone(result.variation_key)
 
     def test_force_variation_is_respected(self) -> None:

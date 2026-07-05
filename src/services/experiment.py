@@ -433,6 +433,20 @@ class ExperimentService:
     def _feature_for_key(self, experiment_key: str) -> _FeatureSpec:
         return self._features[experiment_key]
 
+    @staticmethod
+    def _local_fallback_evaluation(
+        feature: _FeatureSpec,
+        telegram_id: int,
+        *,
+        track_events: bool,
+    ) -> _FeatureEvaluation:
+        return _FeatureEvaluation(
+            feature_key=feature.key,
+            variant=assign_variant(feature.experiment, telegram_id),
+            payload=None,
+            track_events=track_events,
+        )
+
     def _evaluate(
         self,
         experiment_key: str,
@@ -450,21 +464,19 @@ class ExperimentService:
             )
 
         if not self._should_use_estimand(feature):
-            return _FeatureEvaluation(
-                feature_key=feature.key,
-                variant=assign_variant(feature.experiment, telegram_id),
-                payload=None,
+            return self._local_fallback_evaluation(
+                feature,
+                telegram_id,
                 track_events=True,
             )
 
         try:
             payload = self._fetch_estimand_config()
             if payload is None:
-                return _FeatureEvaluation(
-                    feature_key=feature.key,
-                    variant=assign_variant(feature.experiment, telegram_id),
-                    payload=None,
-                    track_events=True,
+                return self._local_fallback_evaluation(
+                    feature,
+                    telegram_id,
+                    track_events=False,
                 )
 
             result = self.estimand_client.evaluate_feature(
@@ -481,21 +493,27 @@ class ExperimentService:
                     track_events=True,
                 )
 
-            logger.warning(
-                f"Estimand feature '{experiment_key}' returned unexpected variant "
-                f"'{variation}', using local assignment"
-            )
+            reason = getattr(result, "reason", "unknown")
+            if variation is None:
+                logger.info(
+                    f"Estimand feature '{experiment_key}' is not serving for unit "
+                    f"'{telegram_id}' (reason='{reason}'); using local fallback without analytics"
+                )
+            else:
+                logger.warning(
+                    f"Estimand feature '{experiment_key}' returned unexpected variant "
+                    f"'{variation}' (reason='{reason}'); using local fallback without analytics"
+                )
         except Exception:
             logger.opt(exception=True).warning(
-                "Failed to evaluate Estimand feature; using local fallback"
+                "Failed to evaluate Estimand feature; using local fallback without analytics"
             )
             self._estimand_disabled = True
 
-        return _FeatureEvaluation(
-            feature_key=feature.key,
-            variant=assign_variant(feature.experiment, telegram_id),
-            payload=None,
-            track_events=True,
+        return self._local_fallback_evaluation(
+            feature,
+            telegram_id,
+            track_events=False,
         )
 
     def _get_feature_variants(self, experiment_key: str) -> tuple[str, str]:

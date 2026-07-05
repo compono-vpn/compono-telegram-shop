@@ -287,6 +287,88 @@ class TestTrialExperiment:
 
         assert estimand_client.fetch_config.call_count == 2
 
+    async def test_non_serving_feature_uses_local_fallback_without_remote_events(self):
+        feature_key = ExperimentFeature.CHECKOUT_FLOW.value
+        feature_id = "cf-01"
+        payload = _build_estimand_payload(feature_key=feature_key)
+        feature = payload.features[feature_key]
+        payload.features[feature_key] = FeatureConfig(
+            type=feature.type,
+            default_value=feature.default_value,
+            seed=feature.seed,
+            unit_type=feature.unit_type,
+            enabled=False,
+            published=feature.published,
+            variations=feature.variations,
+            rules=feature.rules,
+            forced_variations=feature.forced_variations,
+        )
+        svc, estimand_client, _ = _service_estimand(
+            feature_key=feature_key,
+            feature_id=feature_id,
+            checkout_flow_feature_id=feature_id,
+            payload=payload,
+        )
+        user = UserDto(telegram_id=555, name="NonServing")
+
+        evaluation = svc.evaluate_feature_for_user(user, ExperimentFeature.CHECKOUT_FLOW)
+
+        assert evaluation.feature_key == feature_key
+        assert evaluation.variant == "checkout_flow_v1_off"
+        assert evaluation.payload is None
+
+        variant = await svc.expose(feature_key, user.telegram_id, user.created_at)
+
+        assert variant == "checkout_flow_v1_off"
+        svc.redis_client.set.assert_not_awaited()
+
+        svc.record_conversion(
+            feature_key,
+            user.telegram_id,
+            "payment_link_created",
+            user.created_at,
+        )
+
+        estimand_client.track_exposure.assert_not_called()
+        estimand_client.track_conversion.assert_not_called()
+
+    async def test_unpublished_feature_uses_local_fallback_without_remote_events(self):
+        feature_key = ExperimentFeature.START_TIER_PRICE.value
+        feature_id = "price-01"
+        payload = _build_estimand_payload(feature_key=feature_key)
+        feature = payload.features[feature_key]
+        payload.features[feature_key] = FeatureConfig(
+            type=feature.type,
+            default_value=feature.default_value,
+            seed=feature.seed,
+            unit_type=feature.unit_type,
+            enabled=True,
+            published=False,
+            variations=feature.variations,
+            rules=feature.rules,
+            forced_variations=feature.forced_variations,
+        )
+        svc, estimand_client, _ = _service_estimand(
+            feature_key=feature_key,
+            feature_id=feature_id,
+            start_tier_price_feature_id=feature_id,
+            payload=payload,
+        )
+        user = UserDto(telegram_id=556, name="Unpublished")
+
+        evaluation = svc.evaluate_feature_for_user(user, ExperimentFeature.START_TIER_PRICE)
+
+        assert evaluation.feature_key == feature_key
+        assert evaluation.variant == "start_tier_price_v1_off"
+        assert evaluation.payload is None
+
+        await svc.expose(feature_key, user.telegram_id, user.created_at)
+        svc.record_conversion(feature_key, user.telegram_id, "payment_completed", user.created_at)
+
+        svc.redis_client.set.assert_not_awaited()
+        estimand_client.track_exposure.assert_not_called()
+        estimand_client.track_conversion.assert_not_called()
+
     async def test_non_trial_feature_evaluates_via_estimand_when_configured(self):
         feature_key = ExperimentFeature.CHECKOUT_FLOW.value
         feature_id = "cf-01"

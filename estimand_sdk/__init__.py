@@ -18,25 +18,28 @@ from .client import (
     EstimandSDKRequestError,
 )
 from .evaluator import (
-    EvaluationResult,
     REASON_FEATURE_DISABLED,
     REASON_FEATURE_NOT_FOUND,
+    REASON_FEATURE_UNPUBLISHED,
     REASON_NO_MATCHING_RULE,
     REASON_NO_VARIANTS,
     REASON_OUTSIDE_COVERAGE,
     REASON_RULE_DEFAULT_MATCHED,
     REASON_RULE_MATCHED,
     REASON_VARIANT_FORCED,
+    EvaluationResult,
     evaluate_feature,
-    evaluate_features,
     evaluate_feature_from_payload,
+    evaluate_features,
+)
+from .evaluator import (
     evaluate_features as evaluate_features_from_payload,
 )
 from .models import (
     ConfigPayload,
-    FeatureConfig,
     EventBatchResponse,
     EventPayload,
+    FeatureConfig,
     RuleConfig,
     VariationConfig,
 )
@@ -53,6 +56,7 @@ __all__ = [
     "EvaluationResult",
     "REASON_FEATURE_DISABLED",
     "REASON_FEATURE_NOT_FOUND",
+    "REASON_FEATURE_UNPUBLISHED",
     "REASON_NO_MATCHING_RULE",
     "REASON_NO_VARIANTS",
     "REASON_OUTSIDE_COVERAGE",
