@@ -81,6 +81,24 @@ EXPERIMENT_CONVERSIONS_TOTAL = Counter(
     ["experiment", "variant", "event"],
 )
 
+ESTIMAND_RUNTIME_STATE = Gauge(
+    "bot_estimand_runtime_state",
+    "Current Estimand runtime state",
+    ["state"],
+)
+
+ESTIMAND_CLIENT_FAILURES_TOTAL = Counter(
+    "bot_estimand_client_failures_total",
+    "Total Estimand client failures by operation and fallback path",
+    ["operation", "fallback"],
+)
+
+ESTIMAND_CIRCUIT_OPENS_TOTAL = Counter(
+    "bot_estimand_circuit_opens_total",
+    "Total number of times the Estimand circuit breaker opened",
+    ["operation"],
+)
+
 KAFKA_CONSUMER_UP = Gauge(
     "kafka_consumer_up",
     "Whether a Kafka consumer's consume loop is currently running (1) or down/restarting (0)",

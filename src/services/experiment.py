@@ -11,7 +11,13 @@ from redis.asyncio import Redis
 
 from src.core.config import AppConfig
 from src.core.experiments import Experiment, assign_variant
-from src.core.metrics import EXPERIMENT_CONVERSIONS_TOTAL, EXPERIMENT_EXPOSURES_TOTAL
+from src.core.metrics import (
+    ESTIMAND_CIRCUIT_OPENS_TOTAL,
+    ESTIMAND_CLIENT_FAILURES_TOTAL,
+    ESTIMAND_RUNTIME_STATE,
+    EXPERIMENT_CONVERSIONS_TOTAL,
+    EXPERIMENT_EXPOSURES_TOTAL,
+)
 from src.models.dto.user import UserDto
 
 try:
@@ -34,6 +40,7 @@ TRIAL_VARIANT_OFF = "trial_off"
 
 _EXPOSURE_TTL = 60 * 60 * 24 * 30
 _ESTIMAND_CONFIG_CACHE_TTL_SECONDS = 30.0
+_ESTIMAND_CIRCUIT_OPEN_SECONDS = 30.0
 
 
 class ExperimentFeature(str, Enum):
@@ -43,6 +50,13 @@ class ExperimentFeature(str, Enum):
     INTRO_PRICE = "intro_price"
     CHECKOUT_FLOW = "checkout_flow"
     PAYMENT_RESCUE = "payment_rescue"
+
+
+class _EstimandRuntimeState(str, Enum):
+    CONFIGURED_DISABLED = "configured_disabled"
+    NOT_CONFIGURED = "not_configured"
+    AVAILABLE = "available"
+    TEMPORARILY_UNAVAILABLE = "temporarily_unavailable"
 
 
 @dataclass(frozen=True)
@@ -125,7 +139,10 @@ class ExperimentService:
         self._features = self._build_features(config, self.estimand_config)
         self._fetched_config = None
         self._fetched_config_at = 0.0
-        self._estimand_disabled = False
+        self._cached_config_safe = False
+        self._estimand_retry_at = 0.0
+        self._estimand_state: _EstimandRuntimeState | None = None
+        self._set_estimand_runtime_state(self._resolve_initial_estimand_state())
 
     @staticmethod
     def _as_str(value: Any, default: str) -> str:
@@ -373,6 +390,52 @@ class ExperimentService:
             )
             return None
 
+    def _resolve_initial_estimand_state(self) -> _EstimandRuntimeState:
+        if not self.estimand_config.enabled:
+            return _EstimandRuntimeState.CONFIGURED_DISABLED
+        if not self.estimand_config.is_fully_configured() or self.estimand_client is None:
+            return _EstimandRuntimeState.NOT_CONFIGURED
+        return _EstimandRuntimeState.AVAILABLE
+
+    def _set_estimand_runtime_state(self, state: _EstimandRuntimeState) -> None:
+        if self._estimand_state == state:
+            return
+
+        previous = self._estimand_state
+        for candidate in _EstimandRuntimeState:
+            ESTIMAND_RUNTIME_STATE.labels(state=candidate.value).set(1 if candidate == state else 0)
+
+        if state == _EstimandRuntimeState.CONFIGURED_DISABLED:
+            logger.info("Estimand disabled by configuration; using local experiment assignments")
+        elif state == _EstimandRuntimeState.NOT_CONFIGURED:
+            logger.warning(
+                "Estimand enabled but not fully configured or client unavailable; "
+                "using local experiment fallback"
+            )
+        elif (
+            state == _EstimandRuntimeState.AVAILABLE
+            and previous == _EstimandRuntimeState.TEMPORARILY_UNAVAILABLE
+        ):
+            logger.info("Estimand recovered; resuming remote experiment evaluation")
+
+        self._estimand_state = state
+
+    def _is_estimand_circuit_open(self, now: float | None = None) -> bool:
+        current = monotonic() if now is None else now
+        return current < self._estimand_retry_at
+
+    def _open_estimand_circuit(self, operation: str) -> None:
+        self._estimand_retry_at = monotonic() + _ESTIMAND_CIRCUIT_OPEN_SECONDS
+        ESTIMAND_CIRCUIT_OPENS_TOTAL.labels(operation=operation).inc()
+        self._set_estimand_runtime_state(_EstimandRuntimeState.TEMPORARILY_UNAVAILABLE)
+
+    def _reset_estimand_circuit(self) -> None:
+        self._estimand_retry_at = 0.0
+        self._set_estimand_runtime_state(_EstimandRuntimeState.AVAILABLE)
+
+    def _record_estimand_failure(self, operation: str, fallback: str) -> None:
+        ESTIMAND_CLIENT_FAILURES_TOTAL.labels(operation=operation, fallback=fallback).inc()
+
     def _should_use_estimand(self, feature: _FeatureSpec) -> bool:
         if feature.key == TRIAL_EXPERIMENT_KEY and not bool(
             getattr(self.config.experiments, "trial_enabled", False)
@@ -384,14 +447,17 @@ class ExperimentService:
             and bool(
                 self.estimand_config.enabled
                 and self.estimand_config.is_fully_configured()
-                and not self._estimand_disabled
                 and self.estimand_client is not None
             )
             and bool(feature.estimand_feature_key)
         )
 
     def _should_track_estimand_event(self, feature: _FeatureSpec) -> bool:
-        return self._should_use_estimand(feature) and bool(feature.estimand_feature_id)
+        return (
+            self._should_use_estimand(feature)
+            and bool(feature.estimand_feature_id)
+            and not self._is_estimand_circuit_open()
+        )
 
     def _fetch_estimand_config(self) -> Any | None:
         now = monotonic()
@@ -402,6 +468,10 @@ class ExperimentService:
             return self._fetched_config
         if self.estimand_client is None:
             return None
+        if self._is_estimand_circuit_open(now):
+            if self._cached_config_safe and self._fetched_config is not None:
+                return self._fetched_config
+            return None
 
         try:
             self._fetched_config = self.estimand_client.fetch_config(
@@ -410,14 +480,24 @@ class ExperimentService:
                 environment_id=self.estimand_config.environment_id,
             )
             self._fetched_config_at = now
+            self._cached_config_safe = True
+            self._reset_estimand_circuit()
             return self._fetched_config
         except (Exception, ConfigCacheMissError):
-            logger.opt(exception=True).warning(
-                "Failed to fetch Estimand config; using local experiment fallback"
+            fallback = (
+                "cached_config"
+                if self._cached_config_safe and self._fetched_config is not None
+                else "local_fallback"
             )
-            if self._fetched_config is not None:
+            self._record_estimand_failure("fetch_config", fallback)
+            logger.opt(exception=True).warning(
+                "Failed to fetch Estimand config; opening circuit for "
+                f"{_ESTIMAND_CIRCUIT_OPEN_SECONDS:.0f}s and using "
+                f"{'cached config' if fallback == 'cached_config' else 'local experiment fallback'}"
+            )
+            self._open_estimand_circuit("fetch_config")
+            if fallback == "cached_config":
                 return self._fetched_config
-            self._estimand_disabled = True
             return None
 
     def _is_feature_enabled_for_user(
@@ -526,10 +606,13 @@ class ExperimentService:
                     f"'{variation}' (reason='{reason}'); using local fallback without analytics"
                 )
         except Exception:
+            self._cached_config_safe = False
+            self._record_estimand_failure("evaluate_feature", "local_fallback")
             logger.opt(exception=True).warning(
-                "Failed to evaluate Estimand feature; using local fallback without analytics"
+                "Failed to evaluate Estimand feature; opening circuit for "
+                f"{_ESTIMAND_CIRCUIT_OPEN_SECONDS:.0f}s and using local fallback without analytics"
             )
-            self._estimand_disabled = True
+            self._open_estimand_circuit("evaluate_feature")
 
         return self._local_fallback_evaluation(
             feature,
