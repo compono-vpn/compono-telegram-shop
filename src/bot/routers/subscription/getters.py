@@ -180,9 +180,6 @@ async def payment_method_getter(
     experiment_context = build_checkout_context(experiment_service, user)
 
     for gateway in gateways:
-        gateway_type = (
-            gateway.type.value if hasattr(gateway.type, "value") else str(gateway.type)
-        )
         price_details = await billing.calculate_price(
             telegram_id=user.telegram_id,
             plan_id=plan.id,

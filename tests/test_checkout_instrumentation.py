@@ -34,13 +34,20 @@ class _ExperimentService:
         self.exposures: list[tuple[str, int]] = []
 
     def evaluate_feature_for_user(self, user, experiment_key: str | ExperimentFeature):
-        key = experiment_key.value if isinstance(experiment_key, ExperimentFeature) else experiment_key
+        key = (
+            experiment_key.value
+            if isinstance(experiment_key, ExperimentFeature)
+            else experiment_key
+        )
         payload = None
+        variant = f"{key}_v1_on"
         if key == ExperimentFeature.START_TIER_PRICE.value and self.start_tier_price is not None:
             payload = {"final_amount": str(self.start_tier_price)}
+            variant = "price_99"
         if key == ExperimentFeature.INTRO_PRICE.value and self.intro_price is not None:
             payload = {"final_amount": str(self.intro_price)}
-        return SimpleNamespace(feature_key=key, variant=f"{key}_v1_on", payload=payload)
+            variant = "intro_99"
+        return SimpleNamespace(feature_key=key, variant=variant, payload=payload)
 
     async def expose(self, experiment_key: str, telegram_id: int, created_at=None) -> str:
         self.exposures.append((experiment_key, telegram_id))
@@ -175,9 +182,7 @@ async def test_payment_method_getter_passes_context_to_pricing():
     raw = unwrap_inject(payment_method_getter)
     result = await raw(dm, make_user(telegram_id=777), billing, make_i18n(), exp_service)
 
-    prices = {
-        item["gateway_type"]: item["price"] for item in result["payment_methods"]
-    }
+    prices = {item["gateway_type"]: item["price"] for item in result["payment_methods"]}
     assert prices[PaymentGatewayType.YOOKASSA] == Decimal("12.00")
     assert prices[PaymentGatewayType.TELEGRAM_STARS] == Decimal("12.00")
 
@@ -225,11 +230,11 @@ async def test_on_payment_method_select_passes_experiment_context_to_create_paym
 
     payment_call = billing.calls[0]
     assert payment_call["experiment"]["feature_key"] == "start_tier_price"
-    assert payment_call["experiment"]["variant_key"] == "start_tier_price_v1_on"
-    assert payment_call["experiment"]["payload"] == {
-        "final_amount": "99.00"
-    }
-    assert payment_call["experiment"]["price_override"] == "99.00"
+    assert payment_call["experiment"]["variant_key"] == "price_99"
+    assert payment_call["experiment"]["payload"] == {"final_amount": "99.00"}
+    assert payment_call["experiment"]["price_override"] == {"price": "99"}
+    assert (ExperimentFeature.CHECKOUT_FLOW.value, 777) in exp_service.exposures
+    assert (ExperimentFeature.START_TIER_PRICE.value, 777) in exp_service.exposures
     assert ("checkout_started", 777) in exp_service.events
     assert ("payment_link_created", 777) in exp_service.events
 

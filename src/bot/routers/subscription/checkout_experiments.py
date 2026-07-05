@@ -22,6 +22,13 @@ class CheckoutExperimentContext:
     pricing_experiment: FeatureEvaluation | None
 
     @property
+    def feature_keys(self) -> tuple[str, ...]:
+        keys = [self.checkout_flow.feature_key]
+        if self.pricing_experiment is not None:
+            keys.append(self.pricing_experiment.feature_key)
+        return tuple(keys)
+
+    @property
     def billing_experiment(self) -> dict[str, Any] | None:
         if self.pricing_experiment is None:
             return None
@@ -38,18 +45,34 @@ class CheckoutExperimentContext:
         return experiment
 
 
-def _extract_price_override(payload: Any) -> str | None:
+def _format_amount(raw: Any) -> str | None:
+    try:
+        amount = Decimal(str(raw))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+    return format(amount.normalize(), "f")
+
+
+def _extract_price_override(payload: Any) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         return None
+
+    explicit_override = payload.get("price_override")
+    if isinstance(explicit_override, dict):
+        price = _format_amount(explicit_override.get("price"))
+        if price is None:
+            return None
+        override = {**explicit_override, "price": price}
+        return override
 
     for key in ("price_override", "final_amount", "price", "amount"):
         raw = payload.get(key)
         if raw is None:
             continue
-        try:
-            return str(Decimal(str(raw)))
-        except (InvalidOperation, TypeError, ValueError):
-            continue
+        price = _format_amount(raw)
+        if price is not None:
+            return {"price": price}
     return None
 
 
@@ -103,17 +126,22 @@ async def track_checkout_event(
         return
 
     cache[cache_key] = True
-    await experiment_service.expose(
-        ExperimentFeature.CHECKOUT_FLOW.value,
-        user.telegram_id,
-        user.created_at,
-    )
-    experiment_service.record_conversion(
-        ExperimentFeature.CHECKOUT_FLOW.value,
-        user.telegram_id,
-        event,
-        user.created_at,
-    )
+    context = build_checkout_context(experiment_service, user)
+    if context is None:
+        return
+
+    for feature_key in context.feature_keys:
+        await experiment_service.expose(
+            feature_key,
+            user.telegram_id,
+            user.created_at,
+        )
+        experiment_service.record_conversion(
+            feature_key,
+            user.telegram_id,
+            event,
+            user.created_at,
+        )
 
 
 async def track_payment_outcome(
@@ -124,14 +152,19 @@ async def track_payment_outcome(
     if experiment_service is None:
         return
 
-    await experiment_service.expose(
-        ExperimentFeature.CHECKOUT_FLOW.value,
-        user.telegram_id,
-        user.created_at,
-    )
-    experiment_service.record_conversion(
-        ExperimentFeature.CHECKOUT_FLOW.value,
-        user.telegram_id,
-        event,
-        user.created_at,
-    )
+    context = build_checkout_context(experiment_service, user)
+    if context is None:
+        return
+
+    for feature_key in context.feature_keys:
+        await experiment_service.expose(
+            feature_key,
+            user.telegram_id,
+            user.created_at,
+        )
+        experiment_service.record_conversion(
+            feature_key,
+            user.telegram_id,
+            event,
+            user.created_at,
+        )
