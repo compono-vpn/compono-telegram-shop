@@ -153,9 +153,17 @@ def _plan_with_durations(plan_id: int, days: list[int]) -> PlanDto:
     )
 
 
+def _start_plan_with_durations(plan_id: int, days: list[int]) -> PlanDto:
+    plan = _plan_with_durations(plan_id, days)
+    plan.name = "Start"
+    plan.traffic_limit = 100
+    plan.device_limit = 2
+    return plan
+
+
 @pytest.mark.asyncio
 async def test_duration_getter_uses_experiment_pricing_context():
-    plan = _plan_with_durations(plan_id=42, days=[30, 60])
+    plan = _start_plan_with_durations(plan_id=42, days=[30, 60])
     dm = make_dialog_manager()
     dm.dialog_data["plandto"] = plan.model_dump()
 
@@ -166,7 +174,7 @@ async def test_duration_getter_uses_experiment_pricing_context():
     result = await raw(dm, make_user(telegram_id=777), make_i18n(), billing, exp_service)
 
     by_days = {item["days"]: item["final_amount"] for item in result["durations"]}
-    assert by_days == {30: Decimal("19.00"), 60: Decimal("19.00")}
+    assert by_days == {30: Decimal("19.00"), 60: Decimal("10")}
 
 
 @pytest.mark.asyncio
@@ -175,6 +183,7 @@ async def test_payment_method_getter_passes_context_to_pricing():
     dm = make_dialog_manager()
     dm.dialog_data["plandto"] = plan.model_dump()
     dm.dialog_data["selected_duration"] = 30
+    dm.dialog_data["purchase_type"] = PurchaseType.NEW
 
     billing = _Billing()
     exp_service = _ExperimentService(intro_price=Decimal("12.00"))
@@ -203,7 +212,7 @@ async def test_duration_and_price_getters_fallback_without_experiments():
 
 @pytest.mark.asyncio
 async def test_on_payment_method_select_passes_experiment_context_to_create_payment():
-    plan = _plan_with_durations(plan_id=42, days=[30])
+    plan = _start_plan_with_durations(plan_id=42, days=[30])
     dm = make_dialog_manager()
     dm.middleware_data[USER_KEY] = make_user(telegram_id=777)
     dm.dialog_data["plandto"] = plan.model_dump()
@@ -239,3 +248,35 @@ async def test_on_payment_method_select_passes_experiment_context_to_create_paym
     assert ("payment_link_created", 777) in exp_service.events
 
     dm.switch_to.assert_awaited_once_with(state=Subscription.CONFIRM)
+
+
+@pytest.mark.asyncio
+async def test_on_payment_method_select_does_not_pass_start_price_for_annual_duration():
+    plan = _start_plan_with_durations(plan_id=42, days=[365])
+    dm = make_dialog_manager()
+    dm.middleware_data[USER_KEY] = make_user(telegram_id=777)
+    dm.dialog_data["plandto"] = plan.model_dump()
+    dm.dialog_data["selected_duration"] = 365
+    dm.dialog_data["purchase_type"] = PurchaseType.RENEW
+    dm.switch_to = AsyncMock()
+
+    billing = _Billing()
+    notification_service = AsyncMock()
+    exp_service = _ExperimentService(start_tier_price=Decimal("99.00"))
+    raw = unwrap_inject(on_payment_method_select)
+    redis_client = AsyncMock()
+
+    await raw(
+        MagicMock(spec=CallbackQuery),
+        MagicMock(),
+        dm,
+        PaymentGatewayType.TELEGRAM_STARS,
+        billing,
+        exp_service,
+        notification_service,
+        redis_client,
+    )
+
+    assert billing.calls[0]["duration_days"] == 365
+    assert billing.calls[0]["experiment"] is None
+    assert (ExperimentFeature.START_TIER_PRICE.value, 777) not in exp_service.exposures

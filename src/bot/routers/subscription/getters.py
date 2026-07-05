@@ -111,10 +111,17 @@ async def duration_getter(
     only_single_plan = dialog_manager.dialog_data.get("only_single_plan", False)
     dialog_manager.dialog_data["is_free"] = False
     durations = []
-    experiment_context = build_checkout_context(experiment_service, user)
+    purchase_type = dialog_manager.dialog_data.get("purchase_type")
 
     for duration in plan.durations:
         key, kw = i18n_format_days(duration.days)
+        experiment_context = build_checkout_context(
+            experiment_service,
+            user,
+            plan=plan,
+            duration_days=duration.days,
+            purchase_type=purchase_type,
+        )
         price_details = await billing.calculate_price(
             telegram_id=user.telegram_id,
             plan_id=plan.id,
@@ -177,7 +184,14 @@ async def payment_method_getter(
         raise ValueError(f"Duration '{selected_duration}' not found in plan '{plan.name}'")
 
     payment_methods = []
-    experiment_context = build_checkout_context(experiment_service, user)
+    purchase_type = dialog_manager.dialog_data.get("purchase_type")
+    experiment_context = build_checkout_context(
+        experiment_service,
+        user,
+        plan=plan,
+        duration_days=duration.days,
+        purchase_type=purchase_type,
+    )
 
     for gateway in gateways:
         price_details = await billing.calculate_price(
