@@ -54,6 +54,7 @@ class TestCreatePaymentSchedulesCancelSurveyCheck:
             billing=billing,
             notification_service=notification_service,
             redis_client=redis_client,
+            experiment_service=None,
         )
 
         assert result is not None
@@ -78,6 +79,7 @@ class TestCreatePaymentSchedulesCancelSurveyCheck:
             billing=billing,
             notification_service=notification_service,
             redis_client=redis_client,
+            experiment_service=None,
         )
 
         assert result is None
