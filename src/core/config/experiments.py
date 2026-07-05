@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Self
 
 from pydantic import Field, SecretStr, model_validator
@@ -14,6 +15,16 @@ class EstimandConfig(BaseConfig, env_prefix="APP_EXPERIMENT_ESTIMAND_"):
     environment_id: str = ""
     feature_key: str = "trial_offer"
     feature_id: str = ""
+    trial_length_feature_key: str = "trial_length"
+    trial_length_feature_id: str = ""
+    start_tier_price_feature_key: str = "start_tier_price"
+    start_tier_price_feature_id: str = ""
+    intro_price_feature_key: str = "intro_price"
+    intro_price_feature_id: str = ""
+    checkout_flow_feature_key: str = "checkout_flow"
+    checkout_flow_feature_id: str = ""
+    payment_rescue_feature_key: str = "payment_rescue"
+    payment_rescue_feature_id: str = ""
     on_variant: str = "trial_on"
     off_variant: str = "trial_off"
     conversion_event: str = "trial_activated"
@@ -26,14 +37,18 @@ class EstimandConfig(BaseConfig, env_prefix="APP_EXPERIMENT_ESTIMAND_"):
             and self.organization_id
             and self.project_id
             and self.environment_id
-            and self.feature_key
-            and self.feature_id
         )
 
 
 class ExperimentsConfig(BaseConfig, env_prefix="APP_EXPERIMENT_"):
     trial_enabled: bool = False
     trial_on_weight: int = 50
+    trial_offer_start_date: datetime | None = None
+    trial_length_start_date: datetime | None = None
+    start_tier_price_start_date: datetime | None = None
+    intro_price_start_date: datetime | None = None
+    checkout_flow_start_date: datetime | None = None
+    payment_rescue_start_date: datetime | None = None
     estimand: EstimandConfig = Field(default_factory=EstimandConfig)
 
     @model_validator(mode="after")

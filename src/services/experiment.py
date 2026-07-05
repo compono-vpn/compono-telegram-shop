@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from loguru import logger
@@ -9,6 +11,7 @@ from redis.asyncio import Redis
 from src.core.config import AppConfig
 from src.core.experiments import Experiment, assign_variant
 from src.core.metrics import EXPERIMENT_CONVERSIONS_TOTAL, EXPERIMENT_EXPOSURES_TOTAL
+from src.models.dto.user import UserDto
 
 try:
     from estimand_sdk import (
@@ -31,6 +34,15 @@ TRIAL_VARIANT_OFF = "trial_off"
 _EXPOSURE_TTL = 60 * 60 * 24 * 30
 
 
+class ExperimentFeature(str, Enum):
+    TRIAL_OFFER = "trial_offer"
+    TRIAL_LENGTH = "trial_length"
+    START_TIER_PRICE = "start_tier_price"
+    INTRO_PRICE = "intro_price"
+    CHECKOUT_FLOW = "checkout_flow"
+    PAYMENT_RESCUE = "payment_rescue"
+
+
 @dataclass(frozen=True)
 class _ResolvedEstimandConfig:
     enabled: bool = False
@@ -41,6 +53,16 @@ class _ResolvedEstimandConfig:
     environment_id: str = ""
     feature_key: str = TRIAL_EXPERIMENT_KEY
     feature_id: str = ""
+    trial_length_feature_key: str = ExperimentFeature.TRIAL_LENGTH.value
+    trial_length_feature_id: str = ""
+    start_tier_price_feature_key: str = ExperimentFeature.START_TIER_PRICE.value
+    start_tier_price_feature_id: str = ""
+    intro_price_feature_key: str = ExperimentFeature.INTRO_PRICE.value
+    intro_price_feature_id: str = ""
+    checkout_flow_feature_key: str = ExperimentFeature.CHECKOUT_FLOW.value
+    checkout_flow_feature_id: str = ""
+    payment_rescue_feature_key: str = ExperimentFeature.PAYMENT_RESCUE.value
+    payment_rescue_feature_id: str = ""
     on_variant: str = TRIAL_VARIANT_ON
     off_variant: str = TRIAL_VARIANT_OFF
     conversion_event: str = "trial_activated"
@@ -53,9 +75,35 @@ class _ResolvedEstimandConfig:
             and self.organization_id
             and self.project_id
             and self.environment_id
-            and self.feature_key
-            and self.feature_id
         )
+
+
+@dataclass(frozen=True)
+class _FeatureSpec:
+    key: str
+    experiment: Experiment
+    start_date: datetime | None
+    use_estimand: bool
+    estimand_feature_key: str
+    estimand_feature_id: str
+    estimand_conversion_event: str
+    estimand_on_variant: str
+    estimand_off_variant: str
+
+
+@dataclass(frozen=True)
+class _FeatureEvaluation:
+    feature_key: str
+    variant: str
+    payload: Any | None
+    track_events: bool
+
+
+@dataclass(frozen=True)
+class FeatureEvaluation:
+    feature_key: str
+    variant: str
+    payload: Any | None
 
 
 class ExperimentService:
@@ -63,12 +111,13 @@ class ExperimentService:
         self,
         config: AppConfig,
         redis_client: Redis,
+        estimand_client: Any | None = None,
     ) -> None:
         self.config = config
         self.redis_client = redis_client
         self.estimand_config = self._resolve_estimand_config()
-        self.estimand_client = self._build_estimand_client()
-        self._experiments = self._build_experiments(config)
+        self.estimand_client = estimand_client or self._build_estimand_client()
+        self._features = self._build_features(config, self.estimand_config)
         self._fetched_config = None
         self._estimand_disabled = False
 
@@ -85,6 +134,10 @@ class ExperimentService:
         if hasattr(value, "get_secret_value"):
             return value.get_secret_value().strip()
         return str(value).strip() if value else ""
+
+    @staticmethod
+    def _coerce_start_date(value: Any) -> datetime | None:
+        return value if isinstance(value, datetime) else None
 
     @classmethod
     def _resolve_trial_variants(cls, experiments_cfg: Any) -> tuple[str, str]:
@@ -114,6 +167,46 @@ class ExperimentService:
                 TRIAL_EXPERIMENT_KEY,
             ),
             feature_id=self._as_str(getattr(estimand_cfg, "feature_id", None), ""),
+            trial_length_feature_key=self._as_str(
+                getattr(estimand_cfg, "trial_length_feature_key", None),
+                ExperimentFeature.TRIAL_LENGTH.value,
+            ),
+            trial_length_feature_id=self._as_str(
+                getattr(estimand_cfg, "trial_length_feature_id", None),
+                "",
+            ),
+            start_tier_price_feature_key=self._as_str(
+                getattr(estimand_cfg, "start_tier_price_feature_key", None),
+                ExperimentFeature.START_TIER_PRICE.value,
+            ),
+            start_tier_price_feature_id=self._as_str(
+                getattr(estimand_cfg, "start_tier_price_feature_id", None),
+                "",
+            ),
+            intro_price_feature_key=self._as_str(
+                getattr(estimand_cfg, "intro_price_feature_key", None),
+                ExperimentFeature.INTRO_PRICE.value,
+            ),
+            intro_price_feature_id=self._as_str(
+                getattr(estimand_cfg, "intro_price_feature_id", None),
+                "",
+            ),
+            checkout_flow_feature_key=self._as_str(
+                getattr(estimand_cfg, "checkout_flow_feature_key", None),
+                ExperimentFeature.CHECKOUT_FLOW.value,
+            ),
+            checkout_flow_feature_id=self._as_str(
+                getattr(estimand_cfg, "checkout_flow_feature_id", None),
+                "",
+            ),
+            payment_rescue_feature_key=self._as_str(
+                getattr(estimand_cfg, "payment_rescue_feature_key", None),
+                ExperimentFeature.PAYMENT_RESCUE.value,
+            ),
+            payment_rescue_feature_id=self._as_str(
+                getattr(estimand_cfg, "payment_rescue_feature_id", None),
+                "",
+            ),
             on_variant=self._as_str(getattr(estimand_cfg, "on_variant", None), TRIAL_VARIANT_ON),
             off_variant=self._as_str(getattr(estimand_cfg, "off_variant", None), TRIAL_VARIANT_OFF),
             conversion_event=self._as_str(
@@ -123,31 +216,148 @@ class ExperimentService:
             request_timeout=float(getattr(estimand_cfg, "request_timeout", 3.0)),
         )
 
-    def _get_trial_variants(self, config: AppConfig | None = None) -> tuple[str, str]:
-        experiments_cfg = getattr(config or self.config, "experiments", None)
-        return self._resolve_trial_variants(experiments_cfg)
-
     @staticmethod
-    def _build_experiments(config: AppConfig) -> dict[str, Experiment]:
+    def _binary_variant_set(feature_key: str, suffix: str) -> tuple[str, str]:
+        return (f"{feature_key}_{suffix}_off", f"{feature_key}_{suffix}_on")
+
+    def _build_features(
+        self,
+        config: AppConfig,
+        estimand_config: _ResolvedEstimandConfig,
+    ) -> dict[str, _FeatureSpec]:
         cfg = config.experiments
-        trial_on, trial_off = ExperimentService._resolve_trial_variants(cfg)
-        trial = Experiment(
-            key=TRIAL_EXPERIMENT_KEY,
-            variants=(
-                trial_on,
-                trial_off,
+        trial_on, trial_off = self._resolve_trial_variants(cfg)
+
+        trial_length_off, trial_length_on = self._binary_variant_set("trial_length", "v1")
+        (
+            start_tier_price_off,
+            start_tier_price_on,
+        ) = self._binary_variant_set("start_tier_price", "v1")
+        intro_price_off, intro_price_on = self._binary_variant_set("intro_price", "v1")
+        checkout_flow_off, checkout_flow_on = self._binary_variant_set("checkout_flow", "v1")
+        payment_rescue_off, payment_rescue_on = self._binary_variant_set("payment_rescue", "v1")
+
+        return {
+            TRIAL_EXPERIMENT_KEY: _FeatureSpec(
+                key=TRIAL_EXPERIMENT_KEY,
+                experiment=Experiment(
+                    key=TRIAL_EXPERIMENT_KEY,
+                    variants=(trial_on, trial_off),
+                    weights=(cfg.trial_on_weight, 100 - cfg.trial_on_weight),
+                    salt="trial_offer_v1",
+                    enabled=bool(getattr(cfg, "trial_enabled", False)),
+                ),
+                start_date=self._coerce_start_date(
+                    getattr(cfg, "trial_offer_start_date", None)
+                ),
+                use_estimand=True,
+                estimand_feature_key=estimand_config.feature_key,
+                estimand_feature_id=estimand_config.feature_id,
+                estimand_conversion_event=estimand_config.conversion_event,
+                estimand_on_variant=estimand_config.on_variant,
+                estimand_off_variant=estimand_config.off_variant,
             ),
-            weights=(cfg.trial_on_weight, 100 - cfg.trial_on_weight),
-            salt="trial_offer_v1",
-            enabled=bool(getattr(cfg, "trial_enabled", False)),
-        )
-        return {trial.key: trial}
+            ExperimentFeature.TRIAL_LENGTH.value: _FeatureSpec(
+                key=ExperimentFeature.TRIAL_LENGTH.value,
+                experiment=Experiment(
+                    key=ExperimentFeature.TRIAL_LENGTH.value,
+                    variants=(trial_length_off, trial_length_on),
+                    weights=(100, 0),
+                    salt="trial_length_v1",
+                    enabled=False,
+                ),
+                start_date=self._coerce_start_date(
+                    getattr(cfg, "trial_length_start_date", None)
+                ),
+                use_estimand=True,
+                estimand_feature_key=estimand_config.trial_length_feature_key,
+                estimand_feature_id=estimand_config.trial_length_feature_id,
+                estimand_conversion_event=estimand_config.conversion_event,
+                estimand_on_variant=ExperimentFeature.TRIAL_LENGTH.value + "_on",
+                estimand_off_variant=ExperimentFeature.TRIAL_LENGTH.value + "_off",
+            ),
+            ExperimentFeature.START_TIER_PRICE.value: _FeatureSpec(
+                key=ExperimentFeature.START_TIER_PRICE.value,
+                experiment=Experiment(
+                    key=ExperimentFeature.START_TIER_PRICE.value,
+                    variants=(start_tier_price_off, start_tier_price_on),
+                    weights=(100, 0),
+                    salt="start_tier_price_v1",
+                    enabled=False,
+                ),
+                start_date=self._coerce_start_date(
+                    getattr(cfg, "start_tier_price_start_date", None)
+                ),
+                use_estimand=True,
+                estimand_feature_key=estimand_config.start_tier_price_feature_key,
+                estimand_feature_id=estimand_config.start_tier_price_feature_id,
+                estimand_conversion_event=estimand_config.conversion_event,
+                estimand_on_variant=ExperimentFeature.START_TIER_PRICE.value + "_on",
+                estimand_off_variant=ExperimentFeature.START_TIER_PRICE.value + "_off",
+            ),
+            ExperimentFeature.INTRO_PRICE.value: _FeatureSpec(
+                key=ExperimentFeature.INTRO_PRICE.value,
+                experiment=Experiment(
+                    key=ExperimentFeature.INTRO_PRICE.value,
+                    variants=(intro_price_off, intro_price_on),
+                    weights=(100, 0),
+                    salt="intro_price_v1",
+                    enabled=False,
+                ),
+                start_date=self._coerce_start_date(
+                    getattr(cfg, "intro_price_start_date", None)
+                ),
+                use_estimand=True,
+                estimand_feature_key=estimand_config.intro_price_feature_key,
+                estimand_feature_id=estimand_config.intro_price_feature_id,
+                estimand_conversion_event=estimand_config.conversion_event,
+                estimand_on_variant=ExperimentFeature.INTRO_PRICE.value + "_on",
+                estimand_off_variant=ExperimentFeature.INTRO_PRICE.value + "_off",
+            ),
+            ExperimentFeature.CHECKOUT_FLOW.value: _FeatureSpec(
+                key=ExperimentFeature.CHECKOUT_FLOW.value,
+                experiment=Experiment(
+                    key=ExperimentFeature.CHECKOUT_FLOW.value,
+                    variants=(checkout_flow_off, checkout_flow_on),
+                    weights=(100, 0),
+                    salt="checkout_flow_v1",
+                    enabled=False,
+                ),
+                start_date=self._coerce_start_date(
+                    getattr(cfg, "checkout_flow_start_date", None)
+                ),
+                use_estimand=True,
+                estimand_feature_key=estimand_config.checkout_flow_feature_key,
+                estimand_feature_id=estimand_config.checkout_flow_feature_id,
+                estimand_conversion_event=estimand_config.conversion_event,
+                estimand_on_variant=ExperimentFeature.CHECKOUT_FLOW.value + "_on",
+                estimand_off_variant=ExperimentFeature.CHECKOUT_FLOW.value + "_off",
+            ),
+            ExperimentFeature.PAYMENT_RESCUE.value: _FeatureSpec(
+                key=ExperimentFeature.PAYMENT_RESCUE.value,
+                experiment=Experiment(
+                    key=ExperimentFeature.PAYMENT_RESCUE.value,
+                    variants=(payment_rescue_off, payment_rescue_on),
+                    weights=(100, 0),
+                    salt="payment_rescue_v1",
+                    enabled=False,
+                ),
+                start_date=self._coerce_start_date(
+                    getattr(cfg, "payment_rescue_start_date", None)
+                ),
+                use_estimand=True,
+                estimand_feature_key=estimand_config.payment_rescue_feature_key,
+                estimand_feature_id=estimand_config.payment_rescue_feature_id,
+                estimand_conversion_event=estimand_config.conversion_event,
+                estimand_on_variant=ExperimentFeature.PAYMENT_RESCUE.value + "_on",
+                estimand_off_variant=ExperimentFeature.PAYMENT_RESCUE.value + "_off",
+            ),
+        }
 
     def _build_estimand_client(self) -> Any | None:
         if (
             not self.estimand_config.enabled
             or not self.estimand_config.is_fully_configured()
-            or not bool(getattr(self.config.experiments, "trial_enabled", False))
             or EstimandClient is None
             or EstimandClientConfig is None
         ):
@@ -167,14 +377,25 @@ class ExperimentService:
             )
             return None
 
-    def _trial_enabled(self) -> bool:
-        return bool(
-            self.estimand_config.enabled
-            and self.estimand_config.is_fully_configured()
-            and bool(getattr(self.config.experiments, "trial_enabled", False))
-            and not self._estimand_disabled
-            and self.estimand_client is not None
+    def _should_use_estimand(self, feature: _FeatureSpec) -> bool:
+        if feature.key == TRIAL_EXPERIMENT_KEY and not bool(
+            getattr(self.config.experiments, "trial_enabled", False)
+        ):
+            return False
+
+        return (
+            feature.use_estimand
+            and bool(
+                self.estimand_config.enabled
+                and self.estimand_config.is_fully_configured()
+                and not self._estimand_disabled
+                and self.estimand_client is not None
+            )
+            and bool(feature.estimand_feature_key)
         )
+
+    def _should_track_estimand_event(self, feature: _FeatureSpec) -> bool:
+        return self._should_use_estimand(feature) and bool(feature.estimand_feature_id)
 
     def _fetch_estimand_config(self) -> Any | None:
         if self._fetched_config is not None:
@@ -196,53 +417,125 @@ class ExperimentService:
             self._estimand_disabled = True
             return None
 
-    def _should_use_estimand(self, experiment_key: str) -> bool:
-        return bool(
-            self._trial_enabled()
-            and experiment_key == TRIAL_EXPERIMENT_KEY
-            and self.estimand_client is not None
-        )
+    def _is_feature_enabled_for_user(
+        self,
+        feature: _FeatureSpec,
+        created_at: datetime | None,
+    ) -> bool:
+        if feature.start_date is None:
+            return True
 
-    def variant(self, experiment_key: str, telegram_id: int) -> str:
-        if not self._should_use_estimand(experiment_key):
-            return assign_variant(self._experiments[experiment_key], telegram_id)
+        if created_at is None:
+            return False
+
+        return created_at >= feature.start_date
+
+    def _feature_for_key(self, experiment_key: str) -> _FeatureSpec:
+        return self._features[experiment_key]
+
+    def _evaluate(
+        self,
+        experiment_key: str,
+        telegram_id: int,
+        created_at: datetime | None,
+    ) -> _FeatureEvaluation:
+        feature = self._feature_for_key(experiment_key)
+
+        if not self._is_feature_enabled_for_user(feature, created_at):
+            return _FeatureEvaluation(
+                feature_key=feature.key,
+                variant=feature.experiment.variants[0],
+                payload=None,
+                track_events=False,
+            )
+
+        if not self._should_use_estimand(feature):
+            return _FeatureEvaluation(
+                feature_key=feature.key,
+                variant=assign_variant(feature.experiment, telegram_id),
+                payload=None,
+                track_events=True,
+            )
 
         try:
             payload = self._fetch_estimand_config()
             if payload is None:
-                return assign_variant(self._experiments[experiment_key], telegram_id)
+                return _FeatureEvaluation(
+                    feature_key=feature.key,
+                    variant=assign_variant(feature.experiment, telegram_id),
+                    payload=None,
+                    track_events=True,
+                )
 
             result = self.estimand_client.evaluate_feature(
-                feature_key=self.estimand_config.feature_key,
+                feature_key=feature.estimand_feature_key,
                 unit_id=str(telegram_id),
                 config=payload,
             )
             variation = getattr(result, "variation_key", None)
-            on_variant, off_variant = self._get_trial_variants(self.config)
-            if variation in (on_variant, off_variant):
-                return variation
+            if self._is_valid_estimand_variation(feature, variation):
+                return _FeatureEvaluation(
+                    feature_key=feature.key,
+                    variant=variation,
+                    payload=getattr(result, "value", None),
+                    track_events=True,
+                )
 
             logger.warning(
-                f"Estimand experiment '{experiment_key}' returned unexpected variant "
+                f"Estimand feature '{experiment_key}' returned unexpected variant "
                 f"'{variation}', using local assignment"
             )
         except Exception:
             logger.opt(exception=True).warning(
-                "Failed to evaluate Estimand experiment; using local fallback"
+                "Failed to evaluate Estimand feature; using local fallback"
             )
             self._estimand_disabled = True
 
-        return assign_variant(self._experiments[experiment_key], telegram_id)
+        return _FeatureEvaluation(
+            feature_key=feature.key,
+            variant=assign_variant(feature.experiment, telegram_id),
+            payload=None,
+            track_events=True,
+        )
 
-    def _track_estimand_exposure(self, telegram_id: int, variant: str) -> None:
-        if not self._trial_enabled():
+    def _get_feature_variants(self, experiment_key: str) -> tuple[str, str]:
+        feature = self._feature_for_key(experiment_key)
+        on_default = feature.experiment.variants[0]
+        off_default = feature.experiment.variants[1]
+
+        if feature.key == TRIAL_EXPERIMENT_KEY:
+            on_default = self._as_str(feature.estimand_on_variant, on_default)
+            off_default = self._as_str(feature.estimand_off_variant, off_default)
+
+        return on_default, off_default
+
+    def _is_valid_estimand_variation(
+        self,
+        feature: _FeatureSpec,
+        variation: str | None,
+    ) -> bool:
+        if not variation:
+            return False
+
+        if feature.key == TRIAL_EXPERIMENT_KEY:
+            return variation in feature.experiment.variants
+
+        return True
+
+    def _track_estimand_exposure(
+        self,
+        feature: _FeatureSpec,
+        telegram_id: int,
+        variant: str,
+    ) -> None:
+        if not self._should_track_estimand_event(feature):
             return
 
         try:
             self.estimand_client.track_exposure(
                 project_id=self.estimand_config.project_id,
                 environment_id=self.estimand_config.environment_id,
-                feature_id=self.estimand_config.feature_id,
+                feature_id=feature.estimand_feature_id,
                 unit_id=str(telegram_id),
                 variant_key=variant,
             )
@@ -251,11 +544,17 @@ class ExperimentService:
                 "Failed to send Estimand exposure event; keeping local metrics path"
             )
 
-    def _track_estimand_conversion(self, telegram_id: int, variant: str, event: str) -> None:
-        if not self._trial_enabled():
+    def _track_estimand_conversion(
+        self,
+        feature: _FeatureSpec,
+        telegram_id: int,
+        variant: str,
+        event: str,
+    ) -> None:
+        if not self._should_track_estimand_event(feature):
             return
 
-        event_name = event or self.estimand_config.conversion_event
+        event_name = event or feature.estimand_conversion_event
         if not event_name:
             return
 
@@ -263,7 +562,7 @@ class ExperimentService:
             self.estimand_client.track_conversion(
                 project_id=self.estimand_config.project_id,
                 environment_id=self.estimand_config.environment_id,
-                feature_id=self.estimand_config.feature_id,
+                feature_id=feature.estimand_feature_id,
                 unit_id=str(telegram_id),
                 event_name=event_name,
                 variant_key=variant,
@@ -273,8 +572,43 @@ class ExperimentService:
                 "Failed to send Estimand conversion event; keeping local metrics path"
             )
 
-    async def expose(self, experiment_key: str, telegram_id: int) -> str:
-        variant = self.variant(experiment_key, telegram_id)
+    def variant(
+        self,
+        experiment_key: str,
+        telegram_id: int,
+        created_at: datetime | None = None,
+    ) -> str:
+        return self._evaluate(experiment_key, telegram_id, created_at).variant
+
+    def evaluate_feature_for_user(
+        self,
+        user: UserDto,
+        experiment_key: str | ExperimentFeature,
+    ) -> FeatureEvaluation:
+        feature_key = self._as_str(
+            experiment_key if isinstance(experiment_key, str) else experiment_key.value,
+            "",
+        )
+        evaluation = self._evaluate(feature_key, user.telegram_id, user.created_at)
+        return FeatureEvaluation(
+            feature_key=evaluation.feature_key,
+            variant=evaluation.variant,
+            payload=evaluation.payload,
+        )
+
+    async def expose(
+        self,
+        experiment_key: str,
+        telegram_id: int,
+        created_at: datetime | None = None,
+    ) -> str:
+        feature = self._feature_for_key(experiment_key)
+        evaluation = self._evaluate(experiment_key, telegram_id, created_at)
+        variant = evaluation.variant
+
+        if not evaluation.track_events:
+            return variant
+
         try:
             first_time = await self.redis_client.set(
                 name=f"exp_exposed:{experiment_key}:{telegram_id}",
@@ -284,21 +618,37 @@ class ExperimentService:
             )
             if first_time:
                 EXPERIMENT_EXPOSURES_TOTAL.labels(experiment=experiment_key, variant=variant).inc()
-                if self._trial_enabled():
-                    self._track_estimand_exposure(telegram_id, variant)
+                self._track_estimand_exposure(feature, telegram_id, variant)
         except Exception:
             logger.opt(exception=True).warning("Failed to record experiment exposure")
         return variant
 
-    def record_conversion(self, experiment_key: str, telegram_id: int, event: str) -> None:
-        variant = self.variant(experiment_key, telegram_id)
-        EXPERIMENT_CONVERSIONS_TOTAL.labels(
-            experiment=experiment_key, variant=variant, event=event
-        ).inc()
-        if self._trial_enabled():
-            self._track_estimand_conversion(telegram_id, variant, event)
+    def record_conversion(
+        self,
+        experiment_key: str,
+        telegram_id: int,
+        event: str,
+        created_at: datetime | None = None,
+    ) -> None:
+        feature = self._feature_for_key(experiment_key)
+        evaluation = self._evaluate(experiment_key, telegram_id, created_at)
 
-    async def is_trial_offer_enabled(self, telegram_id: int) -> bool:
-        variant = await self.expose(TRIAL_EXPERIMENT_KEY, telegram_id)
-        on_variant, _ = self._get_trial_variants(self.config)
+        if not evaluation.track_events:
+            return
+
+        EXPERIMENT_CONVERSIONS_TOTAL.labels(
+            experiment=experiment_key, variant=evaluation.variant, event=event
+        ).inc()
+        self._track_estimand_conversion(feature, telegram_id, evaluation.variant, event)
+
+    async def is_trial_offer_enabled(self, user_or_telegram_id: int | UserDto) -> bool:
+        if isinstance(user_or_telegram_id, UserDto):
+            telegram_id = user_or_telegram_id.telegram_id
+            created_at = user_or_telegram_id.created_at
+        else:
+            telegram_id = user_or_telegram_id
+            created_at = None
+
+        variant = await self.expose(TRIAL_EXPERIMENT_KEY, telegram_id, created_at)
+        on_variant, _ = self._get_feature_variants(TRIAL_EXPERIMENT_KEY)
         return variant == on_variant

@@ -36,7 +36,7 @@ async def menu_getter(
     try:
         trial_plan = await billing.get_trial_plan()
         has_used_trial = await billing.has_used_trial(user.telegram_id)
-        trial_offer_enabled = await experiment_service.is_trial_offer_enabled(user.telegram_id)
+        trial_offer_enabled = await experiment_service.is_trial_offer_enabled(user)
         settings = await billing.get_settings()
         support_username = config.bot.support_username.get_secret_value()
         ref_link = await referral_service.get_ref_link(user.referral_code)

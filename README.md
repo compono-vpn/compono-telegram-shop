@@ -239,6 +239,12 @@ Now, open the .env file and update the variables:
 - **`REMNAWAVE_WEBHOOK_SECRET`** : Must match the value of `WEBHOOK_SECRET_HEADER` from `.env` the panel.
 - **`APP_EXPERIMENT_TRIAL_ENABLED`** : Enable local trial A/B (default `false`).
 - **`APP_EXPERIMENT_TRIAL_ON_WEIGHT`** : Trial-on percentage when local experiment is enabled.
+- **`APP_EXPERIMENT_TRIAL_OFFER_START_DATE`** : Start date-time (ISO-8601 UTC) for `trial_offer` gate.
+- **`APP_EXPERIMENT_TRIAL_LENGTH_START_DATE`** : Start date-time (ISO-8601 UTC) for `trial_length` feature gating.
+- **`APP_EXPERIMENT_START_TIER_PRICE_START_DATE`** : Start date-time (ISO-8601 UTC) for `start_tier_price` feature gating.
+- **`APP_EXPERIMENT_INTRO_PRICE_START_DATE`** : Start date-time (ISO-8601 UTC) for `intro_price` feature gating.
+- **`APP_EXPERIMENT_CHECKOUT_FLOW_START_DATE`** : Start date-time (ISO-8601 UTC) for `checkout_flow` feature gating.
+- **`APP_EXPERIMENT_PAYMENT_RESCUE_START_DATE`** : Start date-time (ISO-8601 UTC) for `payment_rescue` feature gating.
 - **`APP_EXPERIMENT_ESTIMAND_ENABLED`** : Enable Estimand-driven assignment/events for production (default `false`).
 - **`APP_EXPERIMENT_ESTIMAND_BASE_URL`** : Estimand API base URL.
 - **`APP_EXPERIMENT_ESTIMAND_ORGANIZATION_ID`** : Estimand organization id used for config fetch.
@@ -246,6 +252,11 @@ Now, open the .env file and update the variables:
 - **`APP_EXPERIMENT_ESTIMAND_ENVIRONMENT_ID`** : Estimand environment id used for config fetch.
 - **`APP_EXPERIMENT_ESTIMAND_FEATURE_KEY`** : Feature key from Estimand (set to `trial_offer`).
 - **`APP_EXPERIMENT_ESTIMAND_FEATURE_ID`** : UUID of that feature (required to send events).
+- **`APP_EXPERIMENT_ESTIMAND_TRIAL_LENGTH_FEATURE_ID`** : Optional UUID for `trial_length` feature.
+- **`APP_EXPERIMENT_ESTIMAND_START_TIER_PRICE_FEATURE_ID`** : Optional UUID for `start_tier_price` feature.
+- **`APP_EXPERIMENT_ESTIMAND_INTRO_PRICE_FEATURE_ID`** : Optional UUID for `intro_price` feature.
+- **`APP_EXPERIMENT_ESTIMAND_CHECKOUT_FLOW_FEATURE_ID`** : Optional UUID for `checkout_flow` feature.
+- **`APP_EXPERIMENT_ESTIMAND_PAYMENT_RESCUE_FEATURE_ID`** : Optional UUID for `payment_rescue` feature.
 - **`APP_EXPERIMENT_ESTIMAND_ON_VARIANT`** : Name of the enabled trial variant.
 - **`APP_EXPERIMENT_ESTIMAND_OFF_VARIANT`** : Name of the disabled trial variant.
 - **`APP_EXPERIMENT_ESTIMAND_CONVERSION_EVENT`** : Name of conversion event sent to Estimand (`trial_activated`).
