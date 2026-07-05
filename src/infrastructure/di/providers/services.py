@@ -1,5 +1,7 @@
 from dishka import Provider, Scope, provide
+from redis.asyncio import Redis
 
+from src.core.config import AppConfig
 from src.services.access import AccessService
 from src.services.command import CommandService
 from src.services.experiment import ExperimentService
@@ -19,7 +21,11 @@ class ServicesProvider(Provider):
     scope = Scope.APP
 
     command_service = provide(source=CommandService)
-    experiment_service = provide(source=ExperimentService, scope=Scope.REQUEST)
+
+    @provide(scope=Scope.REQUEST)
+    def get_experiment_service(self, config: AppConfig, redis_client: Redis) -> ExperimentService:
+        return ExperimentService(config=config, redis_client=redis_client)
+
     access_service = provide(source=AccessService, scope=Scope.REQUEST)
     notification_service = provide(source=NotificationService, scope=Scope.REQUEST)
     plan_service = provide(source=PlanService, scope=Scope.REQUEST)
