@@ -247,9 +247,7 @@ class ExperimentService:
                     salt="trial_offer_v1",
                     enabled=bool(getattr(cfg, "trial_enabled", False)),
                 ),
-                start_date=self._coerce_start_date(
-                    getattr(cfg, "trial_offer_start_date", None)
-                ),
+                start_date=self._coerce_start_date(getattr(cfg, "trial_offer_start_date", None)),
                 use_estimand=True,
                 estimand_feature_key=estimand_config.feature_key,
                 estimand_feature_id=estimand_config.feature_id,
@@ -266,9 +264,7 @@ class ExperimentService:
                     salt="trial_length_v1",
                     enabled=False,
                 ),
-                start_date=self._coerce_start_date(
-                    getattr(cfg, "trial_length_start_date", None)
-                ),
+                start_date=self._coerce_start_date(getattr(cfg, "trial_length_start_date", None)),
                 use_estimand=True,
                 estimand_feature_key=estimand_config.trial_length_feature_key,
                 estimand_feature_id=estimand_config.trial_length_feature_id,
@@ -304,9 +300,7 @@ class ExperimentService:
                     salt="intro_price_v1",
                     enabled=False,
                 ),
-                start_date=self._coerce_start_date(
-                    getattr(cfg, "intro_price_start_date", None)
-                ),
+                start_date=self._coerce_start_date(getattr(cfg, "intro_price_start_date", None)),
                 use_estimand=True,
                 estimand_feature_key=estimand_config.intro_price_feature_key,
                 estimand_feature_id=estimand_config.intro_price_feature_id,
@@ -323,9 +317,7 @@ class ExperimentService:
                     salt="checkout_flow_v1",
                     enabled=False,
                 ),
-                start_date=self._coerce_start_date(
-                    getattr(cfg, "checkout_flow_start_date", None)
-                ),
+                start_date=self._coerce_start_date(getattr(cfg, "checkout_flow_start_date", None)),
                 use_estimand=True,
                 estimand_feature_key=estimand_config.checkout_flow_feature_key,
                 estimand_feature_id=estimand_config.checkout_flow_feature_id,
@@ -342,9 +334,7 @@ class ExperimentService:
                     salt="payment_rescue_v1",
                     enabled=False,
                 ),
-                start_date=self._coerce_start_date(
-                    getattr(cfg, "payment_rescue_start_date", None)
-                ),
+                start_date=self._coerce_start_date(getattr(cfg, "payment_rescue_start_date", None)),
                 use_estimand=True,
                 estimand_feature_key=estimand_config.payment_rescue_feature_key,
                 estimand_feature_id=estimand_config.payment_rescue_feature_id,
