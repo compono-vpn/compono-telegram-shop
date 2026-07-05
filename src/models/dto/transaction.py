@@ -23,6 +23,9 @@ class PriceDetailsDto(TrackableDto):
     original_amount: Decimal = Decimal(2)
     discount_percent: int = 0
     final_amount: Decimal = Decimal(2)
+    base_discount_percent: int = 0
+    channel_discount_percent: int = 0
+    channel_discount_source: str = ""
 
     @property
     def is_free(self) -> bool:

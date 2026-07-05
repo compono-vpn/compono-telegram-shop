@@ -29,6 +29,7 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey_check
 from src.models.dto import PlanDto, UserDto
+from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
@@ -73,6 +74,7 @@ async def _create_payment_and_get_data(
     notification_service: NotificationService,
     redis_client: Redis,
     experiment_service: ExperimentService | None,
+    channel_incentive_service: ChannelIncentiveService | None = None,
     gateway_metadata: Optional[dict[str, str]] = None,
 ) -> Optional[CachedPaymentData]:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -91,6 +93,11 @@ async def _create_payment_and_get_data(
         plan=plan,
         duration_days=duration.days,
         purchase_type=purchase_type,
+    )
+    channel_discount = (
+        await channel_incentive_service.discount_context(user, use_cache=False)
+        if channel_incentive_service
+        else None
     )
 
     try:
@@ -123,6 +130,7 @@ async def _create_payment_and_get_data(
             promocode_id=None,
             gateway_metadata=gateway_metadata,
             experiment=experiment_context.billing_experiment if experiment_context else None,
+            channel_discount=channel_discount,
         )
         await track_checkout_event(
             dialog_manager=dialog_manager,
@@ -149,6 +157,7 @@ async def _create_payment_and_get_data(
                 duration_days=duration.days,
                 currency=billing_gateway.Currency,
                 experiment=experiment_context.billing_experiment if experiment_context else None,
+                channel_discount=channel_discount,
             )
             pricing = billing_price_details_to_dto(price_details)
         else:
@@ -272,6 +281,7 @@ async def on_subscription_plans(  # noqa: C901
     dialog_manager: DialogManager,
     billing: FromDishka[BillingClient],
     experiment_service: FromDishka[ExperimentService],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -361,6 +371,7 @@ async def on_subscription_plans(  # noqa: C901
                     notification_service=notification_service,
                     redis_client=redis_client,
                     experiment_service=experiment_service,
+                    channel_incentive_service=channel_incentive_service,
                 )
 
                 if payment_data:
@@ -388,6 +399,7 @@ async def on_plan_select(
     selected_plan: int,
     billing: FromDishka[BillingClient],
     experiment_service: FromDishka[ExperimentService],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -423,6 +435,7 @@ async def on_plan_select(
             plan.durations[0].days,
             billing=billing,
             experiment_service=experiment_service,
+            channel_incentive_service=channel_incentive_service,
             notification_service=notification_service,
             redis_client=redis_client,
         )
@@ -439,6 +452,7 @@ async def on_duration_select(
     selected_duration: int,
     billing: FromDishka[BillingClient],
     experiment_service: FromDishka[ExperimentService],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -463,6 +477,7 @@ async def on_duration_select(
         duration_days=selected_duration,
         purchase_type=purchase_type,
     )
+    channel_discount = await channel_incentive_service.discount_context(user)
     await track_checkout_event(
         dialog_manager=dialog_manager,
         experiment_service=experiment_service,
@@ -480,6 +495,7 @@ async def on_duration_select(
         duration_days=selected_duration,
         currency=default_currency,
         experiment=experiment_context.billing_experiment if experiment_context else None,
+        channel_discount=channel_discount,
     )
     pricing = billing_price_details_to_dto(price_details)
     dialog_manager.dialog_data["is_free"] = pricing.is_free
@@ -508,6 +524,7 @@ async def on_duration_select(
             notification_service=notification_service,
             redis_client=redis_client,
             experiment_service=experiment_service,
+            channel_incentive_service=channel_incentive_service,
         )
 
         if payment_data:
@@ -528,6 +545,7 @@ async def on_payment_method_select(
     selected_payment_method: str,
     billing: FromDishka[BillingClient],
     experiment_service: FromDishka[ExperimentService],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -568,6 +586,7 @@ async def on_payment_method_select(
         notification_service=notification_service,
         redis_client=redis_client,
         experiment_service=experiment_service,
+        channel_incentive_service=channel_incentive_service,
     )
 
     if payment_data:
@@ -585,6 +604,7 @@ async def on_crypto_asset_select(
     selected_asset_id: str,
     billing: FromDishka[BillingClient],
     experiment_service: FromDishka[ExperimentService],
+    channel_incentive_service: FromDishka[ChannelIncentiveService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -622,6 +642,7 @@ async def on_crypto_asset_select(
         notification_service=notification_service,
         redis_client=redis_client,
         experiment_service=experiment_service,
+        channel_incentive_service=channel_incentive_service,
         gateway_metadata={"chain": asset.chain, "token": asset.token},
     )
 

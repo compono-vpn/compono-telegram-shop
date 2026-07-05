@@ -138,8 +138,20 @@ def _make_billing(url: str = "https://checkout.plaidly.io/s/1") -> AsyncMock:
     billing = AsyncMock()
     billing.get_gateway_by_type.return_value = MagicMock(Currency="USD")
     billing.create_payment.return_value = MagicMock(ID="pay-1", URL=url)
-    billing.calculate_price.return_value = MagicMock()
+    billing.calculate_price.return_value = MagicMock(
+        original_amount="10",
+        discount_percent=0,
+        final_amount="10",
+        base_discount_percent=0,
+        channel_discount_percent=0,
+        channel_discount_source="",
+    )
     return billing
+
+
+class _NoChannelIncentive:
+    async def discount_context(self, user, **kwargs):
+        return None
 
 
 def _dm_for_crypto(plan: PlanDto) -> MagicMock:
@@ -168,9 +180,10 @@ class TestOnPaymentMethodSelectPlaidly:
             dm,
             PaymentGatewayType.PLAIDLY,
             billing,
-            redis_client,
             experiment_service,
+            _NoChannelIncentive(),
             ntf,
+            redis_client,
         )
 
         billing.create_payment.assert_not_called()
@@ -195,6 +208,7 @@ class TestOnCryptoAssetSelect:
             "usdt-tron",
             billing,
             experiment_service,
+            _NoChannelIncentive(),
             ntf,
             redis_client,
         )
@@ -222,6 +236,7 @@ class TestOnCryptoAssetSelect:
                 asset.id,
                 billing,
                 experiment_service,
+                _NoChannelIncentive(),
                 AsyncMock(),
                 redis_client,
             )

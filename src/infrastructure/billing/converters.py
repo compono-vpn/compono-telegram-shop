@@ -182,10 +182,23 @@ def billing_subscription_to_dto(bs: BillingSubscription) -> SubscriptionDto:
 
 
 def billing_price_details_to_dto(bp: BillingPriceDetails) -> PriceDetailsDto:
+    base_discount_percent = getattr(bp, "base_discount_percent", 0)
+    channel_discount_percent = getattr(bp, "channel_discount_percent", 0)
+    channel_discount_source = getattr(bp, "channel_discount_source", "")
+    if not isinstance(base_discount_percent, int):
+        base_discount_percent = 0
+    if not isinstance(channel_discount_percent, int):
+        channel_discount_percent = 0
+    if not isinstance(channel_discount_source, str):
+        channel_discount_source = ""
+
     return PriceDetailsDto(
         original_amount=Decimal(bp.original_amount),
         discount_percent=bp.discount_percent,
         final_amount=Decimal(bp.final_amount),
+        base_discount_percent=base_discount_percent,
+        channel_discount_percent=channel_discount_percent,
+        channel_discount_source=channel_discount_source,
     )
 
 

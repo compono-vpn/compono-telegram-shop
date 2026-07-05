@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import httpx
@@ -25,7 +25,6 @@ from src.infrastructure.billing.models import (
     BillingTransaction,
     BillingUser,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -768,7 +767,7 @@ class TestPayments:
         client, mock_http = _make_client_with_mock()
         mock_http.request.return_value = _make_response(200, {"ID": "pay-456", "URL": None})
 
-        result = await client.create_payment(
+        await client.create_payment(
             telegram_id=123,
             plan_id=42,
             duration_days=30,
@@ -820,6 +819,31 @@ class TestPayments:
         assert body["experiment"] == {
             "feature_key": "intro_price",
             "variant_key": "intro_price_v1_on",
+        }
+
+    async def test_create_payment_with_channel_discount(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(200, {"ID": "pay-channel", "URL": None})
+
+        await client.create_payment(
+            telegram_id=123,
+            plan_id=42,
+            duration_days=30,
+            currency="RUB",
+            gateway_type="PLATEGA",
+            purchase_type="NEW",
+            channel_discount={
+                "source": "compono_channel",
+                "percent": 5,
+                "channel": "@componovpn",
+            },
+        )
+
+        body = mock_http.request.call_args[1]["json"]
+        assert body["channel_discount"] == {
+            "source": "compono_channel",
+            "percent": 5,
+            "channel": "@componovpn",
         }
 
     async def test_create_payment_omits_gateway_metadata_when_none(self):
@@ -945,7 +969,9 @@ class TestPromocodes:
 
     async def test_validate_promocode_invalid(self):
         client, mock_http = _make_client_with_mock()
-        mock_http.post.return_value = _make_response(400, json_data={"error": "invalid"}, text="invalid")
+        mock_http.post.return_value = _make_response(
+            400, json_data={"error": "invalid"}, text="invalid"
+        )
 
         result = await client.validate_promocode("BAD")
         assert result is None
@@ -1123,7 +1149,9 @@ class TestReferrals:
 
     async def test_get_referral_info(self):
         client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, {"referral_code": "REF123", "referrals_count": 3})
+        mock_http.request.return_value = _make_response(
+            200, {"referral_code": "REF123", "referrals_count": 3}
+        )
 
         result = await client.get_referral_info(111111)
 
@@ -1337,6 +1365,37 @@ class TestStatisticsAndPricing:
         assert body["experiment"] == {
             "feature_key": "intro_price",
             "variant_key": "intro_price_v1_on",
+        }
+
+    async def test_calculate_price_with_channel_discount(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(200, {
+            "original_amount": "100",
+            "discount_percent": 5,
+            "final_amount": "95",
+            "channel_discount_percent": 5,
+            "channel_discount_source": "compono_channel",
+        })
+
+        result = await client.calculate_price(
+            123,
+            42,
+            30,
+            "RUB",
+            channel_discount={
+                "source": "compono_channel",
+                "percent": 5,
+                "channel": "@componovpn",
+            },
+        )
+
+        assert result.channel_discount_percent == 5
+        assert result.channel_discount_source == "compono_channel"
+        body = mock_http.request.call_args[1]["json"]
+        assert body["channel_discount"] == {
+            "source": "compono_channel",
+            "percent": 5,
+            "channel": "@componovpn",
         }
 
 

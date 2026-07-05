@@ -3,6 +3,7 @@ from redis.asyncio import Redis
 
 from src.core.config import AppConfig
 from src.services.access import AccessService
+from src.services.channel_incentive import ChannelIncentiveService
 from src.services.command import CommandService
 from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
@@ -39,3 +40,4 @@ class ServicesProvider(Provider):
         source=TransactionService, scope=Scope.REQUEST
     )  # uses BillingClient (HTTP API)
     referral_service = provide(source=ReferralService, scope=Scope.REQUEST)
+    channel_incentive_service = provide(source=ChannelIncentiveService, scope=Scope.REQUEST)

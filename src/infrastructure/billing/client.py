@@ -278,6 +278,7 @@ class BillingClient:
         promocode_id: Optional[int] = None,
         gateway_metadata: Optional[dict[str, Any]] = None,
         experiment: Optional[dict[str, Any]] = None,
+        channel_discount: Optional[dict[str, Any]] = None,
     ) -> BillingPaymentResult:
         payload: dict[str, Any] = {
             "telegram_id": telegram_id,
@@ -294,6 +295,8 @@ class BillingClient:
             payload["gateway_metadata"] = gateway_metadata
         if experiment is not None:
             payload["experiment"] = experiment
+        if channel_discount is not None:
+            payload["channel_discount"] = channel_discount
 
         data = await self._post("/payment/create", json=payload)
         return BillingPaymentResult.model_validate(data)
@@ -580,6 +583,7 @@ class BillingClient:
         duration_days: int,
         currency: str,
         experiment: Optional[dict[str, Any]] = None,
+        channel_discount: Optional[dict[str, Any]] = None,
     ) -> BillingPriceDetails:
         payload: dict[str, Any] = {
             "telegram_id": telegram_id,
@@ -589,6 +593,8 @@ class BillingClient:
         }
         if experiment is not None:
             payload["experiment"] = experiment
+        if channel_discount is not None:
+            payload["channel_discount"] = channel_discount
 
         data = await self._post("/pricing/calculate", json=payload)
         return BillingPriceDetails.model_validate(data)

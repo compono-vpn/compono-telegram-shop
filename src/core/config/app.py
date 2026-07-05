@@ -74,6 +74,12 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     yookassa_receipt_url: str = "https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l"
     portal_url: str = "https://componovpn.org/portal"
 
+    channel_incentive_enabled: bool = False
+    channel_incentive_address: str = ""
+    channel_incentive_url: str = ""
+    channel_incentive_discount_percent: int = 5
+    channel_incentive_prompt_cooldown_seconds: int = 86400
+
     @property
     def hydra_primary_domain(self) -> str:
         """First domain in HYDRA_DOMAINS list, used as default for fallback URLs."""

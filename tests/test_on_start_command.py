@@ -9,13 +9,12 @@ After PR 4 of the Web/TG split, the bot:
 
 from __future__ import annotations
 
+import inspect
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
-from tests.conftest import make_dialog_manager, make_user, unwrap_inject
 from src.bot.routers.menu import handlers as menu_handlers
 from src.bot.routers.menu.handlers import on_start_command
+from tests.conftest import make_user, unwrap_inject
 
 
 def _setup(start_text: str) -> tuple:
@@ -33,17 +32,25 @@ def _setup(start_text: str) -> tuple:
     # Echo the key with a recognizable prefix so we can assert what was used.
     i18n.get.side_effect = lambda key, **kwargs: f"[{key}]"
 
-    return message, user, dm, i18n
+    channel_incentive_service = AsyncMock()
+    channel_incentive_service.channel_url = "https://t.me/componovpn"
+    channel_incentive_service.should_prompt.return_value = False
+    channel_incentive_service.discount_percent = 5
+    notification_service = AsyncMock()
+
+    return message, user, dm, i18n, channel_incentive_service, notification_service
 
 
 class TestOnStartCommandWebPayload:
     """A /start web_<token> payload no longer claims/links anything."""
 
     async def test_web_payload_sends_neutral_redirect(self):
-        message, user, dm, i18n = _setup("/start web_ABC123")
+        message, user, dm, i18n, channel_incentive_service, notification_service = _setup(
+            "/start web_ABC123"
+        )
         raw_fn = unwrap_inject(on_start_command)
 
-        await raw_fn(message, user, dm, i18n)
+        await raw_fn(message, user, dm, i18n, channel_incentive_service, notification_service)
 
         # The redirect message uses the dedicated i18n key.
         i18n.get.assert_any_call("msg-web-purchase-redirect")
@@ -61,22 +68,27 @@ class TestOnStartCommandWebPayload:
         NotificationService would mean the claim/link flow is still
         wired in.
         """
-        import inspect
-
         sig = inspect.signature(unwrap_inject(on_start_command))
         param_names = set(sig.parameters.keys())
 
-        # Only these four are allowed.
-        assert param_names == {"message", "user", "dialog_manager", "i18n"}, (
+        # Only these dependencies are allowed; billing/remnawave claim/link flow must stay gone.
+        assert param_names == {
+            "message",
+            "user",
+            "dialog_manager",
+            "i18n",
+            "channel_incentive_service",
+            "notification_service",
+        }, (
             f"on_start_command must not depend on subscription/billing/remnawave "
             f"services — got params {param_names}"
         )
 
     async def test_no_web_payload_skips_redirect(self):
-        message, user, dm, i18n = _setup("/start")
+        message, user, dm, i18n, channel_incentive_service, notification_service = _setup("/start")
         raw_fn = unwrap_inject(on_start_command)
 
-        await raw_fn(message, user, dm, i18n)
+        await raw_fn(message, user, dm, i18n, channel_incentive_service, notification_service)
 
         # No redirect message sent.
         message.answer.assert_not_called()
@@ -86,10 +98,12 @@ class TestOnStartCommandWebPayload:
         dm.start.assert_called_once()
 
     async def test_non_web_payload_skips_redirect(self):
-        message, user, dm, i18n = _setup("/start REF_abcdef")
+        message, user, dm, i18n, channel_incentive_service, notification_service = _setup(
+            "/start REF_abcdef"
+        )
         raw_fn = unwrap_inject(on_start_command)
 
-        await raw_fn(message, user, dm, i18n)
+        await raw_fn(message, user, dm, i18n, channel_incentive_service, notification_service)
 
         message.answer.assert_not_called()
         i18n.get.assert_not_called()
@@ -127,7 +141,6 @@ class TestPastedSubUrlHandlerRemoved:
 
     def test_router_has_no_text_message_handler_for_sub_url(self):
         """The Router must not have a message handler triggered by /api/sub/."""
-        from aiogram import F
 
         router = menu_handlers.router
         # Iterate registered message observers. aiogram's Router exposes
