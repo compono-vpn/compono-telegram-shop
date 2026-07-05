@@ -15,12 +15,35 @@ from src.core.utils.formatters import affiliate_link
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.models.dto import UserDto
+from src.services.loyalty_reward import LoyaltyRewardService
 from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 from src.services.user import UserService
 
 router = Router(name=__name__)
+
+REFERRAL_ANNOUNCEMENT = """
+<b>🎁 Пригласите друга — получите VPN в подарок</b>
+
+Теперь по вашей пригласительной ссылке:
+• друг получает <b>10% скидку</b> на первую оплату;
+• вы получаете <b>14 дней VPN</b>, когда друг впервые оплачивает подписку;
+• если друг оплачивает 3 месяца или год — вы получаете <b>30 дней VPN</b>.
+
+Откройте бота, нажмите <b>«Пригласить»</b> и отправьте ссылку другу:
+https://t.me/compono_bot
+""".strip()
+
+LOYALTY_ANNOUNCEMENT = """
+<b>Спасибо первым пользователям Compono VPN</b>
+
+Мы добавили активным подписчикам <b>+14 дней VPN</b> и закрепили за ними
+<b>30% персональную скидку</b> на будущие оплаты.
+
+Это наш способ сказать спасибо тем, кто был с нами на старте. Проверьте свою
+подписку в боте: https://t.me/compono_bot
+""".strip()
 
 
 @inject
@@ -143,3 +166,75 @@ async def on_afflink_command(
         f"in the funnel report (compono-billing analytics/funnel.sql)."
     )
     logger.info(f"{log(user)} Minted affiliate link for '{affiliate_id}'")
+
+
+@router.message(FilterCommand("announce_referral"))
+async def on_announce_referral_command(
+    message: Message,
+    user: UserDto,
+) -> None:
+    if not user.is_privileged:
+        return
+
+    args = message.text.split(maxsplit=1) if message.text else []
+    channel = args[1].strip() if len(args) > 1 and args[1].strip() else "@compono_channel"
+
+    if message.bot is None:
+        return
+
+    await message.bot.send_message(
+        chat_id=channel,
+        text=REFERRAL_ANNOUNCEMENT,
+        disable_web_page_preview=True,
+    )
+    await message.answer(f"Referral announcement sent to {channel}")
+    logger.info(f"{log(user)} Sent referral announcement to '{channel}'")
+
+
+@inject
+@router.message(FilterCommand("grant_loyalty_reward"))
+async def on_grant_loyalty_reward_command(
+    message: Message,
+    user: UserDto,
+    loyalty_reward_service: FromDishka[LoyaltyRewardService],
+) -> None:
+    if not user.is_privileged:
+        return
+
+    args = set((message.text or "").split()[1:])
+    include_trials = "include-trials" in args
+    confirmed = "confirm" in args
+
+    if confirmed:
+        result = await loyalty_reward_service.grant(include_trials=include_trials)
+    else:
+        result = await loyalty_reward_service.preview(include_trials=include_trials)
+
+    await message.answer(result.to_admin_message(dry_run=not confirmed))
+    logger.info(
+        f"{log(user)} Ran loyalty reward command confirmed={confirmed} "
+        f"include_trials={include_trials}"
+    )
+
+
+@router.message(FilterCommand("announce_loyalty"))
+async def on_announce_loyalty_command(
+    message: Message,
+    user: UserDto,
+) -> None:
+    if not user.is_privileged:
+        return
+
+    args = message.text.split(maxsplit=1) if message.text else []
+    channel = args[1].strip() if len(args) > 1 and args[1].strip() else "@compono_channel"
+
+    if message.bot is None:
+        return
+
+    await message.bot.send_message(
+        chat_id=channel,
+        text=LOYALTY_ANNOUNCEMENT,
+        disable_web_page_preview=True,
+    )
+    await message.answer(f"Loyalty announcement sent to {channel}")
+    logger.info(f"{log(user)} Sent loyalty announcement to '{channel}'")

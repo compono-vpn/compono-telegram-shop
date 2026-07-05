@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
-
-import pytest
-
-from tests.conftest import make_config, make_user
+from uuid import uuid4
 
 from src.core.enums import (
+    Currency,
     Locale,
+    PaymentGatewayType,
+    PurchaseType,
     ReferralLevel,
     ReferralRewardType,
+    TransactionStatus,
     UserNotificationType,
 )
 from src.infrastructure.billing.models import (
@@ -19,21 +20,22 @@ from src.infrastructure.billing.models import (
     BillingReferralReward,
 )
 from src.models.dto.referral import ReferralDto
-from src.models.dto.user import BaseUserDto
+from src.models.dto.settings import ReferralSettingsDto
+from src.models.dto.transaction import PriceDetailsDto, TransactionDto
 from src.services.referral import ReferralService
-
+from tests.conftest import make_config, make_plan_snapshot, make_user
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _make_billing_referral(**overrides) -> BillingReferral:
-    defaults = dict(
-        ID=1,
-        ReferrerTelegramID=100,
-        ReferredTelegramID=200,
-        Level="1",  # BillingReferral.Level is str; converter does ReferralLevel(int(Level))
-    )
+    defaults = {
+        "ID": 1,
+        "ReferrerTelegramID": 100,
+        "ReferredTelegramID": 200,
+        "Level": "1",  # BillingReferral.Level is str; converter does ReferralLevel(int(Level))
+    }
     defaults.update(overrides)
     br = BillingReferral(**defaults)
     # ReferralLevel is IntEnum so the converter needs an int.
@@ -43,16 +45,31 @@ def _make_billing_referral(**overrides) -> BillingReferral:
 
 
 def _make_billing_reward(**overrides) -> BillingReferralReward:
-    defaults = dict(
-        ID=1,
-        ReferralID=1,
-        UserTelegramID=100,
-        Type="POINTS",
-        Amount=10,
-        IsIssued=False,
-    )
+    defaults = {
+        "ID": 1,
+        "ReferralID": 1,
+        "UserTelegramID": 100,
+        "Type": "POINTS",
+        "Amount": 10,
+        "IsIssued": False,
+    }
     defaults.update(overrides)
     return BillingReferralReward(**defaults)
+
+
+def _make_transaction(duration_days: int) -> TransactionDto:
+    plan = make_plan_snapshot()
+    plan.duration = duration_days
+    return TransactionDto(
+        payment_id=uuid4(),
+        status=TransactionStatus.COMPLETED,
+        purchase_type=PurchaseType.NEW,
+        gateway_type=PaymentGatewayType.YOOKASSA,
+        pricing=PriceDetailsDto(original_amount=100, final_amount=100),
+        currency=Currency.RUB,
+        plan=plan,
+        user=make_user(telegram_id=200, name="NewUser"),
+    )
 
 
 def _make_service(
@@ -73,6 +90,7 @@ def _make_service(
 
     user_service = AsyncMock()
     settings_service = AsyncMock()
+    settings_service.get_referral_settings.return_value = ReferralSettingsDto()
     notification_service = AsyncMock()
 
     svc = ReferralService(
@@ -344,16 +362,34 @@ class TestHandleReferral:
 
         referrer = make_user(telegram_id=100, name="Referrer")
         user_svc.get_by_referral_code.return_value = referrer
-        settings_svc.is_referral_enable.return_value = True
 
         user = make_user(telegram_id=200, name="NewUser")
         await svc.handle_referral(user, code="ref_CODE")
 
         billing.create_referral.assert_awaited_once()
-        ntf_svc.notify_user.assert_awaited_once()
-        ntf_call = ntf_svc.notify_user.call_args
-        assert ntf_call.kwargs["user"] == referrer
-        assert ntf_call.kwargs["ntf_type"] == UserNotificationType.REFERRAL_ATTACHED
+        assert ntf_svc.notify_user.await_count == 2
+        first_call = ntf_svc.notify_user.await_args_list[0]
+        second_call = ntf_svc.notify_user.await_args_list[1]
+        assert first_call.kwargs["user"] == referrer
+        assert first_call.kwargs["ntf_type"] == UserNotificationType.REFERRAL_ATTACHED
+        assert second_call.kwargs["user"] == user
+        assert "ntf_type" not in second_call.kwargs
+
+    async def test_successful_referral_applies_invitee_purchase_discount(self):
+        billing = AsyncMock()
+        billing.get_referral_by_referred.return_value = None
+        billing.create_referral.return_value = _make_billing_referral()
+        svc, _, user_svc, _, _ = _make_service(billing)
+
+        referrer = make_user(telegram_id=100)
+        user_svc.get_by_referral_code.return_value = referrer
+
+        user = make_user(telegram_id=200)
+        await svc.handle_referral(user, code="ref_CODE")
+
+        assert user.purchase_discount == 10
+        assert user.purchase_discount_max_days == 365
+        user_svc.update.assert_awaited_once_with(user)
 
     async def test_no_notification_when_referral_disabled(self):
         billing = AsyncMock()
@@ -363,13 +399,37 @@ class TestHandleReferral:
 
         referrer = make_user(telegram_id=100)
         user_svc.get_by_referral_code.return_value = referrer
-        settings_svc.is_referral_enable.return_value = False
+        settings_svc.get_referral_settings.return_value = ReferralSettingsDto(enable=False)
 
         user = make_user(telegram_id=200)
         await svc.handle_referral(user, code="ref_CODE")
 
         billing.create_referral.assert_awaited_once()
         ntf_svc.notify_user.assert_not_awaited()
+
+
+class TestReferralCampaignReward:
+    def test_regular_first_payment_reward_is_14_days(self):
+        settings = ReferralSettingsDto()
+        amount = ReferralService._compute_reward_amount(
+            settings.reward,
+            ReferralRewardType.EXTRA_DAYS,
+            ReferralLevel.FIRST,
+            _make_transaction(duration_days=30),
+        )
+
+        assert amount == 14
+
+    def test_long_first_payment_reward_is_30_days(self):
+        settings = ReferralSettingsDto()
+        amount = ReferralService._compute_reward_amount(
+            settings.reward,
+            ReferralRewardType.EXTRA_DAYS,
+            ReferralLevel.FIRST,
+            _make_transaction(duration_days=90),
+        )
+
+        assert amount == 30
 
 
 # ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ from src.core.enums import (
     PromocodeRewardType,
     PurchaseType,
     ReferralAccrualStrategy,
+    ReferralInviteeRewardType,
     ReferralLevel,
     ReferralRewardStrategy,
     ReferralRewardType,
@@ -46,7 +47,7 @@ from src.models.dto import (
     TransactionDto,
     UserNotificationDto,
 )
-from src.models.dto.settings import ReferralRewardSettingsDto
+from src.models.dto.settings import ReferralInviteeRewardSettingsDto, ReferralRewardSettingsDto
 from src.models.dto.user import BaseUserDto, UserDto
 
 from .models import (
@@ -339,7 +340,45 @@ def _parse_referral_reward(reward_data: dict) -> ReferralRewardSettingsDto:
     return ReferralRewardSettingsDto(
         type=ReferralRewardType(rtype) if rtype else ReferralRewardType.EXTRA_DAYS,
         strategy=ReferralRewardStrategy(rstrategy) if rstrategy else ReferralRewardStrategy.AMOUNT,
-        config=parsed_config or {ReferralLevel.FIRST: 5},
+        config=parsed_config or {ReferralLevel.FIRST: 14},
+        long_purchase_min_days=int(
+            reward_data.get("LongPurchaseMinDays", reward_data.get("long_purchase_min_days", 90))
+            or 90
+        ),
+        long_purchase_amount=(
+            int(
+                reward_data.get(
+                    "LongPurchaseAmount",
+                    reward_data.get("long_purchase_amount", 30),
+                )
+                or 0
+            )
+            or None
+        ),
+    )
+
+
+def _parse_referral_invitee_reward(raw: Optional[dict]) -> ReferralInviteeRewardSettingsDto:
+    """Parse the invitee-side referral incentive block."""
+    if not raw or not isinstance(raw, dict):
+        return ReferralInviteeRewardSettingsDto()
+
+    reward_type = raw.get("Type", raw.get("type", "PURCHASE_DISCOUNT"))
+    return ReferralInviteeRewardSettingsDto(
+        enable=raw.get("Enable", raw.get("enable", True)),
+        type=(
+            ReferralInviteeRewardType(reward_type)
+            if reward_type
+            else ReferralInviteeRewardType.PURCHASE_DISCOUNT
+        ),
+        amount=int(raw.get("Amount", raw.get("amount", 10)) or 10),
+        purchase_discount_max_days=int(
+            raw.get(
+                "PurchaseDiscountMaxDays",
+                raw.get("purchase_discount_max_days", 365),
+            )
+            or 365
+        ),
     )
 
 
@@ -360,6 +399,9 @@ def _parse_referral_settings(raw: Optional[dict]) -> ReferralSettingsDto:
     reward_data = raw.get("Reward", raw.get("reward"))
     if reward_data and isinstance(reward_data, dict):
         referral.reward = _parse_referral_reward(reward_data)
+
+    invitee_reward = raw.get("InviteeReward", raw.get("invitee_reward"))
+    referral.invitee_reward = _parse_referral_invitee_reward(invitee_reward)
 
     return referral
 

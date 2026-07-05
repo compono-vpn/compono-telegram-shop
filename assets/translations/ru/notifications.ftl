@@ -10,7 +10,7 @@ ntf-event-error =
     <b>🔅 Событие: Произошла ошибка!</b>
 
     { frg-build-info }
-    
+
     { $user -> 
     [1]
     { hdr-user }
@@ -105,7 +105,7 @@ ntf-event-subscription-trial =
 
     { hdr-user }
     { frg-user-info }
-    
+
     { hdr-plan }
     { frg-plan-snapshot }
 
@@ -127,7 +127,7 @@ ntf-event-subscription-renew =
     #EventSubscriptionRenew
 
     <b>🔅 Событие: Продление подписки!</b>
-    
+
     { hdr-payment }
     { frg-payment-info }
 
@@ -277,7 +277,7 @@ ntf-event-user-expiring =
     { $is_trial ->
     [0]
     <b>⚠️ Внимание! Ваша подписка закончится через { unit-day }.</b>
-    
+
     Продлите ее заранее, чтобы не терять доступ к сервису! 
     *[1]
     <b>⚠️ Внимание! Ваш бесплатный пробник закончится через { unit-day }.</b>
@@ -346,7 +346,22 @@ ntf-event-user-referral-attached =
     <b>🎉 Вы пригласили друга!</b>
     
     <blockquote>
-    Пользователь <b>{ $name }</b> присоединился по вашей пригласительной ссылке! Чтобы получить награду, убедитесь, что он совершит покупку подписки.
+    Пользователь <b>{ $name }</b> присоединился по вашей пригласительной ссылке! Если он оплатит 3 месяца или год, вы получите увеличенную награду.
+    </blockquote>
+
+ntf-event-user-referral-invitee-reward =
+    <b>🎁 Вам доступна скидка по приглашению!</b>
+
+    <blockquote>
+    На первую оплату автоматически применится скидка <b>{ $discount }%</b>.
+    </blockquote>
+
+ntf-event-user-loyalty-reward =
+    <b>Спасибо, что вы с Compono VPN с самого начала.</b>
+
+    <blockquote>
+    Мы добавили к вашей активной подписке <b>{ $days } дней</b> и закрепили
+    <b>{ $discount }% персональную скидку</b> на будущие оплаты.
     </blockquote>
 
 ntf-event-user-referral-reward =
