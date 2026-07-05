@@ -151,6 +151,40 @@ ntf-event-subscription-change =
     { hdr-plan }
     { frg-plan-snapshot-comparison }
 
+ntf-event-web-new-user =
+    #EventWebNewUser
+
+    <b>🔅 Событие: Новый пользователь на сайте!</b>
+
+    { hdr-web-user }
+    { frg-web-user }
+
+ntf-event-web-subscription-new =
+    #EventWebSubscriptionNew
+
+    <b>🔅 Событие: Покупка подписки на сайте!</b>
+
+    { hdr-web-user }
+    { frg-web-user }
+
+    { hdr-plan }
+    { frg-plan-snapshot }
+
+    <blockquote>
+    • <b>Сумма</b>: { $final_amount }{ $currency }
+    </blockquote>
+
+ntf-event-web-subscription-trial =
+    #EventWebTrial
+
+    <b>🔅 Событие: Пробная подписка на сайте!</b>
+
+    { hdr-web-user }
+    { frg-web-user }
+
+    { hdr-plan }
+    { frg-plan-snapshot }
+
 ntf-event-cancel-survey-prompt =
     <b>😕 Оплата не прошла</b>
 
