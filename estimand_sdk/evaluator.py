@@ -6,9 +6,9 @@ from typing import Any, Mapping, Sequence
 from .assignment import choose_variation, get_bucket_ranges, hash_value
 from .models import ConfigPayload, FeatureConfig, RuleConfig
 
-
 REASON_FEATURE_DISABLED = "feature_disabled"
 REASON_FEATURE_NOT_FOUND = "feature_not_found"
+REASON_FEATURE_UNPUBLISHED = "feature_unpublished"
 REASON_NO_MATCHING_RULE = "no_matching_rule"
 REASON_NO_VARIANTS = "no_variants"
 REASON_OUTSIDE_COVERAGE = "outside_coverage"
@@ -65,6 +65,18 @@ def evaluate_feature(
             bucket=None,
             variation_index=None,
             reason=REASON_FEATURE_DISABLED,
+            matched_rule_id=None,
+            is_default_rule=False,
+        )
+
+    if not feature.published:
+        return EvaluationResult(
+            feature_key=feature_key,
+            variation_key=None,
+            value=None,
+            bucket=None,
+            variation_index=None,
+            reason=REASON_FEATURE_UNPUBLISHED,
             matched_rule_id=None,
             is_default_rule=False,
         )
@@ -134,7 +146,12 @@ def evaluate_feature_from_payload(
             matched_rule_id=None,
             is_default_rule=False,
         )
-    return evaluate_feature(feature=feature, feature_key=feature_key, unit_id=unit_id, context=context)
+    return evaluate_feature(
+        feature=feature,
+        feature_key=feature_key,
+        unit_id=unit_id,
+        context=context,
+    )
 
 
 def _evaluate_rule(
@@ -159,7 +176,9 @@ def _evaluate_rule(
             is_default_rule=is_default,
         )
 
-    variation_keys = [variation for variation in rule.variation_keys if variation in ordered_variants]
+    variation_keys = [
+        variation for variation in rule.variation_keys if variation in ordered_variants
+    ]
     if not variation_keys:
         return EvaluationResult(
             feature_key=feature_key,
@@ -189,7 +208,11 @@ def _evaluate_rule(
             is_default_rule=is_default,
         )
 
-    bucket = hash_value(seed=rule.seed or feature_seed, unit=unit_id, version=rule.hash_version or 2)
+    bucket = hash_value(
+        seed=rule.seed or feature_seed,
+        unit=unit_id,
+        version=rule.hash_version or 2,
+    )
     variation_index = choose_variation(bucket, ranges)
     if variation_index < 0 or variation_index >= len(variation_keys):
         return EvaluationResult(
@@ -253,25 +276,23 @@ def _condition_matches(actual: Any, expected: Any) -> bool:
 
 def _condition_operator_matches(actual: Any, operators: Mapping[str, Any]) -> bool:
     for operator, expected in operators.items():
-        if operator == "in":
-            if not isinstance(expected, list):
-                return False
-            if actual not in expected:
+        if operator in {"in", "nin"}:
+            if not _condition_membership_matches(actual, operator, expected):
                 return False
             continue
-        if operator == "nin":
-            if not isinstance(expected, list):
-                return False
-            if actual in expected:
-                return False
-            continue
-        if operator == "ne":
-            if actual == expected:
-                return False
-            continue
-        if not _condition_numeric_matches(actual, operator, expected):
+        if operator == "ne" and actual == expected:
+            return False
+        if operator != "ne" and not _condition_numeric_matches(actual, operator, expected):
             return False
     return True
+
+
+def _condition_membership_matches(actual: Any, operator: str, expected: Any) -> bool:
+    if not isinstance(expected, list):
+        return False
+    if operator == "in":
+        return actual in expected
+    return actual not in expected
 
 
 def _condition_numeric_matches(actual: Any, operator: str, expected: Any) -> bool:
