@@ -36,6 +36,7 @@ from src.models.dto import (
     TransactionDto,
     UserDto,
 )
+from src.services.experiment import ExperimentFeature, ExperimentService
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.subscription import SubscriptionService
@@ -68,6 +69,7 @@ class PaymentGatewayService(BaseService):
         referral_service: ReferralService,
         notification_service: NotificationService,
         user_service: UserService,
+        experiment_service: ExperimentService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.billing = billing
@@ -77,6 +79,7 @@ class PaymentGatewayService(BaseService):
         self.referral_service = referral_service
         self.notification_service = notification_service
         self.user_service = user_service
+        self.experiment_service = experiment_service
 
     async def create_default(self) -> None:
         existing_gateways = await self.billing.list_gateways()
@@ -325,6 +328,17 @@ class PaymentGatewayService(BaseService):
             return
 
         logger.info(f"Payment succeeded '{payment_id}' for user '{transaction.user.telegram_id}'")
+        await self.experiment_service.expose(
+            ExperimentFeature.CHECKOUT_FLOW.value,
+            transaction.user.telegram_id,
+            transaction.user.created_at,
+        )
+        self.experiment_service.record_conversion(
+            ExperimentFeature.CHECKOUT_FLOW.value,
+            transaction.user.telegram_id,
+            "payment_completed",
+            transaction.user.created_at,
+        )
 
         if transaction.is_test:
             await self.notification_service.notify_user(
@@ -419,6 +433,18 @@ class PaymentGatewayService(BaseService):
             )
             return
 
+        if updated.user:
+            await self.experiment_service.expose(
+                ExperimentFeature.CHECKOUT_FLOW.value,
+                updated.user.telegram_id,
+                updated.user.created_at,
+            )
+            self.experiment_service.record_conversion(
+                ExperimentFeature.CHECKOUT_FLOW.value,
+                updated.user.telegram_id,
+                "payment_canceled",
+                updated.user.created_at,
+            )
         logger.info(f"Payment canceled '{payment_id}'")
 
     #

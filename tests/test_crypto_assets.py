@@ -22,7 +22,7 @@ from src.core.crypto_assets import (
 from src.core.enums import Currency, PaymentGatewayType
 from src.models.dto import PlanDto
 from src.models.dto.plan import PlanDurationDto
-from tests.conftest import make_dialog_manager, make_user, unwrap_inject
+from tests.conftest import make_dialog_manager, make_experiment_service, make_user, unwrap_inject
 
 EXPECTED = {
     "usdt-tron": ("tron", "USDT"),
@@ -158,6 +158,7 @@ class TestOnPaymentMethodSelectPlaidly:
         dm = _dm_for_crypto(plan)
         billing = _make_billing()
         ntf = AsyncMock()
+        experiment_service = make_experiment_service()
         raw = unwrap_inject(on_payment_method_select)
         redis_client = AsyncMock()
 
@@ -167,8 +168,9 @@ class TestOnPaymentMethodSelectPlaidly:
             dm,
             PaymentGatewayType.PLAIDLY,
             billing,
-            ntf,
             redis_client,
+            experiment_service,
+            ntf,
         )
 
         billing.create_payment.assert_not_called()
@@ -182,10 +184,20 @@ class TestOnCryptoAssetSelect:
         dm = _dm_for_crypto(plan)
         billing = _make_billing()
         ntf = AsyncMock()
+        experiment_service = make_experiment_service()
         raw = unwrap_inject(on_crypto_asset_select)
         redis_client = AsyncMock()
 
-        await raw(MagicMock(), MagicMock(), dm, "usdt-tron", billing, ntf, redis_client)
+        await raw(
+            MagicMock(),
+            MagicMock(),
+            dm,
+            "usdt-tron",
+            billing,
+            experiment_service,
+            ntf,
+            redis_client,
+        )
 
         billing.create_payment.assert_awaited_once()
         kwargs = billing.create_payment.await_args.kwargs
@@ -199,6 +211,7 @@ class TestOnCryptoAssetSelect:
             plan = _plan_with_duration()
             dm = _dm_for_crypto(plan)
             billing = _make_billing()
+            experiment_service = make_experiment_service()
             raw = unwrap_inject(on_crypto_asset_select)
             redis_client = AsyncMock()
 
@@ -208,6 +221,7 @@ class TestOnCryptoAssetSelect:
                 dm,
                 asset.id,
                 billing,
+                experiment_service,
                 AsyncMock(),
                 redis_client,
             )

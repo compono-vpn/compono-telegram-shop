@@ -277,6 +277,7 @@ class BillingClient:
         is_test: bool = False,
         promocode_id: Optional[int] = None,
         gateway_metadata: Optional[dict[str, Any]] = None,
+        experiment: Optional[dict[str, Any]] = None,
     ) -> BillingPaymentResult:
         payload: dict[str, Any] = {
             "telegram_id": telegram_id,
@@ -291,6 +292,8 @@ class BillingClient:
             payload["promocode_id"] = promocode_id
         if gateway_metadata is not None:
             payload["gateway_metadata"] = gateway_metadata
+        if experiment is not None:
+            payload["experiment"] = experiment
 
         data = await self._post("/payment/create", json=payload)
         return BillingPaymentResult.model_validate(data)
@@ -576,16 +579,18 @@ class BillingClient:
         plan_id: int,
         duration_days: int,
         currency: str,
+        experiment: Optional[dict[str, Any]] = None,
     ) -> BillingPriceDetails:
-        data = await self._post(
-            "/pricing/calculate",
-            json={
-                "telegram_id": telegram_id,
-                "plan_id": plan_id,
-                "duration_days": duration_days,
-                "currency": currency,
-            },
-        )
+        payload: dict[str, Any] = {
+            "telegram_id": telegram_id,
+            "plan_id": plan_id,
+            "duration_days": duration_days,
+            "currency": currency,
+        }
+        if experiment is not None:
+            payload["experiment"] = experiment
+
+        data = await self._post("/pricing/calculate", json=payload)
         return BillingPriceDetails.model_validate(data)
 
     # ------------------------------------------------------------------ #

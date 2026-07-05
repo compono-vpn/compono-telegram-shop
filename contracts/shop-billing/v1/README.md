@@ -62,6 +62,31 @@ Bump the version directory (`v2/`, keeping `v1/` until the old shape is fully
 retired) for a breaking change instead of editing `v1/` in place, if both
 sides can't land atomically.
 
+## Checkout experiment request note
+
+BDT-433 adds an **outbound request** contract point that is not fixture-pinned
+in this directory yet: `POST /payment/create` and `POST /pricing/calculate`
+accept an optional top-level JSON field named `experiment`.
+
+Current agreed shape:
+
+```json
+{
+  "feature_key": "intro_price",
+  "variant_key": "intro_price_v1_on",
+  "payload": {"final_amount": "99.00"},
+  "price_override": "99.00"
+}
+```
+
+`payload` and `price_override` are optional, but the field name is
+**`experiment`**, not `experiment_context`, and this is a **single**
+`ExperimentContext`, not an array/map of multiple experiment payloads. Checkout
+flow instrumentation events (`plan_viewed`, `duration_selected`,
+`checkout_started`, `payment_link_created`, `payment_completed`,
+`payment_canceled`) are tracked separately and are not serialized into billing
+price/payment requests unless the Go contract changes deliberately.
+
 ## Known gaps found while pinning this (BDT-405) — not fixed here
 
 This pass is contract-pinning only (tests/fixtures/CI); it deliberately does

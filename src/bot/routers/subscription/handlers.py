@@ -29,8 +29,11 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey_check
 from src.models.dto import PlanDto, UserDto
+from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
+
+from .checkout_experiments import build_checkout_context, track_checkout_event
 
 PAYMENT_CACHE_KEY = "payment_cache"
 CURRENT_DURATION_KEY = "selected_duration"
@@ -69,6 +72,7 @@ async def _create_payment_and_get_data(
     billing: BillingClient,
     notification_service: NotificationService,
     redis_client: Redis,
+    experiment_service: ExperimentService | None,
     gateway_metadata: Optional[dict[str, str]] = None,
 ) -> Optional[CachedPaymentData]:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -81,11 +85,22 @@ async def _create_payment_and_get_data(
 
     gt_str = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
     pt_str = purchase_type.value if hasattr(purchase_type, "value") else str(purchase_type)
+    experiment_context = build_checkout_context(experiment_service, user)
 
     try:
         # Look up gateway currency from billing service
         billing_gateway = await billing.get_gateway_by_type(gt_str)
         currency = billing_gateway.Currency if billing_gateway else gt_str
+
+        await track_checkout_event(
+            dialog_manager=dialog_manager,
+            experiment_service=experiment_service,
+            user=user,
+            event="checkout_started",
+            plan_id=plan.id,
+            duration_days=duration.days,
+            gateway_type=gt_str,
+        )
 
         # Use BillingClient to create payment via the Go billing service
         result = await billing.create_payment(
@@ -96,7 +111,18 @@ async def _create_payment_and_get_data(
             gateway_type=gt_str,
             purchase_type=pt_str,
             is_test=user.is_dev,
+            promocode_id=None,
             gateway_metadata=gateway_metadata,
+            experiment=experiment_context.billing_experiment if experiment_context else None,
+        )
+        await track_checkout_event(
+            dialog_manager=dialog_manager,
+            experiment_service=experiment_service,
+            user=user,
+            event="payment_link_created",
+            plan_id=plan.id,
+            duration_days=duration.days,
+            gateway_type=gt_str,
         )
         await schedule_cancel_survey_check(
             redis_client=redis_client,
@@ -110,6 +136,7 @@ async def _create_payment_and_get_data(
                 plan_id=plan.id,
                 duration_days=duration.days,
                 currency=billing_gateway.Currency,
+                experiment=experiment_context.billing_experiment if experiment_context else None,
             )
             pricing = billing_price_details_to_dto(price_details)
         else:
@@ -158,6 +185,7 @@ async def on_purchase_type_select(
     purchase_type: PurchaseType,
     dialog_manager: DialogManager,
     billing: FromDishka[BillingClient],
+    experiment_service: FromDishka[ExperimentService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -209,6 +237,13 @@ async def on_purchase_type_select(
 
     if len(plans) == 1:
         logger.info(f"{log(user)} Auto-selected single plan '{plans[0].id}'")
+        await track_checkout_event(
+            dialog_manager=dialog_manager,
+            experiment_service=experiment_service,
+            user=user,
+            event="plan_viewed",
+            plan_id=plans[0].id,
+        )
         adapter.save(plans[0])
         dialog_manager.dialog_data["only_single_plan"] = True
         await dialog_manager.switch_to(state=Subscription.DURATION)
@@ -224,6 +259,7 @@ async def on_subscription_plans(  # noqa: C901
     widget: Button,
     dialog_manager: DialogManager,
     billing: FromDishka[BillingClient],
+    experiment_service: FromDishka[ExperimentService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -284,6 +320,13 @@ async def on_subscription_plans(  # noqa: C901
 
     if len(plans) == 1:
         logger.info(f"{log(user)} Auto-selected single plan '{plans[0].id}'")
+        await track_checkout_event(
+            dialog_manager=dialog_manager,
+            experiment_service=experiment_service,
+            user=user,
+            event="plan_viewed",
+            plan_id=plans[0].id,
+        )
         adapter.save(plans[0])
         dialog_manager.dialog_data["only_single_plan"] = True
 
@@ -305,6 +348,7 @@ async def on_subscription_plans(  # noqa: C901
                     billing=billing,
                     notification_service=notification_service,
                     redis_client=redis_client,
+                    experiment_service=experiment_service,
                 )
 
                 if payment_data:
@@ -331,6 +375,7 @@ async def on_plan_select(
     dialog_manager: DialogManager,
     selected_plan: int,
     billing: FromDishka[BillingClient],
+    experiment_service: FromDishka[ExperimentService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -342,6 +387,13 @@ async def on_plan_select(
 
     plan = billing_plan_to_dto(billing_plan)
     logger.info(f"{log(user)} Selected plan '{plan.id}'")
+    await track_checkout_event(
+        dialog_manager=dialog_manager,
+        experiment_service=experiment_service,
+        user=user,
+        event="plan_viewed",
+        plan_id=plan.id,
+    )
     adapter = DialogDataAdapter(dialog_manager)
     adapter.save(plan)
 
@@ -358,6 +410,7 @@ async def on_plan_select(
             dialog_manager,
             plan.durations[0].days,
             billing=billing,
+            experiment_service=experiment_service,
             notification_service=notification_service,
             redis_client=redis_client,
         )
@@ -373,6 +426,7 @@ async def on_duration_select(
     dialog_manager: DialogManager,
     selected_duration: int,
     billing: FromDishka[BillingClient],
+    experiment_service: FromDishka[ExperimentService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -389,11 +443,21 @@ async def on_duration_select(
     billing_gateways = await billing.list_active_gateways()
     gateways = [billing_gateway_to_dto(g) for g in billing_gateways if g.Channel in ("BOT", "ALL")]
     default_currency = await billing.get_default_currency()
+    await track_checkout_event(
+        dialog_manager=dialog_manager,
+        experiment_service=experiment_service,
+        user=user,
+        event="duration_selected",
+        plan_id=plan.id,
+        duration_days=selected_duration,
+    )
+    experiment_context = build_checkout_context(experiment_service, user)
     price_details = await billing.calculate_price(
         telegram_id=user.telegram_id,
         plan_id=plan.id,
         duration_days=selected_duration,
         currency=default_currency,
+        experiment=experiment_context.billing_experiment if experiment_context else None,
     )
     pricing = billing_price_details_to_dto(price_details)
     dialog_manager.dialog_data["is_free"] = pricing.is_free
@@ -421,6 +485,7 @@ async def on_duration_select(
             billing=billing,
             notification_service=notification_service,
             redis_client=redis_client,
+            experiment_service=experiment_service,
         )
 
         if payment_data:
@@ -440,6 +505,7 @@ async def on_payment_method_select(
     dialog_manager: DialogManager,
     selected_payment_method: str,
     billing: FromDishka[BillingClient],
+    experiment_service: FromDishka[ExperimentService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -479,6 +545,7 @@ async def on_payment_method_select(
         billing=billing,
         notification_service=notification_service,
         redis_client=redis_client,
+        experiment_service=experiment_service,
     )
 
     if payment_data:
@@ -495,6 +562,7 @@ async def on_crypto_asset_select(
     dialog_manager: DialogManager,
     selected_asset_id: str,
     billing: FromDishka[BillingClient],
+    experiment_service: FromDishka[ExperimentService],
     notification_service: FromDishka[NotificationService],
     redis_client: FromDishka[Redis],
 ) -> None:
@@ -531,6 +599,7 @@ async def on_crypto_asset_select(
         billing=billing,
         notification_service=notification_service,
         redis_client=redis_client,
+        experiment_service=experiment_service,
         gateway_metadata={"chain": asset.chain, "token": asset.token},
     )
 

@@ -802,6 +802,26 @@ class TestPayments:
         assert body["gateway_type"] == "PLAIDLY"
         assert body["gateway_metadata"] == {"chain": "tron", "token": "USDT"}
 
+    async def test_create_payment_with_experiment_context(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(200, {"ID": "pay-ctx", "URL": None})
+
+        await client.create_payment(
+            telegram_id=123,
+            plan_id=42,
+            duration_days=30,
+            currency="USD",
+            gateway_type="YOOKASSA",
+            purchase_type="NEW",
+            experiment={"feature_key": "intro_price", "variant_key": "intro_price_v1_on"},
+        )
+
+        body = mock_http.request.call_args[1]["json"]
+        assert body["experiment"] == {
+            "feature_key": "intro_price",
+            "variant_key": "intro_price_v1_on",
+        }
+
     async def test_create_payment_omits_gateway_metadata_when_none(self):
         client, mock_http = _make_client_with_mock()
         mock_http.request.return_value = _make_response(200, {"ID": "pay-123", "URL": None})
@@ -1295,6 +1315,28 @@ class TestStatisticsAndPricing:
             "plan_id": 42,
             "duration_days": 30,
             "currency": "RUB",
+        }
+
+    async def test_calculate_price_with_experiment_context(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(200, {
+            "original_amount": "100",
+            "discount_percent": 25,
+            "final_amount": "75",
+        })
+
+        await client.calculate_price(
+            123,
+            42,
+            30,
+            "RUB",
+            experiment={"feature_key": "intro_price", "variant_key": "intro_price_v1_on"},
+        )
+
+        body = mock_http.request.call_args[1]["json"]
+        assert body["experiment"] == {
+            "feature_key": "intro_price",
+            "variant_key": "intro_price_v1_on",
         }
 
 

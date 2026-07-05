@@ -26,7 +26,10 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
+from src.services.experiment import ExperimentService
 from src.services.subscription import SubscriptionService
+
+from .checkout_experiments import build_checkout_context
 
 
 async def _await_billing_subscription(
@@ -95,6 +98,7 @@ async def duration_getter(
     user: UserDto,
     i18n: FromDishka[TranslatorRunner],
     billing: FromDishka[BillingClient],
+    experiment_service: FromDishka[ExperimentService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -107,6 +111,7 @@ async def duration_getter(
     only_single_plan = dialog_manager.dialog_data.get("only_single_plan", False)
     dialog_manager.dialog_data["is_free"] = False
     durations = []
+    experiment_context = build_checkout_context(experiment_service, user)
 
     for duration in plan.durations:
         key, kw = i18n_format_days(duration.days)
@@ -115,6 +120,7 @@ async def duration_getter(
             plan_id=plan.id,
             duration_days=duration.days,
             currency=default_currency,
+            experiment=experiment_context.billing_experiment if experiment_context else None,
         )
         pricing = billing_price_details_to_dto(price_details)
         from src.core.enums import Currency  # noqa: PLC0415
@@ -152,6 +158,7 @@ async def payment_method_getter(
     user: UserDto,
     billing: FromDishka[BillingClient],
     i18n: FromDishka[TranslatorRunner],
+    experiment_service: FromDishka[ExperimentService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     adapter = DialogDataAdapter(dialog_manager)
@@ -170,12 +177,15 @@ async def payment_method_getter(
         raise ValueError(f"Duration '{selected_duration}' not found in plan '{plan.name}'")
 
     payment_methods = []
+    experiment_context = build_checkout_context(experiment_service, user)
+
     for gateway in gateways:
         price_details = await billing.calculate_price(
             telegram_id=user.telegram_id,
             plan_id=plan.id,
             duration_days=duration.days,
             currency=gateway.currency.value,
+            experiment=experiment_context.billing_experiment if experiment_context else None,
         )
         pricing = billing_price_details_to_dto(price_details)
         payment_methods.append(
