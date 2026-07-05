@@ -53,6 +53,16 @@ class _ResolvedEstimandConfig:
     environment_id: str = ""
     feature_key: str = TRIAL_EXPERIMENT_KEY
     feature_id: str = ""
+    trial_length_feature_key: str = ExperimentFeature.TRIAL_LENGTH.value
+    trial_length_feature_id: str = ""
+    start_tier_price_feature_key: str = ExperimentFeature.START_TIER_PRICE.value
+    start_tier_price_feature_id: str = ""
+    intro_price_feature_key: str = ExperimentFeature.INTRO_PRICE.value
+    intro_price_feature_id: str = ""
+    checkout_flow_feature_key: str = ExperimentFeature.CHECKOUT_FLOW.value
+    checkout_flow_feature_id: str = ""
+    payment_rescue_feature_key: str = ExperimentFeature.PAYMENT_RESCUE.value
+    payment_rescue_feature_id: str = ""
     on_variant: str = TRIAL_VARIANT_ON
     off_variant: str = TRIAL_VARIANT_OFF
     conversion_event: str = "trial_activated"
@@ -65,8 +75,6 @@ class _ResolvedEstimandConfig:
             and self.organization_id
             and self.project_id
             and self.environment_id
-            and self.feature_key
-            and self.feature_id
         )
 
 
@@ -103,11 +111,12 @@ class ExperimentService:
         self,
         config: AppConfig,
         redis_client: Redis,
+        estimand_client: Any | None = None,
     ) -> None:
         self.config = config
         self.redis_client = redis_client
         self.estimand_config = self._resolve_estimand_config()
-        self.estimand_client = self._build_estimand_client()
+        self.estimand_client = estimand_client or self._build_estimand_client()
         self._features = self._build_features(config, self.estimand_config)
         self._fetched_config = None
         self._estimand_disabled = False
@@ -158,6 +167,46 @@ class ExperimentService:
                 TRIAL_EXPERIMENT_KEY,
             ),
             feature_id=self._as_str(getattr(estimand_cfg, "feature_id", None), ""),
+            trial_length_feature_key=self._as_str(
+                getattr(estimand_cfg, "trial_length_feature_key", None),
+                ExperimentFeature.TRIAL_LENGTH.value,
+            ),
+            trial_length_feature_id=self._as_str(
+                getattr(estimand_cfg, "trial_length_feature_id", None),
+                "",
+            ),
+            start_tier_price_feature_key=self._as_str(
+                getattr(estimand_cfg, "start_tier_price_feature_key", None),
+                ExperimentFeature.START_TIER_PRICE.value,
+            ),
+            start_tier_price_feature_id=self._as_str(
+                getattr(estimand_cfg, "start_tier_price_feature_id", None),
+                "",
+            ),
+            intro_price_feature_key=self._as_str(
+                getattr(estimand_cfg, "intro_price_feature_key", None),
+                ExperimentFeature.INTRO_PRICE.value,
+            ),
+            intro_price_feature_id=self._as_str(
+                getattr(estimand_cfg, "intro_price_feature_id", None),
+                "",
+            ),
+            checkout_flow_feature_key=self._as_str(
+                getattr(estimand_cfg, "checkout_flow_feature_key", None),
+                ExperimentFeature.CHECKOUT_FLOW.value,
+            ),
+            checkout_flow_feature_id=self._as_str(
+                getattr(estimand_cfg, "checkout_flow_feature_id", None),
+                "",
+            ),
+            payment_rescue_feature_key=self._as_str(
+                getattr(estimand_cfg, "payment_rescue_feature_key", None),
+                ExperimentFeature.PAYMENT_RESCUE.value,
+            ),
+            payment_rescue_feature_id=self._as_str(
+                getattr(estimand_cfg, "payment_rescue_feature_id", None),
+                "",
+            ),
             on_variant=self._as_str(getattr(estimand_cfg, "on_variant", None), TRIAL_VARIANT_ON),
             off_variant=self._as_str(getattr(estimand_cfg, "off_variant", None), TRIAL_VARIANT_OFF),
             conversion_event=self._as_str(
@@ -220,9 +269,9 @@ class ExperimentService:
                 start_date=self._coerce_start_date(
                     getattr(cfg, "trial_length_start_date", None)
                 ),
-                use_estimand=False,
-                estimand_feature_key=ExperimentFeature.TRIAL_LENGTH.value,
-                estimand_feature_id="",
+                use_estimand=True,
+                estimand_feature_key=estimand_config.trial_length_feature_key,
+                estimand_feature_id=estimand_config.trial_length_feature_id,
                 estimand_conversion_event=estimand_config.conversion_event,
                 estimand_on_variant=ExperimentFeature.TRIAL_LENGTH.value + "_on",
                 estimand_off_variant=ExperimentFeature.TRIAL_LENGTH.value + "_off",
@@ -239,9 +288,9 @@ class ExperimentService:
                 start_date=self._coerce_start_date(
                     getattr(cfg, "start_tier_price_start_date", None)
                 ),
-                use_estimand=False,
-                estimand_feature_key=ExperimentFeature.START_TIER_PRICE.value,
-                estimand_feature_id="",
+                use_estimand=True,
+                estimand_feature_key=estimand_config.start_tier_price_feature_key,
+                estimand_feature_id=estimand_config.start_tier_price_feature_id,
                 estimand_conversion_event=estimand_config.conversion_event,
                 estimand_on_variant=ExperimentFeature.START_TIER_PRICE.value + "_on",
                 estimand_off_variant=ExperimentFeature.START_TIER_PRICE.value + "_off",
@@ -258,9 +307,9 @@ class ExperimentService:
                 start_date=self._coerce_start_date(
                     getattr(cfg, "intro_price_start_date", None)
                 ),
-                use_estimand=False,
-                estimand_feature_key=ExperimentFeature.INTRO_PRICE.value,
-                estimand_feature_id="",
+                use_estimand=True,
+                estimand_feature_key=estimand_config.intro_price_feature_key,
+                estimand_feature_id=estimand_config.intro_price_feature_id,
                 estimand_conversion_event=estimand_config.conversion_event,
                 estimand_on_variant=ExperimentFeature.INTRO_PRICE.value + "_on",
                 estimand_off_variant=ExperimentFeature.INTRO_PRICE.value + "_off",
@@ -277,9 +326,9 @@ class ExperimentService:
                 start_date=self._coerce_start_date(
                     getattr(cfg, "checkout_flow_start_date", None)
                 ),
-                use_estimand=False,
-                estimand_feature_key=ExperimentFeature.CHECKOUT_FLOW.value,
-                estimand_feature_id="",
+                use_estimand=True,
+                estimand_feature_key=estimand_config.checkout_flow_feature_key,
+                estimand_feature_id=estimand_config.checkout_flow_feature_id,
                 estimand_conversion_event=estimand_config.conversion_event,
                 estimand_on_variant=ExperimentFeature.CHECKOUT_FLOW.value + "_on",
                 estimand_off_variant=ExperimentFeature.CHECKOUT_FLOW.value + "_off",
@@ -296,9 +345,9 @@ class ExperimentService:
                 start_date=self._coerce_start_date(
                     getattr(cfg, "payment_rescue_start_date", None)
                 ),
-                use_estimand=False,
-                estimand_feature_key=ExperimentFeature.PAYMENT_RESCUE.value,
-                estimand_feature_id="",
+                use_estimand=True,
+                estimand_feature_key=estimand_config.payment_rescue_feature_key,
+                estimand_feature_id=estimand_config.payment_rescue_feature_id,
                 estimand_conversion_event=estimand_config.conversion_event,
                 estimand_on_variant=ExperimentFeature.PAYMENT_RESCUE.value + "_on",
                 estimand_off_variant=ExperimentFeature.PAYMENT_RESCUE.value + "_off",
@@ -309,7 +358,6 @@ class ExperimentService:
         if (
             not self.estimand_config.enabled
             or not self.estimand_config.is_fully_configured()
-            or not bool(getattr(self.config.experiments, "trial_enabled", False))
             or EstimandClient is None
             or EstimandClientConfig is None
         ):
@@ -330,18 +378,24 @@ class ExperimentService:
             return None
 
     def _should_use_estimand(self, feature: _FeatureSpec) -> bool:
+        if feature.key == TRIAL_EXPERIMENT_KEY and not bool(
+            getattr(self.config.experiments, "trial_enabled", False)
+        ):
+            return False
+
         return (
             feature.use_estimand
             and bool(
                 self.estimand_config.enabled
                 and self.estimand_config.is_fully_configured()
-                and bool(getattr(self.config.experiments, "trial_enabled", False))
                 and not self._estimand_disabled
                 and self.estimand_client is not None
             )
-            and bool(feature.estimand_feature_id)
             and bool(feature.estimand_feature_key)
         )
+
+    def _should_track_estimand_event(self, feature: _FeatureSpec) -> bool:
+        return self._should_use_estimand(feature) and bool(feature.estimand_feature_id)
 
     def _fetch_estimand_config(self) -> Any | None:
         if self._fetched_config is not None:
@@ -461,7 +515,7 @@ class ExperimentService:
         telegram_id: int,
         variant: str,
     ) -> None:
-        if not self._should_use_estimand(feature):
+        if not self._should_track_estimand_event(feature):
             return
 
         try:
@@ -484,7 +538,7 @@ class ExperimentService:
         variant: str,
         event: str,
     ) -> None:
-        if not self._should_use_estimand(feature):
+        if not self._should_track_estimand_event(feature):
             return
 
         event_name = event or feature.estimand_conversion_event

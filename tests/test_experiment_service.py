@@ -111,7 +111,19 @@ def _service_estimand(
     on_variant: str = TRIAL_VARIANT_ON,
     off_variant: str = TRIAL_VARIANT_OFF,
     feature_key: str = TRIAL_EXPERIMENT_KEY,
+    feature_id: str = "feature-1",
+    trial_length_feature_id: str = "",
+    start_tier_price_feature_id: str = "",
+    intro_price_feature_id: str = "",
+    checkout_flow_feature_id: str = "",
+    payment_rescue_feature_id: str = "",
+    checkout_flow_feature_key: str = "checkout_flow",
+    trial_length_feature_key: str = "trial_length",
+    start_tier_price_feature_key: str = "start_tier_price",
+    intro_price_feature_key: str = "intro_price",
+    payment_rescue_feature_key: str = "payment_rescue",
     trial_offer_start_date: datetime | None = None,
+    payload: ConfigPayload | None = None,
 ) -> tuple[ExperimentService, MagicMock, ConfigPayload]:
     config = MagicMock()
     config.experiments.trial_enabled = trial_enabled
@@ -130,7 +142,17 @@ def _service_estimand(
     config.experiments.estimand.project_id = "project-1"
     config.experiments.estimand.environment_id = "env-1"
     config.experiments.estimand.feature_key = feature_key
-    config.experiments.estimand.feature_id = "feature-1"
+    config.experiments.estimand.feature_id = feature_id
+    config.experiments.estimand.trial_length_feature_key = trial_length_feature_key
+    config.experiments.estimand.trial_length_feature_id = trial_length_feature_id
+    config.experiments.estimand.start_tier_price_feature_key = start_tier_price_feature_key
+    config.experiments.estimand.start_tier_price_feature_id = start_tier_price_feature_id
+    config.experiments.estimand.intro_price_feature_key = intro_price_feature_key
+    config.experiments.estimand.intro_price_feature_id = intro_price_feature_id
+    config.experiments.estimand.checkout_flow_feature_key = checkout_flow_feature_key
+    config.experiments.estimand.checkout_flow_feature_id = checkout_flow_feature_id
+    config.experiments.estimand.payment_rescue_feature_key = payment_rescue_feature_key
+    config.experiments.estimand.payment_rescue_feature_id = payment_rescue_feature_id
     config.experiments.estimand.on_variant = on_variant
     config.experiments.estimand.off_variant = off_variant
     config.experiments.estimand.conversion_event = "trial_activated"
@@ -138,7 +160,7 @@ def _service_estimand(
     redis_client.set.return_value = True
 
     estimand_client = MagicMock()
-    payload = _build_estimand_payload(
+    payload = payload or _build_estimand_payload(
         on_variant=on_variant,
         off_variant=off_variant,
         feature_key=feature_key,
@@ -157,8 +179,11 @@ def _service_estimand(
         estimand_client.track_exposure = MagicMock()
         estimand_client.track_conversion = MagicMock()
 
-    service = ExperimentService(config, redis_client)
-    service.estimand_client = estimand_client
+    service = ExperimentService(
+        config,
+        redis_client,
+        estimand_client=estimand_client,
+    )
     return service, estimand_client, payload
 
 
@@ -215,6 +240,89 @@ class TestTrialExperiment:
         assert first in {TRIAL_VARIANT_ON, TRIAL_VARIANT_OFF}
         assert estimand_client.fetch_config.call_count == 1
         assert estimand_client.track_exposure.call_count == 0
+
+    async def test_estimand_client_can_be_injected_into_service(self):
+        svc, estimand_client, _ = _service_estimand()
+
+        assert svc.estimand_client is estimand_client
+        assert await svc.expose(TRIAL_EXPERIMENT_KEY, 123) in {
+            TRIAL_VARIANT_ON,
+            TRIAL_VARIANT_OFF,
+        }
+        assert estimand_client.evaluate_feature.call_count == 1
+
+    async def test_non_trial_feature_evaluates_via_estimand_when_configured(self):
+        feature_key = ExperimentFeature.CHECKOUT_FLOW.value
+        feature_id = "cf-01"
+        on_variant = "checkout_flow_v1_on"
+        off_variant = "checkout_flow_v1_off"
+        svc, estimand_client, payload = _service_estimand(
+            feature_key=feature_key,
+            feature_id=feature_id,
+            checkout_flow_feature_id=feature_id,
+            on_variant=on_variant,
+            off_variant=off_variant,
+        )
+        user = UserDto(telegram_id=555, name="NonTrial")
+
+        evaluation = svc.evaluate_feature_for_user(user, ExperimentFeature.CHECKOUT_FLOW)
+
+        assert evaluation.feature_key == feature_key
+        assert evaluation.variant in {on_variant, off_variant}
+        assert evaluation.payload in (
+            payload.features[feature_key].variations[0].value,
+            payload.features[feature_key].variations[1].value,
+        )
+        assert estimand_client.evaluate_feature.call_count >= 1
+
+    async def test_non_trial_start_date_blocks_old_users_from_estimand_feature(self):
+        now = datetime.now(timezone.utc)
+        start_date = now + timedelta(days=1)
+        user = UserDto(
+            telegram_id=901,
+            name="Old non-trial",
+            created_at=now - timedelta(days=2),
+        )
+        svc = _service(
+            trial_on_weight=50,
+            trial_offer_start_date=now,
+            trial_length_start_date=None,
+            start_tier_price_start_date=None,
+            intro_price_start_date=None,
+            checkout_flow_start_date=start_date,
+            payment_rescue_start_date=None,
+        )
+
+        assert (
+            await svc.expose(
+                ExperimentFeature.CHECKOUT_FLOW.value,
+                user.telegram_id,
+                user.created_at,
+            )
+            == "checkout_flow_v1_off"
+        )
+        svc.redis_client.set.assert_not_awaited()
+
+    async def test_non_trial_unknown_created_at_falls_back_to_control(self):
+        user = UserDto(
+            telegram_id=902,
+            name="Unknown non-trial",
+            created_at=None,
+        )
+        svc = _service(
+            trial_on_weight=50,
+            checkout_flow_start_date=datetime.now(timezone.utc),
+        )
+
+        assert (
+            await svc.expose(
+                ExperimentFeature.CHECKOUT_FLOW.value,
+                user.telegram_id,
+                user.created_at,
+            )
+            == "checkout_flow_v1_off"
+        )
+        svc.redis_client.set.assert_not_awaited()
 
     async def test_disabled_experiment_uses_local_control_without_estimate(self):
         svc = _service(trial_enabled=False, trial_on_weight=0)
