@@ -73,9 +73,7 @@ async def _handle_pending_cancel_survey_check(
     if was_pinged:
         user = await user_service.get(telegram_id)
         if user:
-            logger.info(
-                f"Sending pending checkout reminder for '{payment_id}' to '{telegram_id}'"
-            )
+            logger.info(f"Sending pending checkout reminder for '{payment_id}' to '{telegram_id}'")
             await notification_service.notify_user(
                 user=user,
                 payload=MessagePayload(i18n_key="ntf-event-cancel-survey-pending"),
