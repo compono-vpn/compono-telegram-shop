@@ -53,6 +53,7 @@ def _service(
 
 def _build_estimand_payload(
     *,
+    revision: str = "rev-1",
     on_variant: str = TRIAL_VARIANT_ON,
     off_variant: str = TRIAL_VARIANT_OFF,
     feature_key: str = TRIAL_EXPERIMENT_KEY,
@@ -78,7 +79,7 @@ def _build_estimand_payload(
         raise ValueError("variation weights must match variation count")
 
     return ConfigPayload(
-        revision="rev-1",
+        revision=revision,
         features={
             feature_key: FeatureConfig(
                 type="flag",
@@ -199,6 +200,14 @@ def _service_estimand(
         estimand_client=estimand_client,
     )
     return service, estimand_client, payload
+
+
+def _payload_evaluator(payload: ConfigPayload):
+    return lambda **kwargs: evaluate_feature_from_payload(
+        config=payload,
+        feature_key=kwargs["feature_key"],
+        unit_id=kwargs["unit_id"],
+    )
 
 
 class TestExperimentModel:
@@ -498,6 +507,67 @@ class TestTrialExperiment:
         assert variant == TRIAL_VARIANT_ON
         svc.redis_client.set.assert_awaited_once()
 
+    async def test_exposure_cache_key_includes_estimand_revision(self):
+        payload = _build_estimand_payload(revision="rev-1")
+        svc, estimand_client, _ = _service_estimand(payload=payload)
+
+        await svc.expose(TRIAL_EXPERIMENT_KEY, 42)
+
+        updated_payload = _build_estimand_payload(revision="rev-2")
+        estimand_client.fetch_config.return_value = updated_payload
+        estimand_client.evaluate_feature.side_effect = _payload_evaluator(updated_payload)
+        svc._fetched_config = None
+        svc._fetched_config_at = 0.0
+
+        await svc.expose(TRIAL_EXPERIMENT_KEY, 42)
+
+        names = [call.kwargs["name"] for call in svc.redis_client.set.await_args_list]
+        assert names == [
+            "exp_exposed:trial_offer:42:rev-1:trial_on",
+            "exp_exposed:trial_offer:42:rev-2:trial_on",
+        ]
+
+    async def test_exposure_cache_key_includes_variant(self):
+        first_payload = _build_estimand_payload(
+            revision="rev-1",
+            feature_variations=[
+                ("checkout_flow_v1_on", {"enabled": True}),
+                ("checkout_flow_v1_off", {"enabled": False}),
+            ],
+            variation_weights=[1.0, 0.0],
+            feature_key=ExperimentFeature.CHECKOUT_FLOW.value,
+        )
+        svc, estimand_client, _ = _service_estimand(
+            feature_key=ExperimentFeature.CHECKOUT_FLOW.value,
+            feature_id="checkout-flow-1",
+            checkout_flow_feature_id="checkout-flow-1",
+            payload=first_payload,
+        )
+
+        await svc.expose(ExperimentFeature.CHECKOUT_FLOW.value, 42)
+
+        second_payload = _build_estimand_payload(
+            revision="rev-1",
+            feature_variations=[
+                ("checkout_flow_v1_on", {"enabled": True}),
+                ("checkout_flow_v1_off", {"enabled": False}),
+            ],
+            variation_weights=[0.0, 1.0],
+            feature_key=ExperimentFeature.CHECKOUT_FLOW.value,
+        )
+        estimand_client.fetch_config.return_value = second_payload
+        estimand_client.evaluate_feature.side_effect = _payload_evaluator(second_payload)
+        svc._fetched_config = None
+        svc._fetched_config_at = 0.0
+
+        await svc.expose(ExperimentFeature.CHECKOUT_FLOW.value, 42)
+
+        names = [call.kwargs["name"] for call in svc.redis_client.set.await_args_list]
+        assert names == [
+            "exp_exposed:checkout_flow:42:rev-1:checkout_flow_v1_on",
+            "exp_exposed:checkout_flow:42:rev-1:checkout_flow_v1_off",
+        ]
+
     async def test_exposure_survives_redis_error(self):
         svc = _service(trial_on_weight=100)
         svc.redis_client.set.side_effect = Exception("redis down")
@@ -525,6 +595,54 @@ class TestTrialExperiment:
         svc.record_conversion(TRIAL_EXPERIMENT_KEY, 7, "")
         assert estimand_client.track_conversion.call_count == 1
         assert estimand_client.track_conversion.call_args.kwargs["event_name"] == "trial_activated"
+
+    async def test_attributed_conversion_reuses_original_variant_after_config_change(self):
+        initial_payload = _build_estimand_payload(
+            revision="rev-1",
+            feature_key=ExperimentFeature.INTRO_PRICE.value,
+            feature_variations=[
+                ("intro_99", {"final_amount": "99"}),
+                ("intro_119", {"final_amount": "119"}),
+            ],
+            variation_weights=[1.0, 0.0],
+        )
+        svc, estimand_client, _ = _service_estimand(
+            feature_key=ExperimentFeature.INTRO_PRICE.value,
+            feature_id="intro-price-1",
+            intro_price_feature_id="intro-price-1",
+            payload=initial_payload,
+        )
+        user = UserDto(telegram_id=777, name="Checkout", created_at=datetime.now(timezone.utc))
+        original = svc.evaluate_feature_for_user(user, ExperimentFeature.INTRO_PRICE)
+        original_eval_count = estimand_client.evaluate_feature.call_count
+
+        updated_payload = _build_estimand_payload(
+            revision="rev-2",
+            feature_key=ExperimentFeature.INTRO_PRICE.value,
+            feature_variations=[
+                ("intro_129", {"final_amount": "129"}),
+                ("intro_119", {"final_amount": "119"}),
+            ],
+            variation_weights=[1.0, 0.0],
+        )
+        estimand_client.fetch_config.return_value = updated_payload
+        estimand_client.evaluate_feature.side_effect = _payload_evaluator(updated_payload)
+        svc._fetched_config = None
+        svc._fetched_config_at = 0.0
+
+        svc.record_attributed_conversion(
+            original.feature_key,
+            original.variant,
+            user.telegram_id,
+            "payment_completed",
+        )
+
+        assert estimand_client.evaluate_feature.call_count == original_eval_count
+        assert estimand_client.track_conversion.call_args.kwargs["variant_key"] == "intro_99"
+        assert (
+            estimand_client.track_conversion.call_args.kwargs["event_name"]
+            == "payment_completed"
+        )
 
     async def test_start_date_blocks_old_users_from_trial_offer(self):
         now = datetime.now(timezone.utc)

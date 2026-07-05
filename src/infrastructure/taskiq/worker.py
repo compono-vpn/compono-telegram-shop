@@ -10,12 +10,12 @@ from src.core.logger import setup_logger
 from src.core.metrics import start_metrics_server
 from src.infrastructure.di import create_container
 from src.infrastructure.kafka.consumer import UserNotificationConsumer
+from src.infrastructure.kafka.pricing_outcome_consumer import PricingOutcomeConsumer
 from src.infrastructure.kafka.trial_reminder_consumer import TrialReminderConsumer
 
 from .broker import broker
 
-_notification_consumer: UserNotificationConsumer | None = None
-_trial_reminder_consumer: TrialReminderConsumer | None = None
+_kafka_consumers: list[object] = []
 
 
 def worker() -> RedisStreamBroker:
@@ -32,18 +32,39 @@ def worker() -> RedisStreamBroker:
 
     @broker.on_event(TaskiqEvents.WORKER_STARTUP)
     async def on_startup(state: TaskiqState) -> None:
-        global _notification_consumer, _trial_reminder_consumer  # noqa: PLW0603
+        global _kafka_consumers  # noqa: PLW0603
         start_metrics_server(TASKIQ_WORKER_METRICS_PORT)
-        _notification_consumer = UserNotificationConsumer(config, container)
-        await _notification_consumer.start()
-        _trial_reminder_consumer = TrialReminderConsumer(config, container)
-        await _trial_reminder_consumer.start()
+        _kafka_consumers = [
+            UserNotificationConsumer(config, container),
+            TrialReminderConsumer(config, container),
+            PricingOutcomeConsumer(
+                config,
+                container,
+                topic=config.kafka_payment_completed_topic,
+                group_suffix="pricing-outcome-payment-completed",
+                event="payment_completed",
+            ),
+            PricingOutcomeConsumer(
+                config,
+                container,
+                topic=config.kafka_payment_canceled_topic,
+                group_suffix="pricing-outcome-payment-canceled",
+                event="payment_canceled",
+            ),
+            PricingOutcomeConsumer(
+                config,
+                container,
+                topic=config.kafka_subscription_created_topic,
+                group_suffix="pricing-outcome-subscription-created",
+                event="subscription_created",
+            ),
+        ]
+        for consumer in _kafka_consumers:
+            await consumer.start()
 
     @broker.on_event(TaskiqEvents.WORKER_SHUTDOWN)
     async def on_shutdown(state: TaskiqState) -> None:
-        if _notification_consumer:
-            await _notification_consumer.stop()
-        if _trial_reminder_consumer:
-            await _trial_reminder_consumer.stop()
+        for consumer in reversed(_kafka_consumers):
+            await consumer.stop()
 
     return broker

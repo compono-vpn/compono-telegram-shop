@@ -47,11 +47,21 @@ class _ExperimentService:
         if key == ExperimentFeature.INTRO_PRICE.value and self.intro_price is not None:
             payload = {"final_amount": str(self.intro_price)}
             variant = "intro_99"
-        return SimpleNamespace(feature_key=key, variant=variant, payload=payload)
+        return SimpleNamespace(
+            feature_key=key,
+            variant=variant,
+            payload=payload,
+            config_revision="rev-1",
+            track_events=True,
+        )
 
     async def expose(self, experiment_key: str, telegram_id: int, created_at=None) -> str:
         self.exposures.append((experiment_key, telegram_id))
         return f"{experiment_key}_v1_on"
+
+    async def expose_evaluation(self, evaluation, telegram_id: int) -> str:
+        self.exposures.append((evaluation.feature_key, telegram_id))
+        return evaluation.variant
 
     def record_conversion(
         self,
@@ -60,6 +70,9 @@ class _ExperimentService:
         event: str,
         created_at=None,
     ) -> None:
+        self.events.append((event, telegram_id))
+
+    def record_evaluated_conversion(self, evaluation, telegram_id: int, event: str) -> None:
         self.events.append((event, telegram_id))
 
 
@@ -240,6 +253,7 @@ async def test_on_payment_method_select_passes_experiment_context_to_create_paym
     payment_call = billing.calls[0]
     assert payment_call["experiment"]["feature_key"] == "start_tier_price"
     assert payment_call["experiment"]["variant_key"] == "price_99"
+    assert payment_call["experiment"]["config_revision"] == "rev-1"
     assert payment_call["experiment"]["payload"] == {"final_amount": "99.00"}
     assert payment_call["experiment"]["price_override"] == {"price": "99"}
     assert (ExperimentFeature.CHECKOUT_FLOW.value, 777) in exp_service.exposures
