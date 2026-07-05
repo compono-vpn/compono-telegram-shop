@@ -103,6 +103,7 @@ async def _create_payment_and_get_data(
             experiment_service=experiment_service,
             user=user,
             event="checkout_started",
+            context=experiment_context,
             plan=plan,
             plan_id=plan.id,
             duration_days=duration.days,
@@ -128,6 +129,7 @@ async def _create_payment_and_get_data(
             experiment_service=experiment_service,
             user=user,
             event="payment_link_created",
+            context=experiment_context,
             plan=plan,
             plan_id=plan.id,
             duration_days=duration.days,
@@ -453,21 +455,22 @@ async def on_duration_select(
     billing_gateways = await billing.list_active_gateways()
     gateways = [billing_gateway_to_dto(g) for g in billing_gateways if g.Channel in ("BOT", "ALL")]
     default_currency = await billing.get_default_currency()
-    await track_checkout_event(
-        dialog_manager=dialog_manager,
-        experiment_service=experiment_service,
-        user=user,
-        event="duration_selected",
-        plan=plan,
-        plan_id=plan.id,
-        duration_days=selected_duration,
-        purchase_type=dialog_manager.dialog_data.get("purchase_type"),
-    )
     purchase_type: PurchaseType | None = dialog_manager.dialog_data.get("purchase_type")
     experiment_context = build_checkout_context(
         experiment_service,
         user,
         plan=plan,
+        duration_days=selected_duration,
+        purchase_type=purchase_type,
+    )
+    await track_checkout_event(
+        dialog_manager=dialog_manager,
+        experiment_service=experiment_service,
+        user=user,
+        event="duration_selected",
+        context=experiment_context,
+        plan=plan,
+        plan_id=plan.id,
         duration_days=selected_duration,
         purchase_type=purchase_type,
     )

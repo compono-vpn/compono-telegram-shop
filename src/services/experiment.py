@@ -98,6 +98,7 @@ class _FeatureEvaluation:
     feature_key: str
     variant: str
     payload: Any | None
+    config_revision: str | None
     track_events: bool
 
 
@@ -106,6 +107,8 @@ class FeatureEvaluation:
     feature_key: str
     variant: str
     payload: Any | None
+    config_revision: str | None
+    track_events: bool
 
 
 class ExperimentService:
@@ -434,6 +437,21 @@ class ExperimentService:
         return self._features[experiment_key]
 
     @staticmethod
+    def _extract_config_revision(payload: Any | None) -> str | None:
+        revision = getattr(payload, "revision", None)
+        if isinstance(revision, str) and revision.strip():
+            return revision.strip()
+        if isinstance(payload, dict):
+            raw_revision = payload.get("revision")
+            if isinstance(raw_revision, str) and raw_revision.strip():
+                return raw_revision.strip()
+        return None
+
+    @staticmethod
+    def _local_config_revision(feature: _FeatureSpec) -> str:
+        return feature.experiment.salt or feature.key
+
+    @staticmethod
     def _local_fallback_evaluation(
         feature: _FeatureSpec,
         telegram_id: int,
@@ -444,6 +462,7 @@ class ExperimentService:
             feature_key=feature.key,
             variant=assign_variant(feature.experiment, telegram_id),
             payload=None,
+            config_revision=ExperimentService._local_config_revision(feature),
             track_events=track_events,
         )
 
@@ -460,6 +479,7 @@ class ExperimentService:
                 feature_key=feature.key,
                 variant=feature.experiment.variants[0],
                 payload=None,
+                config_revision=self._local_config_revision(feature),
                 track_events=False,
             )
 
@@ -490,6 +510,7 @@ class ExperimentService:
                     feature_key=feature.key,
                     variant=variation,
                     payload=getattr(result, "value", None),
+                    config_revision=self._extract_config_revision(payload),
                     track_events=True,
                 )
 
@@ -612,6 +633,90 @@ class ExperimentService:
             feature_key=evaluation.feature_key,
             variant=evaluation.variant,
             payload=evaluation.payload,
+            config_revision=evaluation.config_revision,
+            track_events=evaluation.track_events,
+        )
+
+    @staticmethod
+    def _exposure_cache_key(evaluation: FeatureEvaluation, telegram_id: int) -> str:
+        revision = evaluation.config_revision or "unversioned"
+        return ":".join(
+            (
+                "exp_exposed",
+                evaluation.feature_key,
+                str(telegram_id),
+                revision,
+                evaluation.variant,
+            )
+        )
+
+    async def expose_evaluation(
+        self,
+        evaluation: FeatureEvaluation,
+        telegram_id: int,
+    ) -> str:
+        feature = self._feature_for_key(evaluation.feature_key)
+        variant = evaluation.variant
+
+        if not evaluation.track_events:
+            return variant
+
+        try:
+            first_time = await self.redis_client.set(
+                name=self._exposure_cache_key(evaluation, telegram_id),
+                value=variant,
+                nx=True,
+                ex=_EXPOSURE_TTL,
+            )
+            if first_time:
+                EXPERIMENT_EXPOSURES_TOTAL.labels(
+                    experiment=evaluation.feature_key,
+                    variant=variant,
+                ).inc()
+                self._track_estimand_exposure(feature, telegram_id, variant)
+        except Exception:
+            logger.opt(exception=True).warning("Failed to record experiment exposure")
+        return variant
+
+    def record_evaluated_conversion(
+        self,
+        evaluation: FeatureEvaluation,
+        telegram_id: int,
+        event: str,
+    ) -> None:
+        if not evaluation.track_events:
+            return
+
+        feature = self._feature_for_key(evaluation.feature_key)
+        EXPERIMENT_CONVERSIONS_TOTAL.labels(
+            experiment=evaluation.feature_key,
+            variant=evaluation.variant,
+            event=event,
+        ).inc()
+        self._track_estimand_conversion(feature, telegram_id, evaluation.variant, event)
+
+    def record_attributed_conversion(
+        self,
+        feature_key: str,
+        variant: str,
+        telegram_id: int,
+        event: str,
+    ) -> None:
+        feature = self._features.get(feature_key)
+        if feature is None:
+            logger.warning(f"Unknown experiment feature '{feature_key}' in attributed conversion")
+            return
+
+        self.record_evaluated_conversion(
+            FeatureEvaluation(
+                feature_key=feature_key,
+                variant=variant,
+                payload=None,
+                config_revision=None,
+                track_events=True,
+            ),
+            telegram_id,
+            event,
         )
 
     async def expose(
@@ -620,26 +725,17 @@ class ExperimentService:
         telegram_id: int,
         created_at: datetime | None = None,
     ) -> str:
-        feature = self._feature_for_key(experiment_key)
         evaluation = self._evaluate(experiment_key, telegram_id, created_at)
-        variant = evaluation.variant
-
-        if not evaluation.track_events:
-            return variant
-
-        try:
-            first_time = await self.redis_client.set(
-                name=f"exp_exposed:{experiment_key}:{telegram_id}",
-                value=variant,
-                nx=True,
-                ex=_EXPOSURE_TTL,
-            )
-            if first_time:
-                EXPERIMENT_EXPOSURES_TOTAL.labels(experiment=experiment_key, variant=variant).inc()
-                self._track_estimand_exposure(feature, telegram_id, variant)
-        except Exception:
-            logger.opt(exception=True).warning("Failed to record experiment exposure")
-        return variant
+        return await self.expose_evaluation(
+            FeatureEvaluation(
+                feature_key=evaluation.feature_key,
+                variant=evaluation.variant,
+                payload=evaluation.payload,
+                config_revision=evaluation.config_revision,
+                track_events=evaluation.track_events,
+            ),
+            telegram_id,
+        )
 
     def record_conversion(
         self,
@@ -648,16 +744,18 @@ class ExperimentService:
         event: str,
         created_at: datetime | None = None,
     ) -> None:
-        feature = self._feature_for_key(experiment_key)
         evaluation = self._evaluate(experiment_key, telegram_id, created_at)
-
-        if not evaluation.track_events:
-            return
-
-        EXPERIMENT_CONVERSIONS_TOTAL.labels(
-            experiment=experiment_key, variant=evaluation.variant, event=event
-        ).inc()
-        self._track_estimand_conversion(feature, telegram_id, evaluation.variant, event)
+        self.record_evaluated_conversion(
+            FeatureEvaluation(
+                feature_key=evaluation.feature_key,
+                variant=evaluation.variant,
+                payload=evaluation.payload,
+                config_revision=evaluation.config_revision,
+                track_events=evaluation.track_events,
+            ),
+            telegram_id,
+            event,
+        )
 
     async def is_trial_offer_enabled(self, user_or_telegram_id: int | UserDto) -> bool:
         if isinstance(user_or_telegram_id, UserDto):

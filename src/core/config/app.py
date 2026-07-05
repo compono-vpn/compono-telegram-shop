@@ -53,6 +53,14 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     def kafka_subscription_created_topic(self) -> str:
         return f"{self.kafka_topic_env}.compono-billing.subscription.created.v1"
 
+    @property
+    def kafka_payment_completed_topic(self) -> str:
+        return f"{self.kafka_topic_env}.compono-billing.payment.completed.v1"
+
+    @property
+    def kafka_payment_canceled_topic(self) -> str:
+        return f"{self.kafka_topic_env}.compono-billing.payment.canceled.v1"
+
     # External service base URLs (overridable, non-secret)
     yookassa_api_base: str = "https://api.yookassa.ru"
     yoomoney_api_base: str = "https://yoomoney.ru"
