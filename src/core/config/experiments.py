@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Self
 
 from pydantic import Field, SecretStr, model_validator
@@ -34,6 +35,12 @@ class EstimandConfig(BaseConfig, env_prefix="APP_EXPERIMENT_ESTIMAND_"):
 class ExperimentsConfig(BaseConfig, env_prefix="APP_EXPERIMENT_"):
     trial_enabled: bool = False
     trial_on_weight: int = 50
+    trial_offer_start_date: datetime | None = None
+    trial_length_start_date: datetime | None = None
+    start_tier_price_start_date: datetime | None = None
+    intro_price_start_date: datetime | None = None
+    checkout_flow_start_date: datetime | None = None
+    payment_rescue_start_date: datetime | None = None
     estimand: EstimandConfig = Field(default_factory=EstimandConfig)
 
     @model_validator(mode="after")

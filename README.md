@@ -239,6 +239,12 @@ Now, open the .env file and update the variables:
 - **`REMNAWAVE_WEBHOOK_SECRET`** : Must match the value of `WEBHOOK_SECRET_HEADER` from `.env` the panel.
 - **`APP_EXPERIMENT_TRIAL_ENABLED`** : Enable local trial A/B (default `false`).
 - **`APP_EXPERIMENT_TRIAL_ON_WEIGHT`** : Trial-on percentage when local experiment is enabled.
+- **`APP_EXPERIMENT_TRIAL_OFFER_START_DATE`** : Start date-time (ISO-8601 UTC) for `trial_offer` gate.
+- **`APP_EXPERIMENT_TRIAL_LENGTH_START_DATE`** : Start date-time (ISO-8601 UTC) for `trial_length` feature gating.
+- **`APP_EXPERIMENT_START_TIER_PRICE_START_DATE`** : Start date-time (ISO-8601 UTC) for `start_tier_price` feature gating.
+- **`APP_EXPERIMENT_INTRO_PRICE_START_DATE`** : Start date-time (ISO-8601 UTC) for `intro_price` feature gating.
+- **`APP_EXPERIMENT_CHECKOUT_FLOW_START_DATE`** : Start date-time (ISO-8601 UTC) for `checkout_flow` feature gating.
+- **`APP_EXPERIMENT_PAYMENT_RESCUE_START_DATE`** : Start date-time (ISO-8601 UTC) for `payment_rescue` feature gating.
 - **`APP_EXPERIMENT_ESTIMAND_ENABLED`** : Enable Estimand-driven assignment/events for production (default `false`).
 - **`APP_EXPERIMENT_ESTIMAND_BASE_URL`** : Estimand API base URL.
 - **`APP_EXPERIMENT_ESTIMAND_ORGANIZATION_ID`** : Estimand organization id used for config fetch.

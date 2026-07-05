@@ -93,7 +93,7 @@ async def on_get_trial(
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
 
-    if not await experiment_service.is_trial_offer_enabled(user.telegram_id):
+    if not await experiment_service.is_trial_offer_enabled(user):
         logger.info(f"{log(user)} Trial suppressed by experiment variant")
         await notification_service.notify_user(
             user=user,
