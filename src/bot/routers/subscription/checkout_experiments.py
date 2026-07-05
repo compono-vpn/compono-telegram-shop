@@ -23,11 +23,11 @@ class CheckoutExperimentContext:
     pricing_experiment: FeatureEvaluation | None
 
     @property
-    def feature_keys(self) -> tuple[str, ...]:
-        keys = [self.checkout_flow.feature_key]
+    def tracked_features(self) -> tuple[FeatureEvaluation, ...]:
+        features = [self.checkout_flow]
         if self.pricing_experiment is not None:
-            keys.append(self.pricing_experiment.feature_key)
-        return tuple(keys)
+            features.append(self.pricing_experiment)
+        return tuple(features)
 
     @property
     def billing_experiment(self) -> dict[str, Any] | None:
@@ -40,6 +40,8 @@ class CheckoutExperimentContext:
             "variant_key": self.pricing_experiment.variant,
             "payload": payload,
         }
+        if self.pricing_experiment.config_revision:
+            experiment["config_revision"] = self.pricing_experiment.config_revision
         price_override = _extract_price_override(payload)
         if price_override is not None:
             experiment["price_override"] = price_override
@@ -151,6 +153,7 @@ async def track_checkout_event(
     user: UserDto,
     event: str,
     *,
+    context: CheckoutExperimentContext | None = None,
     plan: PlanDto | None = None,
     plan_id: int | None = None,
     duration_days: int | None = None,
@@ -174,7 +177,7 @@ async def track_checkout_event(
         return
 
     cache[cache_key] = True
-    context = build_checkout_context(
+    context = context or build_checkout_context(
         experiment_service,
         user,
         plan=plan,
@@ -184,41 +187,30 @@ async def track_checkout_event(
     if context is None:
         return
 
-    for feature_key in context.feature_keys:
-        await experiment_service.expose(
-            feature_key,
+    for evaluation in context.tracked_features:
+        await experiment_service.expose_evaluation(
+            evaluation,
             user.telegram_id,
-            user.created_at,
         )
-        experiment_service.record_conversion(
-            feature_key,
+        experiment_service.record_evaluated_conversion(
+            evaluation,
             user.telegram_id,
             event,
-            user.created_at,
         )
 
 
 async def track_payment_outcome(
     experiment_service: ExperimentService | None,
-    user: UserDto,
+    telegram_id: int,
     event: str,
+    experiment_attribution: dict[str, Any] | None = None,
 ) -> None:
-    if experiment_service is None:
+    if experiment_service is None or not experiment_attribution:
         return
 
-    context = build_checkout_context(experiment_service, user)
-    if context is None:
+    feature_key = experiment_attribution.get("feature_key")
+    variant_key = experiment_attribution.get("variant_key")
+    if not feature_key or not variant_key:
         return
 
-    for feature_key in context.feature_keys:
-        await experiment_service.expose(
-            feature_key,
-            user.telegram_id,
-            user.created_at,
-        )
-        experiment_service.record_conversion(
-            feature_key,
-            user.telegram_id,
-            event,
-            user.created_at,
-        )
+    experiment_service.record_attributed_conversion(feature_key, variant_key, telegram_id, event)
