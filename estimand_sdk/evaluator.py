@@ -69,6 +69,25 @@ def evaluate_feature(
             is_default_rule=False,
         )
 
+    variation_lookup = {
+        variation.key: variation.value
+        for variation in feature.variations
+    }
+    ordered_variants = [variation.key for variation in feature.variations]
+
+    forced_variation = feature.forced_variations.get(str(unit_id))
+    if forced_variation in variation_lookup:
+        return EvaluationResult(
+            feature_key=feature_key,
+            variation_key=forced_variation,
+            value=variation_lookup.get(forced_variation),
+            bucket=None,
+            variation_index=None,
+            reason=REASON_VARIANT_FORCED,
+            matched_rule_id=None,
+            is_default_rule=False,
+        )
+
     selected = _select_rule(feature.rules, context or {})
     if selected is None:
         return EvaluationResult(
@@ -83,11 +102,6 @@ def evaluate_feature(
         )
 
     rule, is_default = selected
-    variation_lookup = {
-        variation.key: variation.value
-        for variation in feature.variations
-    }
-    ordered_variants = [variation.key for variation in feature.variations]
     return _evaluate_rule(
         feature_seed=feature.seed,
         feature_key=feature_key,
