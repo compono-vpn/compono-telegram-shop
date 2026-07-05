@@ -43,19 +43,6 @@ def _record_trial_activation(experiment_service: ExperimentService, user: UserDt
         )
 
 
-async def _is_trial_offer_enabled(
-    experiment_service: ExperimentService,
-    user: UserDto,
-) -> bool:
-    try:
-        return await experiment_service.is_trial_offer_enabled(
-            user.telegram_id,
-            created_at=user.created_at,
-        )
-    except TypeError:
-        return await experiment_service.is_trial_offer_enabled(user.telegram_id)
-
-
 async def on_start_dialog(
     user: UserDto,
     dialog_manager: DialogManager,
@@ -123,7 +110,7 @@ async def on_get_trial(
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
 
-    if not await _is_trial_offer_enabled(experiment_service, user):
+    if not await experiment_service.is_trial_offer_enabled(user):
         logger.info(f"{log(user)} Trial suppressed by experiment variant")
         await notification_service.notify_user(
             user=user,

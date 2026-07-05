@@ -1,4 +1,3 @@
-import importlib
 import time
 from typing import Any, Union
 from uuid import UUID
@@ -20,15 +19,8 @@ from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.models.dto import UserDto
-from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
+from src.services.experiment import ExperimentFeature, ExperimentService
 from src.services.notification import NotificationService
-
-_CORE_EXPERIMENTS = (
-    importlib.import_module("src.core.experiments")
-    if importlib.util.find_spec("src.core.experiments") is not None
-    else None
-)
-ExperimentFeature = getattr(_CORE_EXPERIMENTS, "ExperimentFeature", None)
 
 router = Router(name=__name__)
 
@@ -37,14 +29,7 @@ _AWAITING_TEXT_TTL = 30 * 60
 
 
 def _resolve_survey_experiment_key() -> str:
-    if ExperimentFeature is None:
-        return TRIAL_EXPERIMENT_KEY
-
-    payment_rescue = getattr(ExperimentFeature, "PAYMENT_RESCUE", None)
-    if payment_rescue is None:
-        return TRIAL_EXPERIMENT_KEY
-
-    return str(payment_rescue.value if hasattr(payment_rescue, "value") else payment_rescue)
+    return ExperimentFeature.PAYMENT_RESCUE.value
 
 
 _SURVEY_EXPERIMENT_KEY = _resolve_survey_experiment_key()

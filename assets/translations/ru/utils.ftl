@@ -62,7 +62,7 @@ frg-user-info =
     • <b>ID</b>: <code>{ $user_id }</code>
     • <b>Имя</b>: { $user_name } { $username -> 
         [0] { empty }
-    *[HAS] (<a href="tg://user?id={ $user_id }">@{ $username }</a>)
+        *[HAS] (<a href="tg://user?id={ $user_id }">@{ $username }</a>)
     }
     </blockquote>
 
