@@ -117,6 +117,46 @@ class EvaluatorTestCase(TestCase):
         self.assertEqual(result.reason, REASON_VARIANT_FORCED)
         self.assertEqual(result.variation_key, "treatment")
 
+    def test_forced_variation_override_takes_precedence_over_rules(self) -> None:
+        feature = self._feature()
+        feature = FeatureConfig(
+            type=feature.type,
+            default_value=feature.default_value,
+            seed=feature.seed,
+            unit_type=feature.unit_type,
+            enabled=True,
+            published=True,
+            variations=feature.variations,
+            rules=[
+                RuleConfig(
+                    id="r1",
+                    condition={"plan": "enterprise"},
+                    variation_keys=["control", "treatment"],
+                    coverage=1.0,
+                    priority=1,
+                    is_default=False,
+                    force="control",
+                    seed="checkout-v2",
+                    hash_version=2,
+                    weights=None,
+                    ranges=None,
+                )
+            ],
+            forced_variations={"telegram-42": "treatment"},
+        )
+        payload = ConfigPayload(revision="rev-1", features={"checkout": feature})
+
+        result = evaluate_feature_from_payload(
+            config=payload,
+            feature_key="checkout",
+            unit_id="telegram-42",
+            context={"plan": "starter"},
+        )
+
+        self.assertEqual(result.reason, REASON_VARIANT_FORCED)
+        self.assertEqual(result.variation_key, "treatment")
+        self.assertIsNone(result.matched_rule_id)
+
     def test_no_matching_rule(self) -> None:
         unmatched = self._feature()
         unmatched = FeatureConfig(

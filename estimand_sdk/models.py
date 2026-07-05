@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 
@@ -80,9 +80,12 @@ class FeatureConfig:
     published: bool
     variations: list[VariationConfig]
     rules: list[RuleConfig]
+    forced_variations: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "FeatureConfig":
+        raw_forced_variations = payload.get("forcedVariations", {})
+        forced_variations = raw_forced_variations if isinstance(raw_forced_variations, Mapping) else {}
         return cls(
             type=str(payload["type"]),
             default_value=payload.get("defaultValue"),
@@ -92,6 +95,11 @@ class FeatureConfig:
             published=bool(payload.get("published", False)),
             variations=[VariationConfig.from_mapping(raw) for raw in payload.get("variations", [])],
             rules=[RuleConfig.from_mapping(raw) for raw in payload.get("rules", [])],
+            forced_variations={
+                str(unit_id): str(variation_key)
+                for unit_id, variation_key in forced_variations.items()
+                if isinstance(variation_key, str)
+            },
         )
 
 
