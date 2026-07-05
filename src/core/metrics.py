@@ -94,6 +94,19 @@ KAFKA_CONSUMER_RESTARTS_TOTAL = Counter(
 )
 
 
+CANCEL_SURVEY_SENT_TOTAL = Counter(
+    "bot_cancel_survey_sent_total",
+    "Cancel-reason survey prompts sent, by payment gateway",
+    ["gateway"],
+)
+
+CANCEL_SURVEY_ANSWERS_TOTAL = Counter(
+    "bot_cancel_survey_answers_total",
+    "Cancel-reason survey answers, by reason and payment gateway",
+    ["reason", "gateway"],
+)
+
+
 def start_metrics_server(port: int) -> None:
     """Expose the process-local Prometheus registry over HTTP.
 

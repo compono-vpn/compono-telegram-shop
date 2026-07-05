@@ -151,6 +151,30 @@ ntf-event-subscription-change =
     { hdr-plan }
     { frg-plan-snapshot-comparison }
 
+ntf-event-cancel-survey-prompt =
+    <b>😕 Оплата не прошла</b>
+
+    Подскажите, что помешало? Один тап — и мы это исправим.
+
+ntf-event-cancel-survey-other =
+    #EventCancelSurveyOther
+
+    <b>🔅 Событие: Отзыв об отмене оплаты («Другое»)!</b>
+
+    { hdr-user }
+    { frg-user-info }
+
+    <blockquote>
+    • <b>Платежная система</b>: { $gateway }
+    • <b>Комментарий</b>: { $text }
+    </blockquote>
+
+ntf-event-cancel-survey-pending =
+    <b>⏱ Напоминание об оплате</b>
+
+    Оплата по этой заявке еще не завершена.
+    Если вы продолжаете пытаться оплатить, просто закончите оплату в приложении банка.
+
 ntf-event-node-connection-lost =
     #EventNode
 

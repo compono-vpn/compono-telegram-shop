@@ -26,6 +26,23 @@ from src.services.remnawave import RemnawaveService
 router = Router(name=__name__)
 
 
+def _record_trial_activation(experiment_service: ExperimentService, user: UserDto) -> None:
+    try:
+        experiment_service.record_conversion(
+            TRIAL_EXPERIMENT_KEY,
+            user.telegram_id,
+            "trial_activated",
+            created_at=user.created_at,
+        )
+        return
+    except TypeError:
+        experiment_service.record_conversion(
+            TRIAL_EXPERIMENT_KEY,
+            user.telegram_id,
+            "trial_activated",
+        )
+
+
 async def on_start_dialog(
     user: UserDto,
     dialog_manager: DialogManager,
@@ -112,9 +129,7 @@ async def on_get_trial(
 
     try:
         await billing.create_trial_subscription(user.telegram_id, billing_plan.ID)
-        experiment_service.record_conversion(
-            TRIAL_EXPERIMENT_KEY, user.telegram_id, "trial_activated"
-        )
+        _record_trial_activation(experiment_service, user)
         await callback.answer("Пробный период активирован")
         await dialog_manager.start(
             state=Subscription.TRIAL,

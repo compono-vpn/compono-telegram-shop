@@ -10,8 +10,8 @@ from magic_filter import F
 
 from src.bot.states import DashboardUser, MainMenu, Subscription
 from src.bot.widgets.i18n_format import I18nFormat
-from src.core.constants import GOTO_PREFIX, PURCHASE_PREFIX, REPOSITORY, T_ME
-from src.core.enums import PurchaseType
+from src.core.constants import CANCEL_SURVEY_PREFIX, GOTO_PREFIX, PURCHASE_PREFIX, REPOSITORY, T_ME
+from src.core.enums import CancelSurveyReason, PurchaseType
 from src.core.utils.formatters import format_username_to_url
 
 CALLBACK_CHANNEL_CONFIRM: Final[str] = "channel_confirm"
@@ -189,4 +189,27 @@ def get_user_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
         ),
     )
 
+    return builder.as_markup()
+
+
+def get_cancel_survey_keyboard(payment_id: str) -> InlineKeyboardMarkup:
+    def _button(text: str, reason: CancelSurveyReason) -> InlineKeyboardButton:
+        return InlineKeyboardButton(
+            text=text,
+            callback_data=f"{CANCEL_SURVEY_PREFIX}{payment_id}:{reason.value}",
+        )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        _button("btn-cancel-survey-too-expensive", CancelSurveyReason.TOO_EXPENSIVE),
+        _button("btn-cancel-survey-card-failed", CancelSurveyReason.CARD_FAILED),
+    )
+    builder.row(
+        _button("btn-cancel-survey-page-froze", CancelSurveyReason.PAGE_FROZE),
+        _button("btn-cancel-survey-got-distracted", CancelSurveyReason.GOT_DISTRACTED),
+    )
+    builder.row(
+        _button("btn-cancel-survey-will-think", CancelSurveyReason.WILL_THINK),
+        _button("btn-cancel-survey-other", CancelSurveyReason.OTHER),
+    )
     return builder.as_markup()

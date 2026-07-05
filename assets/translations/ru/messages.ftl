@@ -8,6 +8,12 @@ msg-web-purchase-redirect =
     This bot is for Telegram-native purchases only.
 
 
+# Cancel survey
+msg-cancel-survey-other-prompt = ✍️ Напишите в двух словах, что произошло — мы прочитаем.
+msg-cancel-survey-thanks = 🙏 Спасибо за ответ! Учтём это.
+msg-cancel-survey-already-answered = Вы уже ответили, спасибо!
+
+
 # Remnashop
 ntf-remnashop-info =
     <b>💎 Remnashop v{ $version }</b>

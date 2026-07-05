@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.bot.routers.menu.handlers import on_get_trial
+from src.core.constants import USER_KEY
+from src.infrastructure.billing.client import BillingClientError
+from src.infrastructure.billing.models import BillingPlan
 from tests.conftest import (
     make_dialog_manager,
     make_experiment_service,
     make_user,
     unwrap_inject,
 )
-from src.bot.routers.menu.handlers import on_get_trial
-from src.core.constants import USER_KEY
-from src.infrastructure.billing.client import BillingClientError
-from src.infrastructure.billing.models import BillingPlan
 
 
 def _make_trial_plan() -> BillingPlan:

@@ -1,6 +1,7 @@
-from . import notifications, redirects, referrals, subscriptions
+from . import cancel_survey, notifications, redirects, referrals, subscriptions
 
 __all__ = [
+    "cancel_survey",
     "notifications",
     "redirects",
     "subscriptions",

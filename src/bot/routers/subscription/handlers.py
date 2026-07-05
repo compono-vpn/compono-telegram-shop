@@ -9,6 +9,7 @@ from aiogram_dialog.widgets.kbd import Button, Select
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
+from redis.asyncio import Redis
 
 from src.bot.keyboards import get_user_keyboard
 from src.bot.states import Subscription
@@ -26,6 +27,7 @@ from src.infrastructure.billing import (
     billing_promocode_to_dto,
 )
 from src.infrastructure.billing.client import BillingClientError
+from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey_check
 from src.models.dto import PlanDto, UserDto
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
@@ -66,6 +68,7 @@ async def _create_payment_and_get_data(
     gateway_type: PaymentGatewayType,
     billing: BillingClient,
     notification_service: NotificationService,
+    redis_client: Redis,
     gateway_metadata: Optional[dict[str, str]] = None,
 ) -> Optional[CachedPaymentData]:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
@@ -94,6 +97,12 @@ async def _create_payment_and_get_data(
             purchase_type=pt_str,
             is_test=user.is_dev,
             gateway_metadata=gateway_metadata,
+        )
+        await schedule_cancel_survey_check(
+            redis_client=redis_client,
+            payment_id=result.ID,
+            telegram_id=user.telegram_id,
+            gateway_type=gt_str,
         )
         if billing_gateway:
             price_details = await billing.calculate_price(
@@ -216,6 +225,7 @@ async def on_subscription_plans(  # noqa: C901
     dialog_manager: DialogManager,
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Opened subscription plans menu")
@@ -294,6 +304,7 @@ async def on_subscription_plans(  # noqa: C901
                     gateway_type=gateways[0].type,
                     billing=billing,
                     notification_service=notification_service,
+                    redis_client=redis_client,
                 )
 
                 if payment_data:
@@ -320,6 +331,8 @@ async def on_plan_select(
     dialog_manager: DialogManager,
     selected_plan: int,
     billing: FromDishka[BillingClient],
+    notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     billing_plan = await billing.get_plan(plan_id=selected_plan)
@@ -339,7 +352,15 @@ async def on_plan_select(
     if len(plan.durations) == 1:
         logger.info(f"{log(user)} Auto-selected single duration '{plan.durations[0].days}'")
         dialog_manager.dialog_data["only_single_duration"] = True
-        await on_duration_select(callback, widget, dialog_manager, plan.durations[0].days)
+        await on_duration_select(
+            callback,
+            widget,
+            dialog_manager,
+            plan.durations[0].days,
+            billing=billing,
+            notification_service=notification_service,
+            redis_client=redis_client,
+        )
         return
 
     await dialog_manager.switch_to(state=Subscription.DURATION)
@@ -353,6 +374,7 @@ async def on_duration_select(
     selected_duration: int,
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected subscription duration '{selected_duration}' days")
@@ -398,6 +420,7 @@ async def on_duration_select(
             gateway_type=selected_payment_method,
             billing=billing,
             notification_service=notification_service,
+            redis_client=redis_client,
         )
 
         if payment_data:
@@ -418,6 +441,7 @@ async def on_payment_method_select(
     selected_payment_method: str,
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected payment method '{selected_payment_method}'")
@@ -454,6 +478,7 @@ async def on_payment_method_select(
         gateway_type=selected_payment_method,
         billing=billing,
         notification_service=notification_service,
+        redis_client=redis_client,
     )
 
     if payment_data:
@@ -471,6 +496,7 @@ async def on_crypto_asset_select(
     selected_asset_id: str,
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
+    redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     asset = get_crypto_asset(selected_asset_id)
@@ -504,6 +530,7 @@ async def on_crypto_asset_select(
         gateway_type=PaymentGatewayType.PLAIDLY,
         billing=billing,
         notification_service=notification_service,
+        redis_client=redis_client,
         gateway_metadata={"chain": asset.chain, "token": asset.token},
     )
 

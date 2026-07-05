@@ -372,6 +372,14 @@ class TestTrialExperiment:
         assert await svc.expose(TRIAL_EXPERIMENT_KEY, 7) == TRIAL_VARIANT_ON
         assert svc.variant(TRIAL_EXPERIMENT_KEY, 7) == TRIAL_VARIANT_ON
 
+    async def test_disabled_experiment_service_does_not_send_remote_conversion(self):
+        svc = _service(trial_enabled=False, trial_on_weight=100)
+        svc.estimand_client = MagicMock()
+
+        svc.record_conversion(TRIAL_EXPERIMENT_KEY, 42, "rescue_clicked")
+
+        svc.estimand_client.track_conversion.assert_not_called()
+
     async def test_variant_names(self):
         svc = _service(trial_on_weight=100)
         assert svc.variant(TRIAL_EXPERIMENT_KEY, 1) == TRIAL_VARIANT_ON

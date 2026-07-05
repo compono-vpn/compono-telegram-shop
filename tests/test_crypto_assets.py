@@ -159,8 +159,17 @@ class TestOnPaymentMethodSelectPlaidly:
         billing = _make_billing()
         ntf = AsyncMock()
         raw = unwrap_inject(on_payment_method_select)
+        redis_client = AsyncMock()
 
-        await raw(MagicMock(), MagicMock(), dm, PaymentGatewayType.PLAIDLY, billing, ntf)
+        await raw(
+            MagicMock(),
+            MagicMock(),
+            dm,
+            PaymentGatewayType.PLAIDLY,
+            billing,
+            ntf,
+            redis_client,
+        )
 
         billing.create_payment.assert_not_called()
         dm.switch_to.assert_awaited_once_with(state=Subscription.CRYPTO_ASSET)
@@ -174,8 +183,9 @@ class TestOnCryptoAssetSelect:
         billing = _make_billing()
         ntf = AsyncMock()
         raw = unwrap_inject(on_crypto_asset_select)
+        redis_client = AsyncMock()
 
-        await raw(MagicMock(), MagicMock(), dm, "usdt-tron", billing, ntf)
+        await raw(MagicMock(), MagicMock(), dm, "usdt-tron", billing, ntf, redis_client)
 
         billing.create_payment.assert_awaited_once()
         kwargs = billing.create_payment.await_args.kwargs
@@ -190,8 +200,17 @@ class TestOnCryptoAssetSelect:
             dm = _dm_for_crypto(plan)
             billing = _make_billing()
             raw = unwrap_inject(on_crypto_asset_select)
+            redis_client = AsyncMock()
 
-            await raw(MagicMock(), MagicMock(), dm, asset.id, billing, AsyncMock())
+            await raw(
+                MagicMock(),
+                MagicMock(),
+                dm,
+                asset.id,
+                billing,
+                AsyncMock(),
+                redis_client,
+            )
 
             kwargs = billing.create_payment.await_args.kwargs
             assert kwargs["gateway_metadata"] == {"chain": asset.chain, "token": asset.token}
