@@ -85,7 +85,13 @@ async def _create_payment_and_get_data(
 
     gt_str = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
     pt_str = purchase_type.value if hasattr(purchase_type, "value") else str(purchase_type)
-    experiment_context = build_checkout_context(experiment_service, user)
+    experiment_context = build_checkout_context(
+        experiment_service,
+        user,
+        plan=plan,
+        duration_days=duration.days,
+        purchase_type=purchase_type,
+    )
 
     try:
         # Look up gateway currency from billing service
@@ -97,9 +103,11 @@ async def _create_payment_and_get_data(
             experiment_service=experiment_service,
             user=user,
             event="checkout_started",
+            plan=plan,
             plan_id=plan.id,
             duration_days=duration.days,
             gateway_type=gt_str,
+            purchase_type=purchase_type,
         )
 
         # Use BillingClient to create payment via the Go billing service
@@ -120,9 +128,11 @@ async def _create_payment_and_get_data(
             experiment_service=experiment_service,
             user=user,
             event="payment_link_created",
+            plan=plan,
             plan_id=plan.id,
             duration_days=duration.days,
             gateway_type=gt_str,
+            purchase_type=purchase_type,
         )
         await schedule_cancel_survey_check(
             redis_client=redis_client,
@@ -448,10 +458,19 @@ async def on_duration_select(
         experiment_service=experiment_service,
         user=user,
         event="duration_selected",
+        plan=plan,
         plan_id=plan.id,
         duration_days=selected_duration,
+        purchase_type=dialog_manager.dialog_data.get("purchase_type"),
     )
-    experiment_context = build_checkout_context(experiment_service, user)
+    purchase_type: PurchaseType | None = dialog_manager.dialog_data.get("purchase_type")
+    experiment_context = build_checkout_context(
+        experiment_service,
+        user,
+        plan=plan,
+        duration_days=selected_duration,
+        purchase_type=purchase_type,
+    )
     price_details = await billing.calculate_price(
         telegram_id=user.telegram_id,
         plan_id=plan.id,
