@@ -29,6 +29,7 @@ def setup_routers(router: Router) -> None:
         extra.commands.router,
         extra.member.router,
         extra.goto.router,
+        extra.cancel_survey.router,
         #
         menu.handlers.router,
         menu.dialog.router,

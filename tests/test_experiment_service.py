@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import Any, Callable
 from unittest.mock import AsyncMock, MagicMock
 
-from estimand_sdk.evaluator import evaluate_feature_from_payload
-from estimand_sdk.models import ConfigPayload, FeatureConfig, RuleConfig, VariationConfig
-
 import pytest
 
+from estimand_sdk.evaluator import evaluate_feature_from_payload
+from estimand_sdk.models import ConfigPayload, FeatureConfig, RuleConfig, VariationConfig
 from src.core.experiments import Experiment, assign_variant
 from src.services.experiment import (
     TRIAL_EXPERIMENT_KEY,
@@ -166,6 +165,14 @@ class TestTrialExperiment:
     async def test_disabled_experiment_defaults_to_control_on(self):
         svc = _service(trial_enabled=False, trial_on_weight=0)
         assert await svc.is_trial_offer_enabled(999) is True
+
+    async def test_disabled_experiment_service_does_not_send_remote_conversion(self):
+        svc = _service(trial_enabled=False, trial_on_weight=100)
+        svc.estimand_client = MagicMock()
+
+        svc.record_conversion(TRIAL_EXPERIMENT_KEY, 42, "rescue_clicked")
+
+        svc.estimand_client.track_conversion.assert_not_called()
 
     async def test_variant_names(self):
         svc = _service(trial_on_weight=100)

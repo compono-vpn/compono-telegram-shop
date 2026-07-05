@@ -190,6 +190,15 @@ btn-goto-subscription-renew = 🔄 Продлить подписку
 btn-goto-user-profile = 👤 Перейти к пользователю
 
 
+# Cancel survey
+btn-cancel-survey-too-expensive = 💸 Дорого
+btn-cancel-survey-card-failed = 💳 Карта не прошла
+btn-cancel-survey-page-froze = 🌐 Страница зависла
+btn-cancel-survey-got-distracted = ⏳ Отвлёкся
+btn-cancel-survey-will-think = 🤔 Решил подумать
+btn-cancel-survey-other = ✍️ Другое
+
+
 # Promocodes
 btn-promocodes-list = 📃 Список промокодов
 btn-promocodes-search = 🔍 Поиск промокода

@@ -45,6 +45,15 @@ class TransactionStatus(UpperStrEnum):
     FAILED = auto()
 
 
+class CancelSurveyReason(UpperStrEnum):
+    TOO_EXPENSIVE = auto()
+    CARD_FAILED = auto()
+    PAGE_FROZE = auto()
+    GOT_DISTRACTED = auto()
+    WILL_THINK = auto()
+    OTHER = auto()
+
+
 class SubscriptionStatus(UpperStrEnum):
     ACTIVE = auto()
     DISABLED = auto()

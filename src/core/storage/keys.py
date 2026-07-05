@@ -37,3 +37,25 @@ class NotificationDedupKey(StorageKey, prefix="ntf_dedup"):
 
 
 class PendingNotConnectedRemindersKey(StorageKey, prefix="pending_not_connected"): ...
+
+
+class PendingCancelSurveyChecksKey(StorageKey, prefix="pending_cancel_survey"): ...
+
+
+class CancelSurveySentKey(StorageKey, prefix="cancel_survey_sent"):
+    """Guards the cancel-reason survey sweep against sending a second
+    prompt for the same transaction (SETNX, 90d TTL)."""
+
+    payment_id: UUID
+
+
+class CancelSurveyAnswerKey(StorageKey, prefix="cancel_survey"):
+    """Redis hash storing the recorded answer for a cancel-reason survey."""
+
+    payment_id: UUID
+
+
+class CancelSurveyAwaitingTextKey(StorageKey, prefix="cancel_survey_awaiting_text"):
+    """Marks a user as mid-reply to the survey's free-text ('Другое') prompt."""
+
+    telegram_id: int
