@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import src.services.experiment as experiment_module
 from estimand_sdk.evaluator import evaluate_feature_from_payload
 from estimand_sdk.models import ConfigPayload, FeatureConfig, RuleConfig, VariationConfig
 from src.core.experiments import Experiment, assign_variant
@@ -264,6 +265,28 @@ class TestTrialExperiment:
         }
         assert estimand_client.evaluate_feature.call_count == 1
 
+    def test_estimand_config_cache_reuses_payload_within_ttl(self, monkeypatch):
+        times = iter([100.0, 120.0])
+        monkeypatch.setattr(experiment_module, "monotonic", lambda: next(times))
+        svc, estimand_client, _ = _service_estimand()
+        user = UserDto(telegram_id=555, name="Cache")
+
+        svc.evaluate_feature_for_user(user, TRIAL_EXPERIMENT_KEY)
+        svc.evaluate_feature_for_user(user, TRIAL_EXPERIMENT_KEY)
+
+        assert estimand_client.fetch_config.call_count == 1
+
+    def test_estimand_config_cache_refreshes_after_ttl(self, monkeypatch):
+        times = iter([100.0, 131.0])
+        monkeypatch.setattr(experiment_module, "monotonic", lambda: next(times))
+        svc, estimand_client, _ = _service_estimand()
+        user = UserDto(telegram_id=555, name="Cache")
+
+        svc.evaluate_feature_for_user(user, TRIAL_EXPERIMENT_KEY)
+        svc.evaluate_feature_for_user(user, TRIAL_EXPERIMENT_KEY)
+
+        assert estimand_client.fetch_config.call_count == 2
+
     async def test_non_trial_feature_evaluates_via_estimand_when_configured(self):
         feature_key = ExperimentFeature.CHECKOUT_FLOW.value
         feature_id = "cf-01"
@@ -311,9 +334,9 @@ class TestTrialExperiment:
         evaluation = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_LENGTH)
 
         assert evaluation.variant == "trial_14"
-        trial_length_variation = payload_from_config.features[
-            ExperimentFeature.TRIAL_LENGTH.value
-        ].variations[0].value
+        trial_length_variation = (
+            payload_from_config.features[ExperimentFeature.TRIAL_LENGTH.value].variations[0].value
+        )
         assert evaluation.payload == trial_length_variation
         assert evaluation.payload == {"days": 14}
         assert estimand_client.evaluate_feature.call_count >= 1
@@ -419,10 +442,7 @@ class TestTrialExperiment:
         svc, estimand_client, _ = _service_estimand()
         svc.record_conversion(TRIAL_EXPERIMENT_KEY, 7, "")
         assert estimand_client.track_conversion.call_count == 1
-        assert (
-            estimand_client.track_conversion.call_args.kwargs["event_name"]
-            == "trial_activated"
-        )
+        assert estimand_client.track_conversion.call_args.kwargs["event_name"] == "trial_activated"
 
     async def test_start_date_blocks_old_users_from_trial_offer(self):
         now = datetime.now(timezone.utc)

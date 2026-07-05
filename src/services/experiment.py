@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from time import monotonic
 from typing import Any
 
 from loguru import logger
@@ -32,6 +33,7 @@ TRIAL_VARIANT_ON = "trial_on"
 TRIAL_VARIANT_OFF = "trial_off"
 
 _EXPOSURE_TTL = 60 * 60 * 24 * 30
+_ESTIMAND_CONFIG_CACHE_TTL_SECONDS = 30.0
 
 
 class ExperimentFeature(str, Enum):
@@ -119,6 +121,7 @@ class ExperimentService:
         self.estimand_client = estimand_client or self._build_estimand_client()
         self._features = self._build_features(config, self.estimand_config)
         self._fetched_config = None
+        self._fetched_config_at = 0.0
         self._estimand_disabled = False
 
     @staticmethod
@@ -388,7 +391,11 @@ class ExperimentService:
         return self._should_use_estimand(feature) and bool(feature.estimand_feature_id)
 
     def _fetch_estimand_config(self) -> Any | None:
-        if self._fetched_config is not None:
+        now = monotonic()
+        if (
+            self._fetched_config is not None
+            and now - self._fetched_config_at < _ESTIMAND_CONFIG_CACHE_TTL_SECONDS
+        ):
             return self._fetched_config
         if self.estimand_client is None:
             return None
@@ -399,11 +406,14 @@ class ExperimentService:
                 project_id=self.estimand_config.project_id,
                 environment_id=self.estimand_config.environment_id,
             )
+            self._fetched_config_at = now
             return self._fetched_config
         except (Exception, ConfigCacheMissError):
             logger.opt(exception=True).warning(
                 "Failed to fetch Estimand config; using local experiment fallback"
             )
+            if self._fetched_config is not None:
+                return self._fetched_config
             self._estimand_disabled = True
             return None
 
