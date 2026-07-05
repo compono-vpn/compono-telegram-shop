@@ -7,6 +7,7 @@ from typing import Any, Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from prometheus_client import REGISTRY
 
 import src.services.experiment as experiment_module
 from estimand_sdk.evaluator import evaluate_feature_from_payload
@@ -20,6 +21,10 @@ from src.services.experiment import (
     ExperimentFeature,
     ExperimentService,
 )
+
+
+def _metric_value(name: str, **labels: str) -> float | None:
+    return REGISTRY.get_sample_value(name, labels)
 
 
 def _service(
@@ -264,16 +269,6 @@ class TestTrialExperiment:
         assert estimand_client.fetch_config.call_count == 1
         assert estimand_client.track_exposure.call_count == 0
 
-    async def test_estimand_client_can_be_injected_into_service(self):
-        svc, estimand_client, _ = _service_estimand()
-
-        assert svc.estimand_client is estimand_client
-        assert await svc.expose(TRIAL_EXPERIMENT_KEY, 123) in {
-            TRIAL_VARIANT_ON,
-            TRIAL_VARIANT_OFF,
-        }
-        assert estimand_client.evaluate_feature.call_count == 1
-
     def test_estimand_config_cache_reuses_payload_within_ttl(self, monkeypatch):
         times = iter([100.0, 120.0])
         monkeypatch.setattr(experiment_module, "monotonic", lambda: next(times))
@@ -284,6 +279,83 @@ class TestTrialExperiment:
         svc.evaluate_feature_for_user(user, TRIAL_EXPERIMENT_KEY)
 
         assert estimand_client.fetch_config.call_count == 1
+
+    def test_estimand_temporary_outage_recovers_without_restart(self, monkeypatch):
+        times = iter([100.0, 131.0, 131.0, 162.0, 162.0])
+        monkeypatch.setattr(experiment_module, "monotonic", lambda: next(times))
+        svc, estimand_client, payload = _service_estimand()
+        user = UserDto(telegram_id=555, name="Recover")
+        estimand_client.fetch_config.side_effect = [
+            payload,
+            Exception("estimand down"),
+            payload,
+        ]
+
+        first = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_OFFER)
+        during_outage = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_OFFER)
+        after_recovery = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_OFFER)
+
+        assert first.variant in {TRIAL_VARIANT_ON, TRIAL_VARIANT_OFF}
+        assert during_outage.variant == first.variant
+        assert after_recovery.variant == first.variant
+        assert estimand_client.fetch_config.call_count == 3
+        assert (
+            _metric_value(
+                "bot_estimand_runtime_state",
+                state="available",
+            )
+            == 1.0
+        )
+
+    async def test_estimand_sustained_outage_stays_fallback_safe_and_visible(self, monkeypatch):
+        times = iter([100.0, 100.0, 115.0, 145.0, 145.0, 176.0, 176.0])
+        monkeypatch.setattr(experiment_module, "monotonic", lambda: next(times))
+        svc, estimand_client, _ = _service_estimand()
+        user = UserDto(telegram_id=999, name="Down")
+        estimand_client.fetch_config.side_effect = Exception("estimand down")
+        failures_before = _metric_value(
+            "bot_estimand_client_failures_total",
+            operation="fetch_config",
+            fallback="local_fallback",
+        ) or 0.0
+
+        first = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_OFFER)
+        second = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_OFFER)
+        third = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_OFFER)
+        fourth = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_OFFER)
+
+        assert first.variant == second.variant == third.variant == fourth.variant
+        assert first.variant in {TRIAL_VARIANT_ON, TRIAL_VARIANT_OFF}
+        assert estimand_client.fetch_config.call_count == 3
+        assert (
+            _metric_value(
+                "bot_estimand_runtime_state",
+                state="temporarily_unavailable",
+            )
+            == 1.0
+        )
+        assert (
+            (
+                _metric_value(
+                    "bot_estimand_client_failures_total",
+                    operation="fetch_config",
+                    fallback="local_fallback",
+                )
+                or 0.0
+            )
+            - failures_before
+            == 3.0
+        )
+
+    async def test_estimand_client_can_be_injected_into_service(self):
+        svc, estimand_client, _ = _service_estimand()
+
+        assert svc.estimand_client is estimand_client
+        assert await svc.expose(TRIAL_EXPERIMENT_KEY, 123) in {
+            TRIAL_VARIANT_ON,
+            TRIAL_VARIANT_OFF,
+        }
+        assert estimand_client.evaluate_feature.call_count == 1
 
     def test_estimand_config_cache_refreshes_after_ttl(self, monkeypatch):
         times = iter([100.0, 131.0])

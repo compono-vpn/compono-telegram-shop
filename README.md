@@ -245,7 +245,7 @@ Now, open the .env file and update the variables:
 - **`APP_EXPERIMENT_INTRO_PRICE_START_DATE`** : Start date-time (ISO-8601 UTC) for `intro_price` feature gating.
 - **`APP_EXPERIMENT_CHECKOUT_FLOW_START_DATE`** : Start date-time (ISO-8601 UTC) for `checkout_flow` feature gating.
 - **`APP_EXPERIMENT_PAYMENT_RESCUE_START_DATE`** : Start date-time (ISO-8601 UTC) for `payment_rescue` feature gating.
-- **`APP_EXPERIMENT_ESTIMAND_ENABLED`** : Enable Estimand-driven assignment/events for production (default `false`).
+- **`APP_EXPERIMENT_ESTIMAND_ENABLED`** : Enable Estimand-driven assignment/events for production (default `false`). When enabled, the bot keeps the last good Estimand config for a short TTL and falls back locally during temporary Estimand outages instead of permanently disabling remote evaluation until pod restart.
 - **`APP_EXPERIMENT_ESTIMAND_BASE_URL`** : Estimand API base URL.
 - **`APP_EXPERIMENT_ESTIMAND_ORGANIZATION_ID`** : Estimand organization id used for config fetch.
 - **`APP_EXPERIMENT_ESTIMAND_PROJECT_ID`** : Estimand project id used for config fetch.
