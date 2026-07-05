@@ -23,7 +23,7 @@ from src.models.dto import (
 )
 from src.services.payment_gateway import PaymentGatewayService
 
-from tests.conftest import make_plan_snapshot, make_user
+from tests.conftest import make_experiment_service, make_plan_snapshot, make_user
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +79,7 @@ def _make_service(
         referral_service=AsyncMock(),
         notification_service=AsyncMock(),
         user_service=AsyncMock(),
+        experiment_service=make_experiment_service(),
     )
 
 
@@ -358,3 +359,73 @@ class TestListActiveByType:
 
         assert len(result) == 2
         assert all(r.type == PaymentGatewayType.TELEGRAM_STARS for r in result)
+
+
+class TestCheckoutEvents:
+    @pytest.mark.asyncio
+    async def test_success_tracks_checkout_completion_event(self):
+        billing = AsyncMock()
+        transaction_service = AsyncMock()
+        subscription_service = AsyncMock()
+        experiment_service = MagicMock()
+        experiment_service.expose = AsyncMock()
+        experiment_service.record_conversion = MagicMock()
+        transaction = MagicMock()
+        transaction.user = make_user(telegram_id=123)
+        transaction.is_test = False
+        transaction.purchase_type = PurchaseType.NEW
+        transaction.gateway_type = PaymentGatewayType.TELEGRAM_STARS
+        transaction.pricing = PriceDetailsDto(
+            original_amount=Decimal("100"),
+            final_amount=Decimal("100"),
+        )
+        transaction.currency = Currency.XTR
+        transaction.plan = make_plan_snapshot()
+        transaction.payment_id = uuid4()
+        transaction_service.transition_status.return_value = transaction
+        transaction_service.get.return_value = transaction
+        subscription_service.get_current.return_value = None
+
+        svc = _make_service(
+            billing=billing,
+            transaction_service=transaction_service,
+            subscription_service=subscription_service,
+        )
+        svc.experiment_service = experiment_service
+
+        with patch(
+            "src.services.payment_gateway.purchase_subscription_task.kiq",
+            new=AsyncMock(),
+        ):
+            await svc.handle_payment_succeeded(uuid4())
+
+        experiment_service.expose.assert_awaited_once()
+        experiment_service.record_conversion.assert_called_once_with(
+            "checkout_flow",
+            123,
+            "payment_completed",
+            transaction.user.created_at,
+        )
+
+    @pytest.mark.asyncio
+    async def test_cancel_tracks_checkout_canceled_event(self):
+        transaction_service = AsyncMock()
+        experiment_service = MagicMock()
+        experiment_service.expose = AsyncMock()
+        experiment_service.record_conversion = MagicMock()
+        updated = MagicMock()
+        updated.user = make_user(telegram_id=456)
+        transaction_service.transition_status.return_value = updated
+
+        svc = _make_service(transaction_service=transaction_service)
+        svc.experiment_service = experiment_service
+
+        await svc.handle_payment_canceled(uuid4())
+
+        experiment_service.expose.assert_awaited_once()
+        experiment_service.record_conversion.assert_called_once_with(
+            "checkout_flow",
+            456,
+            "payment_canceled",
+            updated.user.created_at,
+        )
