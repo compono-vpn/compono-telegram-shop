@@ -37,6 +37,21 @@ def _extract_events(experiment_service: AsyncMock) -> list[str]:
     return events
 
 
+def _extract_event_records(experiment_service: AsyncMock) -> list[tuple[str, str]]:
+    records: list[tuple[str, str]] = []
+    for call in experiment_service.record_conversion.call_args_list:
+        args, kwargs = call
+        key = (
+            kwargs.get("experiment_key")
+            if "experiment_key" in kwargs
+            else (args[0] if args else "")
+        )
+        event = kwargs.get("event") if "event" in kwargs else (args[2] if len(args) > 2 else "")
+        records.append((str(key), str(event)))
+
+    return records
+
+
 def _counter_value(counter, **labels) -> float:
     return counter.labels(**labels)._value.get()
 
@@ -67,6 +82,67 @@ class TestOnCancelSurveyAnswer:
         callback.answer.assert_awaited_once_with()
         assert "rescue_clicked" in _extract_events(experiment_service)
         redis_client.hset.assert_not_awaited()
+
+    async def test_malformed_payload_without_separator_is_ignored(self):
+        user = make_user(telegram_id=1)
+        callback = _make_callback(f"{CANCEL_SURVEY_PREFIX}not-a-uuid")
+        redis_client = AsyncMock()
+        redis_client.exists.return_value = 0
+        billing = AsyncMock()
+        experiment_service = MagicMock()
+        i18n = MagicMock()
+        i18n.get.side_effect = lambda key, **kwargs: f"[{key}]"
+
+        raw = unwrap_inject(on_cancel_survey_answer)
+        await raw(callback, user, i18n, billing, redis_client, experiment_service)
+
+        callback.answer.assert_awaited_once_with()
+        redis_client.hset.assert_not_awaited()
+
+    async def test_invalid_payment_id_in_callback_is_ignored(self):
+        user = make_user(telegram_id=1)
+        callback = _make_callback(
+            f"{CANCEL_SURVEY_PREFIX}not-a-uuid:{CancelSurveyReason.CARD_FAILED.value}"
+        )
+        redis_client = AsyncMock()
+        redis_client.exists.return_value = 0
+        billing = AsyncMock()
+        experiment_service = MagicMock()
+        i18n = MagicMock()
+        i18n.get.side_effect = lambda key, **kwargs: f"[{key}]"
+
+        raw = unwrap_inject(on_cancel_survey_answer)
+        await raw(callback, user, i18n, billing, redis_client, experiment_service)
+
+        callback.answer.assert_awaited_once_with()
+        redis_client.hset.assert_not_awaited()
+        billing.get_transaction.assert_not_awaited()
+
+    async def test_experiment_events_use_payment_rescue_key(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.bot.routers.extra.cancel_survey._SURVEY_EXPERIMENT_KEY",
+            "payment_rescue",
+        )
+
+        payment_id = uuid4()
+        user = make_user(telegram_id=42)
+        callback = _make_callback(
+            f"{CANCEL_SURVEY_PREFIX}{payment_id}:{CancelSurveyReason.CARD_FAILED.value}"
+        )
+        redis_client = AsyncMock()
+        redis_client.exists.return_value = 0
+        billing = AsyncMock()
+        billing.get_transaction.return_value = MagicMock(GatewayType="YOOKASSA")
+        experiment_service = MagicMock()
+        i18n = MagicMock()
+        i18n.get.side_effect = lambda key, **kwargs: f"[{key}]"
+
+        raw = unwrap_inject(on_cancel_survey_answer)
+        await raw(callback, user, i18n, billing, redis_client, experiment_service)
+
+        records = _extract_event_records(experiment_service)
+        assert ("payment_rescue", "rescue_clicked") in records
+        assert ("payment_rescue", "cancel_reason_selected") in records
 
     async def test_already_answered_shows_toast_and_stops(self):
         payment_id = uuid4()
@@ -208,6 +284,32 @@ class TestOnCancelSurveyOtherText:
         assert "cancel_reason_selected" in _extract_events(experiment_service)
 
         message.answer.assert_awaited_once_with(text="[msg-cancel-survey-thanks]")
+
+    async def test_invalid_payment_id_in_free_text_is_ignored(self):
+        user = make_user(telegram_id=42)
+        message = self._make_message("Как-то пошло не так")
+        redis_client = AsyncMock()
+        redis_client.exists.return_value = 0
+        billing = AsyncMock()
+        notification_service = AsyncMock()
+        experiment_service = MagicMock()
+        i18n = MagicMock()
+
+        raw = unwrap_inject(on_cancel_survey_other_text)
+        await raw(
+            message,
+            user,
+            "not-a-uuid",
+            i18n,
+            billing,
+            notification_service,
+            redis_client,
+            experiment_service,
+        )
+
+        redis_client.delete.assert_awaited_once_with(CancelSurveyAwaitingTextKey(telegram_id=42).pack())
+        redis_client.hset.assert_not_awaited()
+        notification_service.notify_super_dev.assert_not_awaited()
 
     async def test_empty_text_is_ignored(self):
         payment_id = uuid4()

@@ -8,7 +8,11 @@ from redis.asyncio import Redis
 from src.bot.keyboards import get_cancel_survey_keyboard
 from src.core.enums import TransactionStatus
 from src.core.metrics import CANCEL_SURVEY_SENT_TOTAL
-from src.core.storage.keys import CancelSurveySentKey, PendingCancelSurveyChecksKey
+from src.core.storage.keys import (
+    CancelSurveyPendingPingKey,
+    CancelSurveySentKey,
+    PendingCancelSurveyChecksKey,
+)
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.broker import broker
@@ -19,6 +23,7 @@ _PENDING_KEY = PendingCancelSurveyChecksKey()
 _PING_DELAY_SECONDS = 15 * 60
 _MAX_PENDING_AGE = 48 * 60 * 60
 _SENT_TTL = 90 * 24 * 60 * 60
+_PENDING_PING_TTL = 7 * 24 * 60 * 60
 
 
 async def schedule_cancel_survey_check(
@@ -39,7 +44,47 @@ async def _has_paid_since(billing: BillingClient, telegram_id: int) -> bool:
     return bool(subscription and subscription.Status == "ACTIVE" and not subscription.IsTrial)
 
 
-async def _process_due_member(
+async def _handle_pending_cancel_survey_check(
+    *,
+    member: str,
+    payment_id: str,
+    now: float,
+    created_at: float,
+    telegram_id: int,
+    redis_client: Redis,
+    user_service: UserService,
+    notification_service: NotificationService,
+    due_key: str,
+) -> None:
+    if now - created_at >= _MAX_PENDING_AGE:
+        logger.debug(
+            f"Giving up on cancel-survey check for '{payment_id}': "
+            f"still pending after '{_MAX_PENDING_AGE}' seconds"
+        )
+        return
+
+    ping_key = CancelSurveyPendingPingKey(payment_id=payment_id)
+    was_pinged = await redis_client.set(
+        ping_key.pack(),
+        "1",
+        nx=True,
+        ex=_PENDING_PING_TTL,
+    )
+    if was_pinged:
+        user = await user_service.get(telegram_id)
+        if user:
+            logger.info(
+                f"Sending pending checkout reminder for '{payment_id}' to '{telegram_id}'"
+            )
+            await notification_service.notify_user(
+                user=user,
+                payload=MessagePayload(i18n_key="ntf-event-cancel-survey-pending"),
+            )
+
+    await redis_client.zadd(due_key, {member: created_at}, nx=True)
+
+
+async def _process_due_member(  # noqa: C901
     member: str,
     now: float,
     billing: BillingClient,
@@ -48,9 +93,17 @@ async def _process_due_member(
     redis_client: Redis,
 ) -> None:
     key = _PENDING_KEY.pack()
-    payment_id, telegram_id_str, gateway_type, created_at_str = member.split(":", 3)
-    telegram_id = int(telegram_id_str)
-    created_at = float(created_at_str)
+    try:
+        payment_id, telegram_id_str, gateway_type, created_at_str = member.split(":", 3)
+    except ValueError:
+        logger.warning(f"Skipping cancel-survey check: malformed queue member '{member}'")
+        return
+    try:
+        telegram_id = int(telegram_id_str)
+        created_at = float(created_at_str)
+    except ValueError:
+        logger.warning(f"Skipping cancel-survey check: malformed queue payload '{member}'")
+        return
 
     try:
         transaction = await billing.get_transaction(UUID(payment_id))
@@ -63,13 +116,17 @@ async def _process_due_member(
         return
 
     if transaction.Status == TransactionStatus.PENDING.value:
-        if now - created_at < _MAX_PENDING_AGE:
-            await redis_client.zadd(key, {member: created_at}, nx=True)
-        else:
-            logger.debug(
-                f"Giving up on cancel-survey check for '{payment_id}': "
-                f"still pending after '{_MAX_PENDING_AGE}' seconds"
-            )
+        await _handle_pending_cancel_survey_check(
+            member=member,
+            payment_id=payment_id,
+            now=now,
+            created_at=created_at,
+            telegram_id=telegram_id,
+            redis_client=redis_client,
+            user_service=user_service,
+            notification_service=notification_service,
+            due_key=key,
+        )
         return
 
     if transaction.Status != TransactionStatus.CANCELED.value:
@@ -129,4 +186,3 @@ async def process_pending_cancel_survey_checks_task(
         await _process_due_member(
             member, now, billing, user_service, notification_service, redis_client
         )
-

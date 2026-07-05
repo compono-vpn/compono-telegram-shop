@@ -1,3 +1,4 @@
+import importlib
 import time
 from typing import Any, Union
 from uuid import UUID
@@ -22,10 +23,38 @@ from src.models.dto import UserDto
 from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
 from src.services.notification import NotificationService
 
+_CORE_EXPERIMENTS = (
+    importlib.import_module("src.core.experiments")
+    if importlib.util.find_spec("src.core.experiments") is not None
+    else None
+)
+ExperimentFeature = getattr(_CORE_EXPERIMENTS, "ExperimentFeature", None)
+
 router = Router(name=__name__)
 
 _ANSWER_TTL = 90 * 24 * 60 * 60
 _AWAITING_TEXT_TTL = 30 * 60
+
+
+def _resolve_survey_experiment_key() -> str:
+    if ExperimentFeature is None:
+        return TRIAL_EXPERIMENT_KEY
+
+    payment_rescue = getattr(ExperimentFeature, "PAYMENT_RESCUE", None)
+    if payment_rescue is None:
+        return TRIAL_EXPERIMENT_KEY
+
+    return str(payment_rescue.value if hasattr(payment_rescue, "value") else payment_rescue)
+
+
+_SURVEY_EXPERIMENT_KEY = _resolve_survey_experiment_key()
+
+
+def _parse_cancel_survey_payload(payload: str) -> tuple[str, str] | None:
+    payment_id, _, reason_value = payload.partition(":")
+    if not payment_id or not reason_value:
+        return None
+    return payment_id, reason_value
 
 
 class AwaitingCancelSurveyText(BaseFilter):
@@ -48,7 +77,10 @@ class AwaitingCancelSurveyText(BaseFilter):
 
 
 async def _resolve_gateway(billing: BillingClient, payment_id: str) -> str:
-    transaction = await billing.get_transaction(UUID(payment_id))
+    try:
+        transaction = await billing.get_transaction(UUID(payment_id))
+    except ValueError:
+        return "UNKNOWN"
     return transaction.GatewayType if transaction else "UNKNOWN"
 
 
@@ -60,13 +92,13 @@ def _track_survey_event(
 ) -> None:
     try:
         experiment_service.record_conversion(
-            TRIAL_EXPERIMENT_KEY,
+            _SURVEY_EXPERIMENT_KEY,
             user.telegram_id,
             event,
             created_at=user.created_at,
         )
     except TypeError:
-        experiment_service.record_conversion(TRIAL_EXPERIMENT_KEY, user.telegram_id, event)
+        experiment_service.record_conversion(_SURVEY_EXPERIMENT_KEY, user.telegram_id, event)
 
 
 def _track_rescue_clicked(
@@ -96,8 +128,13 @@ async def on_cancel_survey_answer(
         return
 
     payload = callback.data.removeprefix(CANCEL_SURVEY_PREFIX)
-    payment_id, _, reason_value = payload.partition(":")
+    payload_data = _parse_cancel_survey_payload(payload)
+    if not payload_data:
+        logger.warning(f"{log(user)} Malformed cancel-survey callback payload '{payload}'")
+        await callback.answer()
+        return
 
+    payment_id, reason_value = payload_data
     try:
         reason = CancelSurveyReason(reason_value)
     except ValueError:
@@ -106,7 +143,15 @@ async def on_cancel_survey_answer(
         await callback.answer()
         return
 
-    answer_key = CancelSurveyAnswerKey(payment_id=UUID(payment_id))
+    try:
+        payment_uuid = UUID(payment_id)
+    except ValueError:
+        logger.warning(f"{log(user)} Invalid cancel-survey payment id '{payment_id}'")
+        _track_rescue_clicked(experiment_service=experiment_service, user=user)
+        await callback.answer()
+        return
+
+    answer_key = CancelSurveyAnswerKey(payment_id=payment_uuid)
 
     if await redis_client.exists(answer_key.pack()):
         _track_rescue_clicked(experiment_service=experiment_service, user=user)
@@ -171,7 +216,14 @@ async def on_cancel_survey_other_text(
 ) -> None:
     payment_id = cancel_survey_payment_id
     awaiting_key = CancelSurveyAwaitingTextKey(telegram_id=user.telegram_id)
-    answer_key = CancelSurveyAnswerKey(payment_id=UUID(payment_id))
+    try:
+        payment_uuid = UUID(payment_id)
+    except ValueError:
+        logger.warning(f"{log(user)} Invalid cancel-survey free-text payment id '{payment_id}'")
+        await redis_client.delete(awaiting_key.pack())
+        return
+
+    answer_key = CancelSurveyAnswerKey(payment_id=payment_uuid)
 
     if await redis_client.exists(answer_key.pack()):
         await redis_client.delete(awaiting_key.pack())

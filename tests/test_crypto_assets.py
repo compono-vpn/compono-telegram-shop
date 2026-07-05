@@ -159,7 +159,6 @@ class TestOnPaymentMethodSelectPlaidly:
         billing = _make_billing()
         ntf = AsyncMock()
         raw = unwrap_inject(on_payment_method_select)
-
         redis_client = AsyncMock()
 
         await raw(
@@ -203,7 +202,15 @@ class TestOnCryptoAssetSelect:
             raw = unwrap_inject(on_crypto_asset_select)
             redis_client = AsyncMock()
 
-            await raw(MagicMock(), MagicMock(), dm, asset.id, billing, AsyncMock(), redis_client)
+            await raw(
+                MagicMock(),
+                MagicMock(),
+                dm,
+                asset.id,
+                billing,
+                AsyncMock(),
+                redis_client,
+            )
 
             kwargs = billing.create_payment.await_args.kwargs
             assert kwargs["gateway_metadata"] == {"chain": asset.chain, "token": asset.token}

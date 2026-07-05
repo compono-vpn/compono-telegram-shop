@@ -59,3 +59,9 @@ class CancelSurveyAwaitingTextKey(StorageKey, prefix="cancel_survey_awaiting_tex
     """Marks a user as mid-reply to the survey's free-text ('Другое') prompt."""
 
     telegram_id: int
+
+
+class CancelSurveyPendingPingKey(StorageKey, prefix="cancel_survey_pending_ping"):
+    """Guards the pending checkout reminder so it is sent only once."""
+
+    payment_id: UUID

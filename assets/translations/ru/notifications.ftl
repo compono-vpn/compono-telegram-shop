@@ -169,6 +169,12 @@ ntf-event-cancel-survey-other =
     • <b>Комментарий</b>: { $text }
     </blockquote>
 
+ntf-event-cancel-survey-pending =
+    <b>⏱ Напоминание об оплате</b>
+
+    Оплата по этой заявке еще не завершена.
+    Если вы продолжаете пытаться оплатить, просто закончите оплату в приложении банка.
+
 ntf-event-node-connection-lost =
     #EventNode
 

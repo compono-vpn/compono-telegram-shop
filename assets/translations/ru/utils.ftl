@@ -34,7 +34,6 @@ referral-invite-message =
 # Headers
 hdr-user = <b>👤 Пользователь:</b>
 hdr-user-profile = <b>👤 Профиль:</b>
-hdr-web-user = <b>🌐 Пользователь сайта:</b>
 
 hdr-subscription = { $is_trial ->
     [1] <b>🎁 Пробная подписка:</b>
@@ -64,15 +63,6 @@ frg-user-info =
     • <b>Имя</b>: { $user_name } { $username -> 
         [0] { empty }
     *[HAS] (<a href="tg://user?id={ $user_id }">@{ $username }</a>)
-    }
-    </blockquote>
-
-frg-web-user =
-    <blockquote>
-    • <b>Email</b>: <code>{ $email }</code>
-    { $source ->
-    [0] { empty }
-    *[HAS] • <b>Источник</b>: <code>{ $source }</code>
     }
     </blockquote>
 

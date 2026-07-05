@@ -21,10 +21,15 @@ from uuid import UUID, uuid4
 
 from src.core.enums import TransactionStatus
 from src.core.metrics import CANCEL_SURVEY_ANSWERS_TOTAL, CANCEL_SURVEY_SENT_TOTAL
-from src.core.storage.keys import CancelSurveySentKey, PendingCancelSurveyChecksKey
+from src.core.storage.keys import (
+    CancelSurveyPendingPingKey,
+    CancelSurveySentKey,
+    PendingCancelSurveyChecksKey,
+)
 from src.infrastructure.taskiq.tasks.cancel_survey import (
     _MAX_PENDING_AGE,
     _PENDING_KEY,
+    _PENDING_PING_TTL,
     _SENT_TTL,
     _process_due_member,
     schedule_cancel_survey_check,
@@ -156,20 +161,59 @@ class TestProcessDueMemberPending:
         payment_id = str(uuid4())
         created_at = time.time()
         member = f"{payment_id}:12345:PLATEGA:{created_at}"
+        user = make_user(telegram_id=12345)
 
         redis_client = AsyncMock()
+        redis_client.set.return_value = True
         billing = _make_billing(transaction=_make_transaction(TransactionStatus.PENDING.value))
         user_service = AsyncMock()
+        user_service.get.return_value = user
         notification_service = AsyncMock()
 
         await _process_due_member(
             member, created_at + 60, billing, user_service, notification_service, redis_client
         )
 
+        redis_client.set.assert_awaited_once_with(
+            CancelSurveyPendingPingKey(payment_id=payment_id).pack(),
+            "1",
+            nx=True,
+            ex=_PENDING_PING_TTL,
+        )
+        notification_service.notify_user.assert_awaited_once()
+        payload = notification_service.notify_user.await_args.kwargs["payload"]
+        assert payload.i18n_key == "ntf-event-cancel-survey-pending"
         redis_client.zadd.assert_awaited_once_with(
             _PENDING_KEY.pack(), {member: created_at}, nx=True
         )
+
+    async def test_young_pending_does_not_repeat_ping(self):
+        payment_id = str(uuid4())
+        created_at = time.time()
+        member = f"{payment_id}:12345:PLATEGA:{created_at}"
+        user = make_user(telegram_id=12345)
+
+        redis_client = AsyncMock()
+        redis_client.set.return_value = None
+        billing = _make_billing(transaction=_make_transaction(TransactionStatus.PENDING.value))
+        user_service = AsyncMock()
+        user_service.get.return_value = user
+        notification_service = AsyncMock()
+
+        await _process_due_member(
+            member, created_at + 60, billing, user_service, notification_service, redis_client
+        )
+
+        redis_client.set.assert_awaited_once_with(
+            CancelSurveyPendingPingKey(payment_id=payment_id).pack(),
+            "1",
+            nx=True,
+            ex=_PENDING_PING_TTL,
+        )
         notification_service.notify_user.assert_not_awaited()
+        redis_client.zadd.assert_awaited_once_with(
+            _PENDING_KEY.pack(), {member: created_at}, nx=True
+        )
 
     async def test_stale_pending_past_max_age_is_dropped(self):
         payment_id = str(uuid4())
