@@ -473,7 +473,7 @@ class ExperimentService:
                 config=payload,
             )
             variation = getattr(result, "variation_key", None)
-            if variation in feature.experiment.variants:
+            if self._is_valid_estimand_variation(feature, variation):
                 return _FeatureEvaluation(
                     feature_key=feature.key,
                     variant=variation,
@@ -508,6 +508,19 @@ class ExperimentService:
             off_default = self._as_str(feature.estimand_off_variant, off_default)
 
         return on_default, off_default
+
+    def _is_valid_estimand_variation(
+        self,
+        feature: _FeatureSpec,
+        variation: str | None,
+    ) -> bool:
+        if not variation:
+            return False
+
+        if feature.key == TRIAL_EXPERIMENT_KEY:
+            return variation in feature.experiment.variants
+
+        return True
 
     def _track_estimand_exposure(
         self,

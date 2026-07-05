@@ -55,7 +55,27 @@ def _build_estimand_payload(
     on_variant: str = TRIAL_VARIANT_ON,
     off_variant: str = TRIAL_VARIANT_OFF,
     feature_key: str = TRIAL_EXPERIMENT_KEY,
+    feature_variations: list[tuple[str, dict[str, Any]]] | None = None,
+    variation_weights: list[float] | None = None,
 ) -> ConfigPayload:
+    variations = feature_variations
+    if variations is None:
+        variations = [
+            (on_variant, {"trial": "on"}),
+            (off_variant, {"trial": "off"}),
+        ]
+
+    count = len(variations)
+    if count == 0:
+        raise ValueError("at least one variation required")
+
+    if variation_weights is None:
+        equal_weight = 1.0 / count
+        variation_weights = [equal_weight for _ in range(count)]
+
+    if len(variation_weights) != count:
+        raise ValueError("variation weights must match variation count")
+
     return ConfigPayload(
         revision="rev-1",
         features={
@@ -68,34 +88,27 @@ def _build_estimand_payload(
                 published=True,
                 variations=[
                     VariationConfig(
-                        key=on_variant,
-                        name=on_variant,
-                        value={"trial": "on"},
-                        weight=50,
-                        is_control=True,
+                        key=key,
+                        name=key,
+                        value=value,
+                        weight=100,
+                        is_control=index == 0,
                         description="",
-                    ),
-                    VariationConfig(
-                        key=off_variant,
-                        name=off_variant,
-                        value={"trial": "off"},
-                        weight=50,
-                        is_control=False,
-                        description="",
-                    ),
+                    )
+                    for index, (key, value) in enumerate(variations)
                 ],
                 rules=[
                     RuleConfig(
                         id="default",
                         condition={},
-                        variation_keys=[on_variant, off_variant],
+                        variation_keys=[key for key, _ in variations],
                         coverage=1.0,
                         priority=0,
                         is_default=True,
                         force=None,
                         seed=f"{feature_key}_v1",
                         hash_version=2,
-                        weights=[0.5, 0.5],
+                        weights=variation_weights,
                         ranges=None,
                     ),
                 ],
@@ -273,6 +286,36 @@ class TestTrialExperiment:
             payload.features[feature_key].variations[0].value,
             payload.features[feature_key].variations[1].value,
         )
+        assert estimand_client.evaluate_feature.call_count >= 1
+
+    async def test_non_trial_feature_returns_multi_arm_estimand_variant(self):
+        payload = _build_estimand_payload(
+            feature_key=ExperimentFeature.TRIAL_LENGTH.value,
+            feature_variations=[
+                ("trial_14", {"days": 14}),
+                ("trial_7", {"days": 7}),
+                ("trial_3", {"days": 3}),
+            ],
+            variation_weights=[1.0, 0.0, 0.0],
+        )
+        svc, estimand_client, payload_from_config = _service_estimand(
+            feature_key=ExperimentFeature.TRIAL_LENGTH.value,
+            feature_id="tl-14",
+            trial_length_feature_id="tl-14",
+            on_variant="trial_14",
+            off_variant="trial_3",
+            payload=payload,
+        )
+        user = UserDto(telegram_id=321, name="MultiArm")
+
+        evaluation = svc.evaluate_feature_for_user(user, ExperimentFeature.TRIAL_LENGTH)
+
+        assert evaluation.variant == "trial_14"
+        trial_length_variation = payload_from_config.features[
+            ExperimentFeature.TRIAL_LENGTH.value
+        ].variations[0].value
+        assert evaluation.payload == trial_length_variation
+        assert evaluation.payload == {"days": 14}
         assert estimand_client.evaluate_feature.call_count >= 1
 
     async def test_non_trial_start_date_blocks_old_users_from_estimand_feature(self):
