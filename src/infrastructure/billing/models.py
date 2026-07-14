@@ -82,6 +82,7 @@ class BillingUser(BaseModel):
     Role: str = ""
     Language: str = ""
     PersonalDiscount: int = 0
+    LoyaltyDiscount: int = 0
     PurchaseDiscount: int = 0
     PurchaseDiscountMaxDays: int = 0
     Points: int = 0
