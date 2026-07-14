@@ -1233,11 +1233,13 @@ class TestReferrals:
 
     async def test_list_referral_rewards(self):
         client, mock_http = _make_client_with_mock()
-        mock_http.request.return_value = _make_response(200, [{"id": 1, "amount": 5}])
+        mock_http.request.return_value = _make_response(200, [SAMPLE_REFERRAL_REWARD])
 
         result = await client.list_referral_rewards(111111)
 
         assert len(result) == 1
+        assert isinstance(result[0], BillingReferralReward)
+        assert result[0].IsIssued is False
 
 
 # ---------------------------------------------------------------------------

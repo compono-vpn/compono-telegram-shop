@@ -36,6 +36,7 @@ from src.models.dto import (
 )
 from src.services.notification import NotificationService
 from src.services.plan import PlanService
+from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 from src.services.transaction import TransactionService
@@ -322,6 +323,18 @@ async def _handle_change_purchase(
     logger.debug(f"Changed subscription for user '{user.telegram_id}'")
 
 
+async def _flush_pending_referral_rewards(
+    referral_service: ReferralService,
+    user_telegram_id: int,
+) -> None:
+    try:
+        await referral_service.flush_pending_rewards(user_telegram_id)
+    except Exception:
+        logger.opt(exception=True).error(
+            f"Failed to flush pending referral rewards for user '{user_telegram_id}'"
+        )
+
+
 @broker.task(retry_on_error=True)
 @inject
 async def purchase_subscription_task(
@@ -333,6 +346,7 @@ async def purchase_subscription_task(
     subscription_service: FromDishka[SubscriptionService],
     transaction_service: FromDishka[TransactionService],
     notification_service: FromDishka[NotificationService],
+    referral_service: FromDishka[ReferralService],
     redis_client: FromDishka[Redis],
 ) -> None:
     purchase_type = transaction.purchase_type
@@ -392,6 +406,8 @@ async def purchase_subscription_task(
                     sub.url, config.remnawave.sub_public_domain
                 )
                 await schedule_not_connected_reminder(redis_client, user.telegram_id, connect_url)
+
+        await _flush_pending_referral_rewards(referral_service, user.telegram_id)
 
         await redirect_to_successed_payment_task.kiq(user, purchase_type)
         logger.info(f"Purchase subscription task completed for user '{user.telegram_id}'")

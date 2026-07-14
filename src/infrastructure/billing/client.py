@@ -448,9 +448,9 @@ class BillingClient:
         data = await self._get(f"/referral/{telegram_id}/stats")
         return data if isinstance(data, dict) else {}
 
-    async def list_referral_rewards(self, telegram_id: int) -> list[dict[str, Any]]:
+    async def list_referral_rewards(self, telegram_id: int) -> list[BillingReferralReward]:
         data = await self._get(f"/referral/{telegram_id}/rewards")
-        return data if isinstance(data, list) else []
+        return [BillingReferralReward.model_validate(r) for r in (data or [])]
 
     # ------------------------------------------------------------------ #
     # Customers
