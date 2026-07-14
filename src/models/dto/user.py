@@ -27,6 +27,7 @@ class BaseUserDto(TrackableDto):
     language: Locale = Locale.EN
 
     personal_discount: int = 0
+    loyalty_discount: int = 0
     purchase_discount: int = 0
     purchase_discount_max_days: int = 0
     points: int = 0

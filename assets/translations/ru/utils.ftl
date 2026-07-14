@@ -59,6 +59,10 @@ frg-user =
     [0] { empty }
     *[HAS] • <b>Ваша скидка</b>: { $personal_discount }%
     }
+    { $loyalty_discount ->
+    [0] { empty }
+    *[HAS] • <b>Скидка постоянного клиента</b>: { $loyalty_discount }%
+    }
     </blockquote>
 
 frg-user-info =

@@ -299,6 +299,7 @@ def billing_user_to_dto(bu: BillingUser) -> UserDto:
         role=UserRole(bu.Role) if bu.Role else UserRole.USER,
         language=(bu.Language or "ru").lower(),
         personal_discount=bu.PersonalDiscount,
+        loyalty_discount=bu.LoyaltyDiscount,
         purchase_discount=bu.PurchaseDiscount,
         purchase_discount_max_days=bu.PurchaseDiscountMaxDays,
         points=bu.Points,

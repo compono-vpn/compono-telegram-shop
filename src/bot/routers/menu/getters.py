@@ -50,6 +50,7 @@ async def menu_getter(
             "user_id": str(user.telegram_id),
             "user_name": user.name,
             "personal_discount": user.personal_discount,
+            "loyalty_discount": user.loyalty_discount,
             "support": support_link,
             "invite": i18n.get(
                 "referral-invite-message",
