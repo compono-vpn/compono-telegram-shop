@@ -1,4 +1,5 @@
 import importlib
+from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
 from typing import Any, Optional, cast
@@ -24,6 +25,7 @@ from src.core.enums import (
     UserNotificationType,
 )
 from src.core.utils.message_payload import MessagePayload
+from src.core.utils.time import datetime_now
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import (
     billing_referral_reward_to_dto,
@@ -37,7 +39,9 @@ from src.models.dto import (
     UserDto,
 )
 from src.services.notification import NotificationService
+from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
+from src.services.subscription import SubscriptionService
 from src.services.user import UserService
 
 from .base import BaseService
@@ -47,6 +51,8 @@ class ReferralService(BaseService):
     billing: BillingClient
     user_service: UserService
     settings_service: SettingsService
+    subscription_service: SubscriptionService
+    remnawave_service: RemnawaveService
     _bot_username: Optional[str]
 
     def __init__(
@@ -61,12 +67,16 @@ class ReferralService(BaseService):
         user_service: UserService,
         settings_service: SettingsService,
         notification_service: NotificationService,
+        subscription_service: SubscriptionService,
+        remnawave_service: RemnawaveService,
     ) -> None:
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.billing = billing
         self.user_service = user_service
         self.settings_service = settings_service
         self.notification_service = notification_service
+        self.subscription_service = subscription_service
+        self.remnawave_service = remnawave_service
         self._bot_username: Optional[str] = None
 
     async def create_referral(
@@ -114,6 +124,52 @@ class ReferralService(BaseService):
     async def mark_reward_as_issued(self, reward_id: int) -> None:
         await self.billing.update_referral_reward(reward_id, is_issued=True)
         logger.info(f"Marked reward '{reward_id}' as issued")
+
+    async def flush_pending_rewards(self, user_telegram_id: int) -> None:
+        subscription = await self.subscription_service.get_current(user_telegram_id)
+        if not subscription or subscription.is_trial:
+            return
+
+        billing_rewards = await self.billing.list_referral_rewards(user_telegram_id)
+        pending_rewards = [
+            billing_referral_reward_to_dto(r)
+            for r in billing_rewards
+            if not r.IsIssued and r.Type == ReferralRewardType.EXTRA_DAYS.value
+        ]
+        if not pending_rewards:
+            return
+
+        user = await self.user_service.get(user_telegram_id)
+        if not user:
+            logger.warning(
+                f"User '{user_telegram_id}' not found while flushing pending referral rewards"
+            )
+            return
+
+        for reward in pending_rewards:
+            base_expire_at = max(subscription.expire_at, datetime_now())
+            subscription.expire_at = base_expire_at + timedelta(days=reward.amount)
+
+            await self.subscription_service.update(subscription)
+            await self.remnawave_service.updated_user(
+                user=user,
+                uuid=subscription.user_remna_id,
+                subscription=subscription,
+            )
+            await self.mark_reward_as_issued(reward.id)  # type: ignore[arg-type]
+            await self.notification_service.notify_user(
+                user=user,
+                payload=MessagePayload.not_deleted(
+                    i18n_key="ntf-event-user-referral-reward-banked",
+                    i18n_kwargs={"value": reward.amount},
+                    message_effect=MessageEffect.CONFETTI,
+                ),
+                ntf_type=UserNotificationType.REFERRAL_REWARD,
+            )
+            logger.info(
+                f"Flushed banked referral reward '{reward.id}' "
+                f"({reward.amount} days) for user '{user_telegram_id}'"
+            )
 
     @staticmethod
     def _compute_reward_amount(
@@ -357,6 +413,10 @@ class ReferralService(BaseService):
             parent = await self.get_referral_by_referred(referral.referrer.telegram_id)
         return referral, parent
 
+    async def _has_had_paid_subscription(self, telegram_id: int) -> bool:
+        subscriptions = await self.subscription_service.get_all_by_user(telegram_id)
+        return any(not subscription.is_trial for subscription in subscriptions)
+
     async def _get_valid_referrer(self, code: str, user_id: int) -> Optional[UserDto]:
         referrer = await self.user_service.get_by_referral_code(code)
         if not referrer or referrer.telegram_id == user_id:
@@ -371,6 +431,13 @@ class ReferralService(BaseService):
             or reward.type != ReferralInviteeRewardType.PURCHASE_DISCOUNT
             or reward.amount <= 0
         ):
+            return False
+
+        if await self._has_had_paid_subscription(user.telegram_id):
+            logger.info(
+                f"Referral invitee discount skipped for user '{user.telegram_id}': "
+                "already has a paid subscription history"
+            )
             return False
 
         new_discount = max(user.purchase_discount or 0, reward.amount)

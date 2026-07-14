@@ -396,6 +396,17 @@ ntf-event-user-referral-reward-error =
     <i>Купите подписку, чтобы получать бонусы за приглашенных друзей!</i>
     </blockquote>
 
+ntf-event-user-referral-reward-banked =
+    <b>💰 Отложенная награда начислена!</b>
+
+    <blockquote>
+    Теперь, когда у вас есть активная подписка, мы добавили к ней <b>{ $value } { $value ->
+        [one] доп. день
+        [few] доп. дня
+        *[more] доп. дней
+        }</b> из ранее заработанной реферальной награды!
+    </blockquote>
+
 
 # Notifications
 ntf-command-paysupport = 💸 <b>Чтобы запросить возврат, обратитесь в нашу службу поддержки.</b>
