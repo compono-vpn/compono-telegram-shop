@@ -5,7 +5,7 @@ import pytest
 from fluentogram.exceptions import FormatError
 from prometheus_client import REGISTRY
 
-from src.infrastructure.kafka.consumer import UserNotificationConsumer
+from src.infrastructure.kafka.consumer import UserNotificationConsumer, _format_plan_i18n_kwargs
 
 
 def _consumer() -> UserNotificationConsumer:
@@ -59,3 +59,23 @@ async def test_transient_redirect_error_still_propagates_for_retry() -> None:
                 "redirect_to": "subscription_success",
             }
         )
+
+
+def test_change_notification_formats_previous_plan_fields() -> None:
+    kwargs = {
+        "plan_traffic_limit": 300,
+        "plan_device_limit": 6,
+        "plan_duration": 30,
+        "previous_plan_traffic_limit": 100,
+        "previous_plan_device_limit": 3,
+        "previous_plan_duration": 30,
+    }
+
+    _format_plan_i18n_kwargs(kwargs)
+
+    assert kwargs["plan_traffic_limit"] == ("unit-gigabyte", {"value": 300})
+    assert kwargs["plan_device_limit"] == ("unit-unlimited", {"value": 6})
+    assert kwargs["plan_duration"] == ("unit-month", {"value": 1})
+    assert kwargs["previous_plan_traffic_limit"] == ("unit-gigabyte", {"value": 100})
+    assert kwargs["previous_plan_device_limit"] == ("unit-unlimited", {"value": 3})
+    assert kwargs["previous_plan_duration"] == ("unit-month", {"value": 1})

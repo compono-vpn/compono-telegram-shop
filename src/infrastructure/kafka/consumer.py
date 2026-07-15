@@ -19,6 +19,20 @@ from src.infrastructure.kafka.base_consumer import SupervisedKafkaConsumer
 from src.services.notification import NotificationService
 
 
+def _format_plan_i18n_kwargs(i18n_kwargs: dict) -> None:
+    """Convert both current and previous plan numbers into Fluent values."""
+    formatters = {
+        "plan_traffic_limit": i18n_format_traffic_limit,
+        "plan_device_limit": i18n_format_device_limit,
+        "plan_duration": i18n_format_days,
+    }
+    for prefix in ("", "previous_"):
+        for field, formatter in formatters.items():
+            key = f"{prefix}{field}"
+            if key in i18n_kwargs and isinstance(i18n_kwargs[key], int):
+                i18n_kwargs[key] = formatter(i18n_kwargs[key])
+
+
 class UserNotificationConsumer(SupervisedKafkaConsumer):
     """Consumes generic user notification events from Kafka and delivers via Telegram.
 
@@ -91,19 +105,7 @@ class UserNotificationConsumer(SupervisedKafkaConsumer):
 
         i18n_kwargs = payload.get("i18n_kwargs", {})
 
-        # Apply Fluent-compatible formatters for known plan fields
-        if "plan_traffic_limit" in i18n_kwargs and isinstance(
-            i18n_kwargs["plan_traffic_limit"], int
-        ):
-            i18n_kwargs["plan_traffic_limit"] = i18n_format_traffic_limit(
-                i18n_kwargs["plan_traffic_limit"]
-            )
-        if "plan_device_limit" in i18n_kwargs and isinstance(i18n_kwargs["plan_device_limit"], int):
-            i18n_kwargs["plan_device_limit"] = i18n_format_device_limit(
-                i18n_kwargs["plan_device_limit"]
-            )
-        if "plan_duration" in i18n_kwargs and isinstance(i18n_kwargs["plan_duration"], int):
-            i18n_kwargs["plan_duration"] = i18n_format_days(i18n_kwargs["plan_duration"])
+        _format_plan_i18n_kwargs(i18n_kwargs)
 
         reply_markup = None
         reply_markup_user_id = payload.get("reply_markup_user_id")
