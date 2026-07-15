@@ -1,12 +1,14 @@
 from aiogram import Bot
 from aiogram_dialog import BgManagerFactory, ShowMode, StartMode
 from dishka import AsyncContainer
+from fluentogram.exceptions import FormatError
 from loguru import logger
 
 from src.bot.keyboards import get_user_keyboard
 from src.bot.states import Subscription
 from src.core.config import AppConfig
 from src.core.enums import PurchaseType, SystemNotificationType
+from src.core.metrics import KAFKA_CONSUMER_DISCARDED_MESSAGES_TOTAL
 from src.core.utils.formatters import (
     i18n_format_days,
     i18n_format_device_limit,
@@ -54,12 +56,25 @@ class UserNotificationConsumer(SupervisedKafkaConsumer):
 
         msg_type = payload.get("type", "system")
 
-        if msg_type == "system":
-            await self._handle_system_notify(telegram_id, payload)
-        elif msg_type == "redirect":
-            await self._handle_redirect(telegram_id, payload)
-        else:
-            logger.warning(f"Unknown notification type '{msg_type}', skipping")
+        try:
+            if msg_type == "system":
+                await self._handle_system_notify(telegram_id, payload)
+            elif msg_type == "redirect":
+                await self._handle_redirect(telegram_id, payload)
+            else:
+                logger.warning(f"Unknown notification type '{msg_type}', skipping")
+        except FormatError as exc:
+            # Retrying a malformed Fluent payload can never succeed. Let the
+            # base consumer commit this one poison message so later customer
+            # redirects are not held behind an exponential restart loop.
+            KAFKA_CONSUMER_DISCARDED_MESSAGES_TOTAL.labels(
+                consumer=self.consumer_name,
+                reason="format_error",
+            ).inc()
+            logger.error(
+                "Discarding malformed notification after translation failure: "
+                f"i18n_key={payload.get('i18n_key', '')!r}, error={exc}"
+            )
 
     async def _handle_system_notify(self, telegram_id: int, payload: dict) -> None:
         ntf_type_str = payload.get("ntf_type", "")

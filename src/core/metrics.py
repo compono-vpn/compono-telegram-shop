@@ -111,6 +111,12 @@ KAFKA_CONSUMER_RESTARTS_TOTAL = Counter(
     ["consumer"],
 )
 
+KAFKA_CONSUMER_DISCARDED_MESSAGES_TOTAL = Counter(
+    "kafka_consumer_discarded_messages_total",
+    "Kafka messages committed without delivery because they are deterministically invalid",
+    ["consumer", "reason"],
+)
+
 
 CANCEL_SURVEY_SENT_TOTAL = Counter(
     "bot_cancel_survey_sent_total",
