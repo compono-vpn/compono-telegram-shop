@@ -1,5 +1,6 @@
 from .client import BillingClient
 from .converters import (
+    billing_calls_bundle_to_dto,
     billing_gateway_to_dto,
     billing_plan_snapshot_to_dto,
     billing_plan_to_dto,
@@ -15,6 +16,7 @@ from .converters import (
 
 __all__ = [
     "BillingClient",
+    "billing_calls_bundle_to_dto",
     "billing_gateway_to_dto",
     "billing_plan_snapshot_to_dto",
     "billing_plan_to_dto",

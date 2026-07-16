@@ -84,12 +84,13 @@ def make_subscription(
     active: bool = True,
     traffic_limit: int = 300,
     device_limit: int = 6,
+    is_trial: bool = False,
 ) -> BaseSubscriptionDto:
     expire_at = datetime.now(tz=timezone.utc) + timedelta(days=30) if active else datetime.now(tz=timezone.utc) - timedelta(days=1)
     return BaseSubscriptionDto(
         user_remna_id=uuid4(),
         status=SubscriptionStatus.ACTIVE if active else SubscriptionStatus.EXPIRED,
-        is_trial=False,
+        is_trial=is_trial,
         traffic_limit=traffic_limit,
         device_limit=device_limit,
         traffic_limit_strategy=TrafficLimitStrategy.MONTH,
@@ -152,6 +153,7 @@ def make_config() -> MagicMock:
     config.bot.is_mini_app = False
     config.remnawave.sub_public_domain = "componovpn.com"
     config.hydra_primary_domain = "componovpn.com"
+    config.calls.is_beta_user.return_value = True
     return config
 
 

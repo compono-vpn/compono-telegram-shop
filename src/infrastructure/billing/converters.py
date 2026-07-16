@@ -30,6 +30,9 @@ from src.core.enums import (
     UserRole,
 )
 from src.models.dto import (
+    AmneziaWGConfigDto,
+    CallsBundleDto,
+    Hysteria2ConfigDto,
     PaymentGatewayDto,
     PlanDto,
     PlanDurationDto,
@@ -51,6 +54,9 @@ from src.models.dto.settings import ReferralInviteeRewardSettingsDto, ReferralRe
 from src.models.dto.user import BaseUserDto, UserDto
 
 from .models import (
+    BillingAmneziaWGConfig,
+    BillingCallsBundle,
+    BillingHysteria2Config,
     BillingPaymentGateway,
     BillingPlan,
     BillingPlanDuration,
@@ -467,4 +473,48 @@ def billing_referral_reward_to_dto(brr: BillingReferralReward) -> ReferralReward
         is_issued=brr.IsIssued,
         created_at=brr.CreatedAt,
         updated_at=brr.UpdatedAt,
+    )
+
+
+# ------------------------------------------------------------------ #
+# Calls (beta)
+# ------------------------------------------------------------------ #
+
+
+def billing_amneziawg_config_to_dto(ba: BillingAmneziaWGConfig) -> AmneziaWGConfigDto:
+    return AmneziaWGConfigDto(
+        private_key=ba.private_key,
+        address=ba.address,
+        dns=ba.dns,
+        mtu=ba.mtu,
+        server_public_key=ba.server_public_key,
+        endpoint=ba.endpoint,
+        allowed_ips=ba.allowed_ips,
+        persistent_keepalive=ba.persistent_keepalive,
+        jc=ba.jc,
+        jmin=ba.jmin,
+        jmax=ba.jmax,
+        s1=ba.s1,
+        s2=ba.s2,
+        h1=ba.h1,
+        h2=ba.h2,
+        h3=ba.h3,
+        h4=ba.h4,
+    )
+
+
+def billing_hysteria2_config_to_dto(bh: BillingHysteria2Config) -> Hysteria2ConfigDto:
+    return Hysteria2ConfigDto(
+        uri=bh.uri,
+        server=bh.server,
+        auth=bh.auth,
+        sni=bh.sni,
+        insecure=bh.insecure,
+    )
+
+
+def billing_calls_bundle_to_dto(bc: BillingCallsBundle) -> CallsBundleDto:
+    return CallsBundleDto(
+        amneziawg=billing_amneziawg_config_to_dto(bc.amneziawg),
+        hysteria2=billing_hysteria2_config_to_dto(bc.hysteria2),
     )
