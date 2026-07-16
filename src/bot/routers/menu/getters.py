@@ -110,7 +110,11 @@ async def menu_getter(
                     subscription.url, config.remnawave.sub_public_domain
                 ),
                 "tg_proxy_available": len(tg_proxies) > 0,
-                "calls_beta_available": subscription.is_active and not subscription.is_trial,
+                "calls_beta_available": (
+                    subscription.is_active
+                    and not subscription.is_trial
+                    and config.calls.is_beta_user(user.telegram_id)
+                ),
             }
         )
 

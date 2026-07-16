@@ -198,3 +198,13 @@ class TestCallsBetaAvailability:
         result = await _call_menu_getter(user=user)
 
         assert result["calls_beta_available"] is False
+
+    @pytest.mark.asyncio
+    async def test_active_non_trial_not_in_allowlist_hides_button(self):
+        user = make_user(subscription=make_subscription(active=True, is_trial=False))
+        config = make_config()
+        config.calls.is_beta_user.return_value = False
+
+        result = await _call_menu_getter(user=user, config=config)
+
+        assert result["calls_beta_available"] is False
