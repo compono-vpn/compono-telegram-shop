@@ -8,8 +8,9 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 
-from src.infrastructure.billing.client import BillingClient, BillingClientError
+from src.infrastructure.billing.client import BillingClient, BillingClientError, CallsNotEntitledError
 from src.infrastructure.billing.models import (
+    BillingCallsBundle,
     BillingCustomer,
     BillingPaymentGateway,
     BillingPaymentResult,
@@ -1465,3 +1466,71 @@ class TestClientLifecycle:
         # Clean up if real client was created
         if isinstance(http_client, httpx.AsyncClient):
             await http_client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Calls (beta)
+# ---------------------------------------------------------------------------
+
+
+class TestProvisionCalls:
+
+    async def test_provision_calls_success(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(200, {
+            "amneziawg": {
+                "private_key": "aGVsbG8td29ybGQ=",
+                "address": "10.8.0.2/32",
+                "dns": "1.1.1.1",
+                "mtu": 1280,
+                "server_public_key": "cHVibGljLWtleQ==",
+                "endpoint": "calls.componovpn.com:51820",
+                "allowed_ips": "0.0.0.0/0, ::/0",
+                "persistent_keepalive": 25,
+                "jc": 4,
+                "jmin": 40,
+                "jmax": 70,
+                "s1": 30,
+                "s2": 25,
+                "h1": 1234567891,
+                "h2": 1234567892,
+                "h3": 1234567893,
+                "h4": 1234567894,
+            },
+            "hysteria2": {
+                "uri": "hysteria2://auth@calls.componovpn.com:8443/?sni=calls.componovpn.com",
+                "server": "calls.componovpn.com:8443",
+                "auth": "auth",
+                "sni": "calls.componovpn.com",
+                "insecure": False,
+            },
+        })
+
+        result = await client.provision_calls(123456)
+
+        assert isinstance(result, BillingCallsBundle)
+        assert result.amneziawg.address == "10.8.0.2/32"
+        assert result.hysteria2.server == "calls.componovpn.com:8443"
+        call_kwargs = mock_http.request.call_args[1]
+        assert call_kwargs["json"] == {"telegram_id": 123456}
+        url = mock_http.request.call_args[0][1]
+        assert url.endswith("/calls/provision")
+
+    async def test_provision_calls_403_raises_not_entitled(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(403, {"error": "not entitled"})
+
+        with pytest.raises(CallsNotEntitledError) as exc_info:
+            await client.provision_calls(123456)
+
+        assert exc_info.value.status_code == 403
+
+    async def test_provision_calls_other_error_propagates_as_billing_client_error(self):
+        client, mock_http = _make_client_with_mock()
+        mock_http.request.return_value = _make_response(500, {"error": "internal error"})
+
+        with pytest.raises(BillingClientError) as exc_info:
+            await client.provision_calls(123456)
+
+        assert not isinstance(exc_info.value, CallsNotEntitledError)
+        assert exc_info.value.status_code == 500

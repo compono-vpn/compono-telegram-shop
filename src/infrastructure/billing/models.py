@@ -303,3 +303,45 @@ class BillingTGProxy(BaseModel):
     port: int = Field(0, alias="port")
     secret: str = Field("", alias="secret")
     link: str = Field("", alias="link")
+
+
+# --- Calls (beta) ---
+
+
+class BillingAmneziaWGConfig(BaseModel):
+    """Maps the amneziawg block of domain.CallsBundle from billing API (lowercase JSON keys)."""
+
+    private_key: str = ""
+    address: str = ""
+    dns: str = ""
+    mtu: int = 0
+    server_public_key: str = ""
+    endpoint: str = ""
+    allowed_ips: str = ""
+    persistent_keepalive: int = 0
+    jc: int = 0
+    jmin: int = 0
+    jmax: int = 0
+    s1: int = 0
+    s2: int = 0
+    h1: int = 0
+    h2: int = 0
+    h3: int = 0
+    h4: int = 0
+
+
+class BillingHysteria2Config(BaseModel):
+    """Maps the hysteria2 block of domain.CallsBundle from billing API (lowercase JSON keys)."""
+
+    uri: str = ""
+    server: str = ""
+    auth: str = ""
+    sni: str = ""
+    insecure: bool = False
+
+
+class BillingCallsBundle(BaseModel):
+    """Maps domain.CallsBundle from billing API (lowercase JSON keys)."""
+
+    amneziawg: BillingAmneziaWGConfig = Field(default_factory=BillingAmneziaWGConfig)
+    hysteria2: BillingHysteria2Config = Field(default_factory=BillingHysteria2Config)

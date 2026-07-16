@@ -60,6 +60,31 @@ class TestMenuButtonOrder:
             f"TG proxy (index {proxy_row_idx}) should be before trial (index {trial_row_idx})"
         )
 
+    def test_calls_beta_button_exists(self):
+        widget = _find_widget_by_id(menu, "calls_beta")
+        assert widget is not None, "Calls (beta) button not found in menu"
+
+    def test_calls_beta_right_after_tg_proxy(self):
+        proxy_row_idx = _get_row_index(menu, "tg_proxy")
+        calls_beta_row_idx = _get_row_index(menu, "calls_beta")
+
+        assert proxy_row_idx >= 0, "TG proxy row not found"
+        assert calls_beta_row_idx >= 0, "Calls (beta) row not found"
+        assert calls_beta_row_idx == proxy_row_idx + 1, (
+            f"Calls (beta) button should be right after tg_proxy row "
+            f"(expected index {proxy_row_idx + 1}, got {calls_beta_row_idx})"
+        )
+
+    def test_calls_beta_before_trial(self):
+        calls_beta_row_idx = _get_row_index(menu, "calls_beta")
+        trial_row_idx = _get_row_index(menu, "trial")
+
+        assert calls_beta_row_idx >= 0, "Calls (beta) row not found"
+        assert trial_row_idx >= 0, "Trial row not found"
+        assert calls_beta_row_idx < trial_row_idx, (
+            f"Calls (beta) (index {calls_beta_row_idx}) should be before trial (index {trial_row_idx})"
+        )
+
 
 class TestTGProxyWindow:
     """The TG proxy window must not use Url or CopyText buttons (tg:// is rejected by Telegram)."""

@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 from aiogram_dialog import DialogManager, ShowMode, StartMode, SubManager
 from aiogram_dialog.widgets.kbd import Button
 from dishka import FromDishka
@@ -13,10 +13,11 @@ from src.bot.states import MainMenu, Subscription
 from src.core.constants import USER_KEY
 from src.core.enums import MediaType
 from src.core.i18n.translator import get_translated_kwargs
+from src.core.utils.calls import generate_calls_qr, render_amneziawg_conf
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
-from src.infrastructure.billing import BillingClient
-from src.infrastructure.billing.client import BillingClientError
+from src.infrastructure.billing import BillingClient, billing_calls_bundle_to_dto
+from src.infrastructure.billing.client import BillingClientError, CallsNotEntitledError
 from src.models.dto import UserDto
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
@@ -256,6 +257,57 @@ async def on_show_qr(
             media_type=MediaType.PHOTO,
         ),
     )
+
+
+@inject
+async def on_calls_beta(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    billing: FromDishka[BillingClient],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+
+    try:
+        billing_bundle = await billing.provision_calls(user.telegram_id)
+    except CallsNotEntitledError:
+        logger.info(f"{log(user)} Calls beta provisioning rejected: not entitled")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-calls-beta-not-entitled"),
+        )
+        return
+
+    bundle = billing_calls_bundle_to_dto(billing_bundle)
+    conf = render_amneziawg_conf(bundle.amneziawg)
+    hysteria2_uri = bundle.hysteria2.uri.get_secret_value()
+
+    await notification_service.notify_user(
+        user=user,
+        payload=MessagePayload.not_deleted(
+            i18n_key="msg-calls-beta",
+            media=BufferedInputFile(conf.encode(), filename="compono-calls.conf"),
+            media_type=MediaType.DOCUMENT,
+        ),
+    )
+    await notification_service.notify_user(
+        user=user,
+        payload=MessagePayload.not_deleted(
+            i18n_key="",
+            media=generate_calls_qr(conf, "compono-calls-amneziawg.png"),
+            media_type=MediaType.PHOTO,
+        ),
+    )
+    await notification_service.notify_user(
+        user=user,
+        payload=MessagePayload.not_deleted(
+            i18n_key="",
+            media=generate_calls_qr(hysteria2_uri, "compono-calls-hysteria2.png"),
+            media_type=MediaType.PHOTO,
+        ),
+    )
+    logger.info(f"{log(user)} Provisioned Calls beta bundle")
 
 
 @inject

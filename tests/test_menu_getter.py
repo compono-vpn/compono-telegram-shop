@@ -158,3 +158,43 @@ class TestMenuState:
         result = await _call_menu_getter(user=user)
 
         assert result["connectable"] is False
+
+
+# ---------------------------------------------------------------------------
+# Calls (beta) gating
+# ---------------------------------------------------------------------------
+
+class TestCallsBetaAvailability:
+    """The Calls (beta) button should only appear for an active, non-trial subscriber."""
+
+    @pytest.mark.asyncio
+    async def test_active_non_trial_subscription_shows_button(self):
+        user = make_user(subscription=make_subscription(active=True, is_trial=False))
+
+        result = await _call_menu_getter(user=user)
+
+        assert result["calls_beta_available"] is True
+
+    @pytest.mark.asyncio
+    async def test_active_trial_subscription_hides_button(self):
+        user = make_user(subscription=make_subscription(active=True, is_trial=True))
+
+        result = await _call_menu_getter(user=user)
+
+        assert result["calls_beta_available"] is False
+
+    @pytest.mark.asyncio
+    async def test_expired_non_trial_subscription_hides_button(self):
+        user = make_user(subscription=make_subscription(active=False, is_trial=False))
+
+        result = await _call_menu_getter(user=user)
+
+        assert result["calls_beta_available"] is False
+
+    @pytest.mark.asyncio
+    async def test_no_subscription_hides_button(self):
+        user = make_user(subscription=None)
+
+        result = await _call_menu_getter(user=user)
+
+        assert result["calls_beta_available"] is False

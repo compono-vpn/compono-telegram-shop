@@ -11,6 +11,7 @@ import httpx
 from loguru import logger
 
 from .models import (
+    BillingCallsBundle,
     BillingCustomer,
     BillingPaymentGateway,
     BillingPaymentResult,
@@ -35,6 +36,10 @@ class BillingClientError(Exception):
         self.status_code = status_code
         self.message = message
         super().__init__(f"Billing API error {status_code}: {message}")
+
+
+class CallsNotEntitledError(BillingClientError):
+    """Raised when billing rejects Calls provisioning: no active, non-trial subscription."""
 
 
 class BillingClient:
@@ -681,3 +686,16 @@ class BillingClient:
     async def get_tg_proxies(self, plan_id: int) -> list[BillingTGProxy]:
         data = await self._get("/tg-proxies", params={"plan_id": plan_id})
         return [BillingTGProxy.model_validate(p) for p in (data or [])]
+
+    # ------------------------------------------------------------------ #
+    # Calls (beta)
+    # ------------------------------------------------------------------ #
+
+    async def provision_calls(self, telegram_id: int) -> BillingCallsBundle:
+        try:
+            data = await self._post("/calls/provision", json={"telegram_id": telegram_id})
+        except BillingClientError as e:
+            if e.status_code == 403:
+                raise CallsNotEntitledError(e.status_code, e.message) from e
+            raise
+        return BillingCallsBundle.model_validate(data)
