@@ -37,6 +37,7 @@ from src.core.enums import (
     SubscriptionStatus,
     SystemNotificationType,
     UserNotificationType,
+    UserRole,
 )
 from src.models.dto import PlanSnapshotDto, SubscriptionDto
 from src.services.remnawave import RemnawaveService
@@ -202,6 +203,7 @@ def _make_webhook_user(
 # _rewrite_sub_url
 # ---------------------------------------------------------------------------
 
+
 class TestRewriteSubUrl:
     def test_rewrites_netloc_when_domain_configured(self):
         svc = _make_service(sub_public_domain="componovpn.com")
@@ -222,6 +224,7 @@ class TestRewriteSubUrl:
 # ---------------------------------------------------------------------------
 # _trigger_relay_sync
 # ---------------------------------------------------------------------------
+
 
 class TestTriggerRelaySync:
     async def test_skips_when_no_url(self):
@@ -260,6 +263,7 @@ class TestTriggerRelaySync:
 # try_connection
 # ---------------------------------------------------------------------------
 
+
 class TestTryConnection:
     async def test_succeeds_with_valid_stats_response(self):
         svc = _make_service()
@@ -277,6 +281,7 @@ class TestTryConnection:
 # ---------------------------------------------------------------------------
 # create_user
 # ---------------------------------------------------------------------------
+
 
 class TestCreateUser:
     async def test_creates_from_plan(self):
@@ -317,6 +322,29 @@ class TestCreateUser:
 
         svc.remnawave.users.create_user.assert_awaited_once()
         assert result.username == created.username
+
+    async def test_privileged_user_keeps_plan_and_admin_squads(self):
+        svc = _make_service()
+        created = _make_create_response()
+        svc.remnawave.users.create_user.return_value = created
+        admin_squad = uuid4()
+        admin_squad_dto = MagicMock()
+        admin_squad_dto.uuid = admin_squad
+        admin_squad_dto.name = "Admin"
+        svc.remnawave.internal_squads.get_internal_squads.return_value = MagicMock(
+            internal_squads=[admin_squad_dto]
+        )
+
+        user = make_user(telegram_id=100)
+        user.role = UserRole.DEV
+        plan = make_plan_snapshot()
+        plan_squad = uuid4()
+        plan.internal_squads = [plan_squad]
+
+        await svc.create_user(user, plan=plan)
+
+        request = svc.remnawave.users.create_user.call_args.args[0]
+        assert request.active_internal_squads == [plan_squad, admin_squad]
 
     async def test_raises_when_no_plan_or_subscription(self):
         svc = _make_service()
@@ -384,6 +412,7 @@ class TestCreateUser:
 # updated_user
 # ---------------------------------------------------------------------------
 
+
 class TestUpdatedUser:
     async def test_updates_from_subscription(self):
         svc = _make_service()
@@ -425,6 +454,42 @@ class TestUpdatedUser:
 
         svc.remnawave.users.update_user.assert_awaited_once()
         assert result.uuid == updated.uuid
+
+    async def test_privileged_user_update_keeps_subscription_and_admin_squads(self):
+        svc = _make_service()
+        updated = _make_remna_user_response()
+        svc.remnawave.users.update_user.return_value = updated
+        admin_squad = uuid4()
+        admin_squad_dto = MagicMock()
+        admin_squad_dto.uuid = admin_squad
+        admin_squad_dto.name = "Admin"
+        svc.remnawave.internal_squads.get_internal_squads.return_value = MagicMock(
+            internal_squads=[admin_squad_dto]
+        )
+
+        user = make_user(telegram_id=100)
+        user.role = UserRole.ADMIN
+        plan = make_plan_snapshot()
+        plan_squad = uuid4()
+        uid = uuid4()
+        sub = SubscriptionDto(
+            user_remna_id=uid,
+            status=SubscriptionStatus.ACTIVE,
+            traffic_limit=300,
+            device_limit=6,
+            traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+            tag=None,
+            internal_squads=[plan_squad],
+            external_squad=None,
+            expire_at=_NOW + timedelta(days=30),
+            url="https://panel.internal.com/sub/token123",
+            plan=plan,
+        )
+
+        await svc.updated_user(user, uid, subscription=sub)
+
+        request = svc.remnawave.users.update_user.call_args.args[0]
+        assert request.active_internal_squads == [plan_squad, admin_squad]
 
     async def test_raises_when_no_plan_or_subscription(self):
         svc = _make_service()
@@ -519,6 +584,7 @@ class TestUpdatedUser:
 # delete_user
 # ---------------------------------------------------------------------------
 
+
 class TestDeleteUser:
     async def test_deletes_by_subscription_uuid(self):
         svc = _make_service()
@@ -540,9 +606,7 @@ class TestDeleteUser:
 
         result = await svc.delete_user(user)
 
-        svc.remnawave.users.get_users_by_telegram_id.assert_awaited_once_with(
-            telegram_id="100"
-        )
+        svc.remnawave.users.get_users_by_telegram_id.assert_awaited_once_with(telegram_id="100")
         svc.remnawave.users.delete_user.assert_awaited_once_with(found_user.uuid)
         assert result is True
 
@@ -570,6 +634,7 @@ class TestDeleteUser:
 # ---------------------------------------------------------------------------
 # get_devices_user
 # ---------------------------------------------------------------------------
+
 
 class TestGetDevicesUser:
     async def test_returns_devices(self):
@@ -619,6 +684,7 @@ class TestGetDevicesUser:
 # delete_device
 # ---------------------------------------------------------------------------
 
+
 class TestDeleteDevice:
     async def test_deletes_device_and_returns_total(self):
         svc = _make_service()
@@ -648,6 +714,7 @@ class TestDeleteDevice:
 # get_user
 # ---------------------------------------------------------------------------
 
+
 class TestGetUser:
     async def test_returns_user_when_found(self):
         svc = _make_service()
@@ -673,6 +740,7 @@ class TestGetUser:
 # ---------------------------------------------------------------------------
 # get_subscription_url
 # ---------------------------------------------------------------------------
+
 
 class TestGetSubscriptionUrl:
     async def test_returns_rewritten_url(self):
@@ -700,6 +768,7 @@ class TestGetSubscriptionUrl:
 # ---------------------------------------------------------------------------
 # sync_user
 # ---------------------------------------------------------------------------
+
 
 class TestSyncUser:
     async def test_skips_when_no_telegram_id(self):
@@ -813,6 +882,7 @@ class TestSyncUser:
 # handle_user_event
 # ---------------------------------------------------------------------------
 
+
 class TestHandleUserEvent:
     async def test_skips_when_no_telegram_id(self):
         svc = _make_service()
@@ -893,13 +963,17 @@ class TestHandleUserEvent:
             user = make_user(telegram_id=100)
             svc.user_service.get.return_value = user
 
-            with patch(
-                "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
-            ) as mock_task, patch(
-                "src.infrastructure.taskiq.tasks.notifications.send_subscription_limited_notification_task"
-            ) as mock_limited, patch(
-                "src.infrastructure.taskiq.tasks.notifications.send_subscription_expire_notification_task"
-            ) as mock_expire:
+            with (
+                patch(
+                    "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
+                ) as mock_task,
+                patch(
+                    "src.infrastructure.taskiq.tasks.notifications.send_subscription_limited_notification_task"
+                ) as mock_limited,
+                patch(
+                    "src.infrastructure.taskiq.tasks.notifications.send_subscription_expire_notification_task"
+                ) as mock_expire,
+            ):
                 mock_task.kiq = AsyncMock()
                 mock_limited.kiq = AsyncMock()
                 mock_expire.kiq = AsyncMock()
@@ -912,11 +986,14 @@ class TestHandleUserEvent:
         user = make_user(telegram_id=100)
         svc.user_service.get.return_value = user
 
-        with patch(
-            "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
-        ) as mock_update, patch(
-            "src.infrastructure.taskiq.tasks.notifications.send_subscription_limited_notification_task"
-        ) as mock_limited:
+        with (
+            patch(
+                "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
+            ) as mock_update,
+            patch(
+                "src.infrastructure.taskiq.tasks.notifications.send_subscription_limited_notification_task"
+            ) as mock_limited,
+        ):
             mock_update.kiq = AsyncMock()
             mock_limited.kiq = AsyncMock()
             await svc.handle_user_event(RemnaUserEvent.LIMITED, remna_user)
@@ -933,11 +1010,14 @@ class TestHandleUserEvent:
         user = make_user(telegram_id=100)
         svc.user_service.get.return_value = user
 
-        with patch(
-            "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
-        ) as mock_update, patch(
-            "src.infrastructure.taskiq.tasks.notifications.send_subscription_expire_notification_task"
-        ) as mock_expire:
+        with (
+            patch(
+                "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
+            ) as mock_update,
+            patch(
+                "src.infrastructure.taskiq.tasks.notifications.send_subscription_expire_notification_task"
+            ) as mock_expire,
+        ):
             mock_update.kiq = AsyncMock()
             mock_expire.kiq = AsyncMock()
             await svc.handle_user_event(RemnaUserEvent.EXPIRED, remna_user)
@@ -957,11 +1037,14 @@ class TestHandleUserEvent:
         user = make_user(telegram_id=100)
         svc.user_service.get.return_value = user
 
-        with patch(
-            "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
-        ) as mock_update, patch(
-            "src.infrastructure.taskiq.tasks.notifications.send_subscription_expire_notification_task"
-        ) as mock_expire:
+        with (
+            patch(
+                "src.infrastructure.taskiq.tasks.subscriptions.update_status_current_subscription_task"
+            ) as mock_update,
+            patch(
+                "src.infrastructure.taskiq.tasks.notifications.send_subscription_expire_notification_task"
+            ) as mock_expire,
+        ):
             mock_update.kiq = AsyncMock()
             mock_expire.kiq = AsyncMock()
             await svc.handle_user_event(RemnaUserEvent.EXPIRED, remna_user)
@@ -1017,6 +1100,7 @@ class TestHandleUserEvent:
 # handle_device_event
 # ---------------------------------------------------------------------------
 
+
 class TestHandleDeviceEvent:
     def _make_device(self) -> MagicMock:
         device = MagicMock()
@@ -1032,9 +1116,7 @@ class TestHandleDeviceEvent:
         remna_user = _make_webhook_user(telegram_id=None)
         device = self._make_device()
 
-        await svc.handle_device_event(
-            RemnaUserHwidDevicesEvent.ADDED, remna_user, device
-        )
+        await svc.handle_device_event(RemnaUserHwidDevicesEvent.ADDED, remna_user, device)
 
         svc.user_service.get.assert_not_awaited()
 
@@ -1044,9 +1126,7 @@ class TestHandleDeviceEvent:
         svc.user_service.get.return_value = None
         device = self._make_device()
 
-        await svc.handle_device_event(
-            RemnaUserHwidDevicesEvent.ADDED, remna_user, device
-        )
+        await svc.handle_device_event(RemnaUserHwidDevicesEvent.ADDED, remna_user, device)
 
         svc.notification_service.system_notify.assert_not_awaited()
 
@@ -1057,9 +1137,7 @@ class TestHandleDeviceEvent:
         svc.user_service.get.return_value = user
         device = self._make_device()
 
-        await svc.handle_device_event(
-            RemnaUserHwidDevicesEvent.ADDED, remna_user, device
-        )
+        await svc.handle_device_event(RemnaUserHwidDevicesEvent.ADDED, remna_user, device)
 
         svc.notification_service.system_notify.assert_awaited_once()
         call_kwargs = svc.notification_service.system_notify.call_args[1]
@@ -1074,9 +1152,7 @@ class TestHandleDeviceEvent:
         svc.user_service.get.return_value = user
         device = self._make_device()
 
-        await svc.handle_device_event(
-            RemnaUserHwidDevicesEvent.DELETED, remna_user, device
-        )
+        await svc.handle_device_event(RemnaUserHwidDevicesEvent.DELETED, remna_user, device)
 
         svc.notification_service.system_notify.assert_awaited_once()
         call_kwargs = svc.notification_service.system_notify.call_args[1]
@@ -1098,6 +1174,7 @@ class TestHandleDeviceEvent:
 # ---------------------------------------------------------------------------
 # handle_node_event
 # ---------------------------------------------------------------------------
+
 
 class TestHandleNodeEvent:
     def _make_node(self) -> NodeDto:
