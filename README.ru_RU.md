@@ -183,9 +183,10 @@
     sudo curl -fsSL https://get.docker.com | sh
     ```
 
-> [!WARNING]
-> **Последняя версия бота совместима только с панелью RemnaWave версии 2.3–2.4.x**  
-> Перед установкой убедитесь, что ваша панель соответствует этой версии.
+> [!NOTE]
+> **Старое ограничение upstream на RemnaWave 2.3–2.4.x больше не относится к
+> форку Compono.** Бот тестируется с развернутым форком Remnawave от Compono;
+> при обновлении бэкенда обязательно прогоняйте интеграционные тесты бота.
 
 
 ## Шаг 1 – Скачивание необходимых файлов
@@ -327,4 +328,3 @@ cd /opt/remnashop && docker compose pull && docker compose down && RESET_ASSETS=
 > СБП, ЮMoney, SberPay, T-Pay - [**ЮKassa**](https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l)
 
 > USDT TRC-20 - **`TPnpmwD4P9znKs3Hp4Hrh9rhJ7u1m6UA1B`**
-
