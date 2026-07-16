@@ -93,6 +93,30 @@ class RemnawaveService(BaseService):
         parsed = urlparse(url)
         return urlunparse(parsed._replace(netloc=domain))
 
+    async def _with_privileged_squad(
+        self,
+        user: UserDto,
+        internal_squads: list[UUID],
+    ) -> list[UUID]:
+        squads = list(dict.fromkeys(internal_squads))
+        if not user.is_privileged:
+            return squads
+
+        response = await self.remnawave.internal_squads.get_internal_squads()
+        admin_squad = next(
+            (
+                squad.uuid
+                for squad in response.internal_squads
+                if squad.name.strip().casefold() == "admin"
+            ),
+            None,
+        )
+        if admin_squad is None:
+            raise ValueError("Remnawave Admin internal squad is not configured")
+        if admin_squad not in squads:
+            squads.append(admin_squad)
+        return squads
+
     async def _trigger_relay_sync(self) -> None:
         url = self.config.relay_sync_url
         if not url:
@@ -118,6 +142,14 @@ class RemnawaveService(BaseService):
         subscription: Optional[SubscriptionDto] = None,
         force: bool = False,
     ) -> UserResponseDto:
+        if not subscription and not plan:
+            raise ValueError("Either 'plan' or 'subscription' must be provided")
+
+        source_squads = (
+            subscription.internal_squads if subscription else plan.internal_squads if plan else []
+        )
+        internal_squads = await self._with_privileged_squad(user, source_squads)
+
         async def _do_create() -> CreateUserResponseDto:
             if subscription:
                 logger.info(
@@ -135,7 +167,7 @@ class RemnawaveService(BaseService):
                         tag=subscription.tag,
                         telegram_id=user.telegram_id,
                         hwid_device_limit=format_device_count(subscription.device_limit),
-                        active_internal_squads=subscription.internal_squads,
+                        active_internal_squads=internal_squads,
                         external_squad_uuid=subscription.external_squad,
                     )
                 )
@@ -152,7 +184,7 @@ class RemnawaveService(BaseService):
                         tag=plan.tag,
                         telegram_id=user.telegram_id,
                         hwid_device_limit=format_device_count(plan.device_limit),
-                        active_internal_squads=plan.internal_squads,
+                        active_internal_squads=internal_squads,
                         external_squad_uuid=plan.external_squad,
                     )
                 )
@@ -217,6 +249,8 @@ class RemnawaveService(BaseService):
             strategy = plan.traffic_limit_strategy
         else:
             raise ValueError("Either 'plan' or 'subscription' must be provided")
+
+        internal_squads = await self._with_privileged_squad(user, internal_squads)
 
         updated_user = await self.remnawave.users.update_user(
             UpdateUserRequestDto(

@@ -150,6 +150,9 @@
 
     > Edit user data both from the bot and the panel.
 
+    > Developer and administrator roles retain the Remnawave `Admin` internal
+    > squad when plan or subscription synchronization replaces plan squads.
+
 - **🔍 User Audit**
     > View full user activity history.
     
