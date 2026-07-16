@@ -52,7 +52,6 @@ btn-menu-info-privacy = 🔒 Политика конфиденциальност
 btn-menu-info-terms = 📄 Условия использования
 btn-menu-tg-proxy = 📡 Прокси для Telegram
 btn-menu-tg-proxy-connect = 🔗 Подключить прокси
-btn-menu-calls-beta = 📞 Звонки (бета)
 btn-menu-dashboard = 🛠 Панель управления
 
 
