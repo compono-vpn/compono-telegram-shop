@@ -27,10 +27,7 @@ from src.core.enums import (
 from remnapy.enums.users import TrafficLimitStrategy
 
 from src.infrastructure.billing.converters import (
-    billing_amneziawg_config_to_dto,
-    billing_calls_bundle_to_dto,
     billing_gateway_to_dto,
-    billing_hysteria2_config_to_dto,
     billing_plan_duration_to_dto,
     billing_plan_price_to_dto,
     billing_plan_snapshot_to_dto,
@@ -45,9 +42,6 @@ from src.infrastructure.billing.converters import (
     billing_user_to_dto,
 )
 from src.infrastructure.billing.models import (
-    BillingAmneziaWGConfig,
-    BillingCallsBundle,
-    BillingHysteria2Config,
     BillingPaymentGateway,
     BillingPlan,
     BillingPlanDuration,
@@ -745,63 +739,5 @@ class TestBillingPromocodeToDto:
         dto = billing_promocode_to_dto(bp)
 
         assert dto.activations == []
-
-
-class TestBillingCallsBundleToDto:
-
-    def _make_bundle(self) -> BillingCallsBundle:
-        return BillingCallsBundle(
-            amneziawg=BillingAmneziaWGConfig(
-                private_key="aGVsbG8td29ybGQ=",
-                address="10.8.0.2/32",
-                dns="1.1.1.1",
-                mtu=1280,
-                server_public_key="cHVibGljLWtleQ==",
-                endpoint="calls.componovpn.com:51820",
-                allowed_ips="0.0.0.0/0, ::/0",
-                persistent_keepalive=25,
-                jc=4,
-                jmin=40,
-                jmax=70,
-                s1=30,
-                s2=25,
-                h1=1234567891,
-                h2=1234567892,
-                h3=1234567893,
-                h4=1234567894,
-            ),
-            hysteria2=BillingHysteria2Config(
-                uri="hysteria2://auth@calls.componovpn.com:8443/?sni=calls.componovpn.com",
-                server="calls.componovpn.com:8443",
-                auth="auth",
-                sni="calls.componovpn.com",
-                insecure=False,
-            ),
-        )
-
-    def test_amneziawg_config_to_dto(self):
-        dto = billing_amneziawg_config_to_dto(self._make_bundle().amneziawg)
-
-        assert dto.private_key.get_secret_value() == "aGVsbG8td29ybGQ="
-        assert dto.address == "10.8.0.2/32"
-        assert dto.mtu == 1280
-        assert dto.jc == 4
-        assert dto.jmin == 40
-        assert dto.jmax == 70
-        assert dto.h4 == 1234567894
-
-    def test_hysteria2_config_to_dto(self):
-        dto = billing_hysteria2_config_to_dto(self._make_bundle().hysteria2)
-
-        assert dto.uri.get_secret_value().startswith("hysteria2://")
-        assert dto.server == "calls.componovpn.com:8443"
-        assert dto.auth.get_secret_value() == "auth"
-        assert dto.insecure is False
-
-    def test_calls_bundle_to_dto(self):
-        dto = billing_calls_bundle_to_dto(self._make_bundle())
-
-        assert dto.amneziawg.address == "10.8.0.2/32"
-        assert dto.hysteria2.server == "calls.componovpn.com:8443"
 
 

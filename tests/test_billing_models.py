@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from src.infrastructure.billing.models import (
-    BillingCallsBundle,
     BillingPlan,
     BillingPlanDuration,
     BillingPlanPrice,
@@ -101,47 +100,3 @@ class TestBillingSubscriptionPascalCase:
         sub = BillingSubscription(ID=1, URL="https://example.com/sub/abc", Status="ACTIVE")
         assert sub.URL == "https://example.com/sub/abc"
         assert not hasattr(sub, "url"), "should NOT have lowercase .url"
-
-
-class TestBillingCallsBundle:
-    """BillingCallsBundle must parse the actual JSON format from the Go billing API."""
-
-    def test_parses_lowercase_json_keys(self):
-        raw = {
-            "amneziawg": {
-                "private_key": "aGVsbG8td29ybGQ=",
-                "address": "10.8.0.2/32",
-                "dns": "1.1.1.1",
-                "mtu": 1280,
-                "server_public_key": "cHVibGljLWtleQ==",
-                "endpoint": "calls.componovpn.com:51820",
-                "allowed_ips": "0.0.0.0/0, ::/0",
-                "persistent_keepalive": 25,
-                "jc": 4,
-                "jmin": 40,
-                "jmax": 70,
-                "s1": 30,
-                "s2": 25,
-                "h1": 1234567891,
-                "h2": 1234567892,
-                "h3": 1234567893,
-                "h4": 1234567894,
-            },
-            "hysteria2": {
-                "uri": "hysteria2://auth@calls.componovpn.com:8443/?sni=calls.componovpn.com",
-                "server": "calls.componovpn.com:8443",
-                "auth": "auth",
-                "sni": "calls.componovpn.com",
-                "insecure": False,
-            },
-        }
-        bundle = BillingCallsBundle.model_validate(raw)
-
-        assert bundle.amneziawg.private_key == "aGVsbG8td29ybGQ="
-        assert bundle.amneziawg.address == "10.8.0.2/32"
-        assert bundle.amneziawg.mtu == 1280
-        assert bundle.amneziawg.jc == 4
-        assert bundle.amneziawg.h4 == 1234567894
-        assert bundle.hysteria2.uri.startswith("hysteria2://")
-        assert bundle.hysteria2.server == "calls.componovpn.com:8443"
-        assert bundle.hysteria2.insecure is False

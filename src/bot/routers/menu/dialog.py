@@ -29,7 +29,6 @@ from .getters import (
     tg_proxy_getter,
 )
 from .handlers import (
-    on_calls_beta,
     on_device_delete,
     on_get_trial,
     on_invite,
@@ -57,14 +56,6 @@ menu = Window(
             id="tg_proxy",
             state=MainMenu.TG_PROXY,
             when=F["tg_proxy_available"],
-        ),
-    ),
-    Row(
-        Button(
-            text=I18nFormat("btn-menu-calls-beta"),
-            id="calls_beta",
-            on_click=on_calls_beta,
-            when=F["calls_beta_available"],
         ),
     ),
     Row(

@@ -183,9 +183,10 @@
     sudo curl -fsSL https://get.docker.com | sh
     ```
 
-> [!WARNING]
-> **The latest version of the bot is compatible only with RemnaWave panel version 2.3–2.4.x**  
-> Before installation, make sure your panel matches this version.
+> [!NOTE]
+> **The old upstream 2.3–2.4.x compatibility warning no longer applies to this
+> Compono fork.** The bot is tested against Compono's deployed Remnawave fork;
+> verify the bot integration tests when upgrading that backend.
 
 
 ## Step 1 – Download required files

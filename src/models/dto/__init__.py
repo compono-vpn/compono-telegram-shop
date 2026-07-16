@@ -1,5 +1,4 @@
 from .base import BaseDto, TrackableDto
-from .calls import AmneziaWGConfigDto, CallsBundleDto, Hysteria2ConfigDto
 from .customer import CustomerDto
 from .payment_gateway import (
     AnyGatewaySettingsDto,
@@ -37,9 +36,6 @@ __all__ = [
     "BaseDto",
     "CustomerDto",
     "TrackableDto",
-    "AmneziaWGConfigDto",
-    "CallsBundleDto",
-    "Hysteria2ConfigDto",
     "AnyGatewaySettingsDto",
     "CryptomusGatewaySettingsDto",
     "CryptopayGatewaySettingsDto",

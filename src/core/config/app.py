@@ -12,7 +12,6 @@ from src.core.utils.types import LocaleList, StringList
 from .base import BaseConfig
 from .bot import BotConfig
 from .build import BuildConfig
-from .calls import CallsConfig
 from .experiments import ExperimentsConfig
 from .redis import RedisConfig
 from .remnawave import RemnawaveConfig
@@ -38,7 +37,6 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     build: BuildConfig = Field(default_factory=BuildConfig)
     experiments: ExperimentsConfig = Field(default_factory=ExperimentsConfig)
-    calls: CallsConfig = Field(default_factory=CallsConfig)
 
     api_url: str = ""
     api_internal_secret: SecretStr = SecretStr("")
