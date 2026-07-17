@@ -284,6 +284,11 @@ async def _handle_change_purchase(
     total_days = plan.duration + remaining_days
     new_expire = datetime_now() + timedelta(days=total_days)
 
+    internal_squads = await remnawave_service.preserve_beta_tester_squad(
+        current_squads=subscription.internal_squads,
+        target_squads=plan.internal_squads,
+    )
+
     temp_subscription = SubscriptionDto(
         user_remna_id=subscription.user_remna_id,
         status=SubscriptionStatus.ACTIVE,
@@ -291,7 +296,7 @@ async def _handle_change_purchase(
         device_limit=plan.device_limit,
         traffic_limit_strategy=plan.traffic_limit_strategy,
         tag=plan.tag,
-        internal_squads=plan.internal_squads,
+        internal_squads=internal_squads,
         external_squad=plan.external_squad,
         expire_at=new_expire,
         url=subscription.url,
@@ -313,7 +318,7 @@ async def _handle_change_purchase(
         device_limit=plan.device_limit,
         traffic_limit_strategy=plan.traffic_limit_strategy,
         tag=plan.tag,
-        internal_squads=plan.internal_squads,
+        internal_squads=internal_squads,
         external_squad=plan.external_squad,
         expire_at=updated_user.expire_at,
         url=updated_user.subscription_url,

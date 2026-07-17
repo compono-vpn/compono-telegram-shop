@@ -33,6 +33,7 @@ async def menu_getter(
     billing: FromDishka[BillingClient],
     referral_service: FromDishka[ReferralService],
     experiment_service: FromDishka[ExperimentService],
+    remnawave_service: FromDishka[RemnawaveService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     try:
@@ -51,6 +52,7 @@ async def menu_getter(
             "user_name": user.name,
             "personal_discount": user.personal_discount,
             "loyalty_discount": user.loyalty_discount,
+            "is_beta_tester": 0,
             "support": support_link,
             "invite": i18n.get(
                 "referral-invite-message",
@@ -82,6 +84,12 @@ async def menu_getter(
             return base_data
 
         plan_id = subscription.plan.id if subscription.plan else 0
+        try:
+            base_data["is_beta_tester"] = int(await remnawave_service.is_beta_tester(subscription))
+        except Exception:
+            logger.opt(exception=True).warning(
+                f"Failed to resolve beta tester status for user '{user.telegram_id}'"
+            )
         try:
             tg_proxies = (
                 await billing.get_tg_proxies(plan_id) if subscription.is_active and plan_id else []

@@ -22,9 +22,11 @@ from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
-from src.services.remnawave import RemnawaveService
+from src.services.remnawave import BetaTesterEnrollmentResult, RemnawaveService
 
 router = Router(name=__name__)
+
+BETA_TESTERS_DEEP_LINK = "beta_testers"
 
 
 def _record_trial_activation(experiment_service: ExperimentService, user: UserDto) -> None:
@@ -76,6 +78,25 @@ async def _maybe_prompt_channel_incentive(
             add_close_button=False,
         ),
     )
+
+
+@inject
+@router.message(CommandStart(ignore_case=True), F.text.endswith(f" {BETA_TESTERS_DEEP_LINK}"))
+async def on_beta_testers_start_command(
+    message: Message,
+    user: UserDto,
+    dialog_manager: DialogManager,
+    i18n: FromDishka[TranslatorRunner],
+    remnawave_service: FromDishka[RemnawaveService],
+) -> None:
+    result = await remnawave_service.enroll_beta_tester(user)
+    message_key = {
+        BetaTesterEnrollmentResult.ENROLLED: "msg-beta-tester-enrolled",
+        BetaTesterEnrollmentResult.ALREADY_ENROLLED: "msg-beta-tester-already-enrolled",
+        BetaTesterEnrollmentResult.INELIGIBLE: "msg-beta-tester-ineligible",
+    }[result]
+    await message.answer(i18n.get(message_key))
+    await on_start_dialog(user, dialog_manager)
 
 
 @inject
