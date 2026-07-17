@@ -8,12 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import ValidationError
 from remnapy.enums import TrafficLimitStrategy
 from remnapy.exceptions import ApiErrorResponse, ConflictError, NotFoundError
 from remnapy.models import (
     CreateUserResponseDto,
     DeleteUserResponseDto,
     GetStatsResponseDto,
+    RestartNodeResponseDto,
     UserResponseDto,
 )
 from remnapy.models.hwid import (
@@ -152,6 +154,31 @@ class TestBetaTesterEnrollment:
         assert result == BetaTesterEnrollmentResult.ALREADY_ENROLLED
         svc.subscription_service.update.assert_not_awaited()
         svc.remnawave.users.update_user.assert_awaited_once()
+        svc.remnawave.nodes.restart_node.assert_awaited_once_with(node.uuid)
+
+    async def test_accepts_legacy_success_only_restart_response(self):
+        svc = _make_service()
+        beta_squad = uuid4()
+        _configure_beta_squad(svc, beta_squad)
+        node = _configure_hysteria_node(svc)
+        subscription = make_subscription()
+        svc.subscription_service.get_current.return_value = subscription
+        svc.subscription_service.update.return_value = subscription
+        svc.remnawave.users.update_user.return_value = _make_remna_user_response(
+            uuid=subscription.user_remna_id
+        )
+        user = make_user(subscription=subscription)
+
+        try:
+            RestartNodeResponseDto.model_validate({"success": True})
+        except ValidationError as exc:
+            svc.remnawave.nodes.restart_node.side_effect = exc
+        else:  # pragma: no cover - remove when the SDK accepts the backend response
+            pytest.fail("remnapy unexpectedly accepted a success-only restart response")
+
+        result = await svc.enroll_beta_tester(user)
+
+        assert result == BetaTesterEnrollmentResult.ENROLLED
         svc.remnawave.nodes.restart_node.assert_awaited_once_with(node.uuid)
 
     async def test_rejects_trial_without_mutating_subscription(self):

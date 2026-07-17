@@ -8,6 +8,7 @@ import httpx
 from aiogram import Bot
 from fluentogram import TranslatorHub
 from loguru import logger
+from pydantic import ValidationError
 from redis.asyncio import Redis
 from remnapy import RemnawaveSDK
 from remnapy.exceptions import ConflictError, NotFoundError
@@ -149,7 +150,22 @@ class RemnawaveService(BaseService):
         if not nodes:
             raise ValueError("Remnawave Hysteria canary node is not configured")
         for node in nodes:
-            await self.remnawave.nodes.restart_node(node.uuid)
+            try:
+                await self.remnawave.nodes.restart_node(node.uuid)
+            except ValidationError as exc:
+                errors = exc.errors()
+                accepted_restart = (
+                    len(errors) == 1
+                    and tuple(errors[0].get("loc", ())) == ("eventSent",)
+                    and errors[0].get("type") == "missing"
+                    and errors[0].get("input") == {"success": True}
+                )
+                if not accepted_restart:
+                    raise
+                logger.warning(
+                    "Remnawave accepted Hysteria canary restart but returned the "
+                    "legacy success-only response"
+                )
             logger.info(f"Restarted Hysteria canary node '{node.name}' after beta enrollment")
 
     async def enroll_beta_tester(self, user: UserDto) -> BetaTesterEnrollmentResult:
