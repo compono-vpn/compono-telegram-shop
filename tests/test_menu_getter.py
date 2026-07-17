@@ -5,10 +5,12 @@ Covers TG proxy visibility, subscription states, and error handling.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
 
+from src.bot.routers.menu.getters import menu_getter as _menu_getter
 from src.infrastructure.billing.models import BillingTGProxy
-
 from tests.conftest import (
     make_billing_client,
     make_config,
@@ -21,14 +23,13 @@ from tests.conftest import (
     unwrap_inject,
 )
 
-from src.bot.routers.menu.getters import menu_getter as _menu_getter
-
 menu_getter = unwrap_inject(_menu_getter)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _call_menu_getter(
     user=None,
@@ -37,7 +38,11 @@ async def _call_menu_getter(
     i18n=None,
     referral_service=None,
     experiment_service=None,
+    remnawave_service=None,
 ):
+    if remnawave_service is None:
+        remnawave_service = AsyncMock()
+        remnawave_service.is_beta_tester.return_value = False
     return await menu_getter(
         dialog_manager=make_dialog_manager(),
         config=config or make_config(),
@@ -46,6 +51,7 @@ async def _call_menu_getter(
         billing=billing or make_billing_client(),
         referral_service=referral_service or make_referral_service(),
         experiment_service=experiment_service or make_experiment_service(),
+        remnawave_service=remnawave_service,
     )
 
 
@@ -53,12 +59,21 @@ async def _call_menu_getter(
 # TG proxy visibility
 # ---------------------------------------------------------------------------
 
+
 class TestTGProxyVisibility:
     """TG proxy button should only appear for eligible, active subscribers."""
 
     @pytest.mark.asyncio
     async def test_pro_plan_with_proxies_shows_button(self):
-        proxies = [BillingTGProxy(id=1, server="1.2.3.4", port=443, secret="abc", link="tg://proxy?server=1.2.3.4&port=443&secret=abc")]
+        proxies = [
+            BillingTGProxy(
+                id=1,
+                server="1.2.3.4",
+                port=443,
+                secret="abc",
+                link="tg://proxy?server=1.2.3.4&port=443&secret=abc",
+            )
+        ]
         user = make_user(subscription=make_subscription(plan_id=2))
         billing = make_billing_client(tg_proxies=proxies)
 
@@ -68,7 +83,15 @@ class TestTGProxyVisibility:
 
     @pytest.mark.asyncio
     async def test_max_plan_with_proxies_shows_button(self):
-        proxies = [BillingTGProxy(id=1, server="1.2.3.4", port=443, secret="abc", link="tg://proxy?server=1.2.3.4&port=443&secret=abc")]
+        proxies = [
+            BillingTGProxy(
+                id=1,
+                server="1.2.3.4",
+                port=443,
+                secret="abc",
+                link="tg://proxy?server=1.2.3.4&port=443&secret=abc",
+            )
+        ]
         user = make_user(subscription=make_subscription(plan_id=3, plan_name="💎 Макс"))
         billing = make_billing_client(tg_proxies=proxies)
 
@@ -78,7 +101,11 @@ class TestTGProxyVisibility:
 
     @pytest.mark.asyncio
     async def test_start_plan_no_proxies_hides_button(self):
-        user = make_user(subscription=make_subscription(plan_id=1, plan_name="⚡️ Старт", traffic_limit=100, device_limit=2))
+        user = make_user(
+            subscription=make_subscription(
+                plan_id=1, plan_name="⚡️ Старт", traffic_limit=100, device_limit=2
+            )
+        )
         billing = make_billing_client(tg_proxies=[])
 
         result = await _call_menu_getter(user=user, billing=billing)
@@ -108,7 +135,9 @@ class TestTGProxyVisibility:
     async def test_billing_api_error_hides_button_gracefully(self):
         """The bug that crashed the menu — billing returns 404, menu must still render."""
         user = make_user(subscription=make_subscription(plan_id=2))
-        billing = make_billing_client(tg_proxies_error=Exception("Billing API error 404: 404 page not found"))
+        billing = make_billing_client(
+            tg_proxies_error=Exception("Billing API error 404: 404 page not found")
+        )
 
         result = await _call_menu_getter(user=user, billing=billing)
 
@@ -130,6 +159,7 @@ class TestTGProxyVisibility:
 # Menu state basics
 # ---------------------------------------------------------------------------
 
+
 class TestMenuState:
     """Basic menu getter state for different subscription scenarios."""
 
@@ -141,6 +171,19 @@ class TestMenuState:
 
         assert result["connectable"] is True
         assert result["has_subscription"] is True
+
+    @pytest.mark.asyncio
+    async def test_beta_tester_status_is_exposed(self):
+        user = make_user(subscription=make_subscription())
+        remnawave_service = AsyncMock()
+        remnawave_service.is_beta_tester.return_value = True
+
+        result = await _call_menu_getter(
+            user=user,
+            remnawave_service=remnawave_service,
+        )
+
+        assert result["is_beta_tester"] == 1
 
     @pytest.mark.asyncio
     async def test_no_subscription_not_connectable(self):

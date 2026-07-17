@@ -63,6 +63,10 @@ frg-user =
     [0] { empty }
     *[HAS] • <b>Скидка постоянного клиента</b>: { $loyalty_discount }%
     }
+    { $is_beta_tester ->
+    [1] • 🧪 <b>Бета-тестер</b>: Да
+    *[0] • 🧪 <b>Бета-тестер</b>: Нет
+    }
     </blockquote>
 
 frg-user-info =

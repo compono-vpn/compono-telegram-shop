@@ -150,6 +150,13 @@
 
     > Edit user data both from the bot and the panel.
 
+- **🧪 Automatic Beta Access**
+    > Paying users can opt in through the `beta_testers` Telegram deep link.
+
+    > Enrollment persists the `Beta Testers` squad in billing, synchronizes
+    > Remnawave, reloads the isolated Hysteria canary, and shows the current
+    > beta status in the main-menu profile.
+
     > Developer and administrator roles retain the Remnawave `Admin` internal
     > squad when plan or subscription synchronization replaces plan squads.
 

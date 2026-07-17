@@ -13,7 +13,8 @@ import inspect
 from unittest.mock import AsyncMock, MagicMock
 
 from src.bot.routers.menu import handlers as menu_handlers
-from src.bot.routers.menu.handlers import on_start_command
+from src.bot.routers.menu.handlers import on_beta_testers_start_command, on_start_command
+from src.services.remnawave import BetaTesterEnrollmentResult
 from tests.conftest import make_user, unwrap_inject
 
 
@@ -58,6 +59,32 @@ class TestOnStartCommandWebPayload:
 
         # Main menu still opens after the redirect.
         dm.start.assert_called_once()
+
+
+class TestBetaTestersStartCommand:
+    async def test_enrollment_sends_success_and_opens_updated_menu(self):
+        message, user, dm, i18n, _, _ = _setup("/start beta_testers")
+        remnawave_service = AsyncMock()
+        remnawave_service.enroll_beta_tester.return_value = BetaTesterEnrollmentResult.ENROLLED
+        raw_fn = unwrap_inject(on_beta_testers_start_command)
+
+        await raw_fn(message, user, dm, i18n, remnawave_service)
+
+        remnawave_service.enroll_beta_tester.assert_awaited_once_with(user)
+        i18n.get.assert_called_once_with("msg-beta-tester-enrolled")
+        message.answer.assert_awaited_once_with("[msg-beta-tester-enrolled]")
+        dm.start.assert_awaited_once()
+
+    async def test_ineligible_user_gets_clear_message(self):
+        message, user, dm, i18n, _, _ = _setup("/start beta_testers")
+        remnawave_service = AsyncMock()
+        remnawave_service.enroll_beta_tester.return_value = BetaTesterEnrollmentResult.INELIGIBLE
+        raw_fn = unwrap_inject(on_beta_testers_start_command)
+
+        await raw_fn(message, user, dm, i18n, remnawave_service)
+
+        i18n.get.assert_called_once_with("msg-beta-tester-ineligible")
+        message.answer.assert_awaited_once_with("[msg-beta-tester-ineligible]")
 
     async def test_web_payload_does_not_call_any_billing_or_remnawave_api(self):
         """The handler must not depend on billing/remnawave subscription_service.
@@ -157,6 +184,4 @@ class TestPastedSubUrlHandlerRemoved:
                     "registered on the menu router; it must be removed."
                 )
         # Sanity-check we did look at at least one handler (the /start one).
-        assert router.message.handlers, (
-            "Expected at least one message handler on the menu router."
-        )
+        assert router.message.handlers, "Expected at least one message handler on the menu router."

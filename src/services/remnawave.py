@@ -1,4 +1,5 @@
 from datetime import timedelta
+from enum import Enum
 from typing import Optional, cast
 from urllib.parse import urlparse, urlunparse
 from uuid import UUID
@@ -7,6 +8,7 @@ import httpx
 from aiogram import Bot
 from fluentogram import TranslatorHub
 from loguru import logger
+from pydantic import ValidationError
 from redis.asyncio import Redis
 from remnapy import RemnawaveSDK
 from remnapy.exceptions import ConflictError, NotFoundError
@@ -24,7 +26,7 @@ from remnapy.models.webhook import NodeDto
 
 from src.bot.keyboards import get_user_keyboard
 from src.core.config import AppConfig
-from src.core.constants import DATETIME_FORMAT, IMPORTED_TAG
+from src.core.constants import DATETIME_FORMAT, IMPORTED_TAG, TIME_5M
 from src.core.enums import (
     RemnaNodeEvent,
     RemnaUserEvent,
@@ -61,6 +63,16 @@ from src.services.user import UserService
 
 from .base import BaseService
 
+BETA_TESTERS_SQUAD_NAME = "Beta Testers"
+HYSTERIA_CANARY_NODE_MARKER = "hysteria-canary"
+BETA_TESTERS_SQUAD_CACHE_KEY = "cache:internal_squad:beta-testers"
+
+
+class BetaTesterEnrollmentResult(str, Enum):
+    ENROLLED = "ENROLLED"
+    ALREADY_ENROLLED = "ALREADY_ENROLLED"
+    INELIGIBLE = "INELIGIBLE"
+
 
 class RemnawaveService(BaseService):
     remnawave: RemnawaveSDK
@@ -85,6 +97,104 @@ class RemnawaveService(BaseService):
         self.user_service = user_service
         self.subscription_service = subscription_service
         self.notification_service = notification_service
+
+    async def _get_beta_testers_squad_uuid(self) -> UUID:
+        cached = await self.redis_client.get(BETA_TESTERS_SQUAD_CACHE_KEY)
+        if cached:
+            value = cached.decode() if isinstance(cached, bytes) else str(cached)
+            return UUID(value)
+
+        response = await self.remnawave.internal_squads.get_internal_squads()
+        squad_uuid = next(
+            (
+                squad.uuid
+                for squad in response.internal_squads
+                if squad.name.strip().casefold() == BETA_TESTERS_SQUAD_NAME.casefold()
+            ),
+            None,
+        )
+        if squad_uuid is None:
+            raise ValueError("Remnawave Beta Testers internal squad is not configured")
+
+        await self.redis_client.set(
+            BETA_TESTERS_SQUAD_CACHE_KEY,
+            str(squad_uuid),
+            ex=TIME_5M,
+        )
+        return squad_uuid
+
+    async def is_beta_tester(self, subscription: Optional[SubscriptionDto]) -> bool:
+        if subscription is None:
+            return False
+        beta_squad = await self._get_beta_testers_squad_uuid()
+        return beta_squad in subscription.internal_squads
+
+    async def preserve_beta_tester_squad(
+        self,
+        current_squads: list[UUID],
+        target_squads: list[UUID],
+    ) -> list[UUID]:
+        squads = list(dict.fromkeys(target_squads))
+        beta_squad = await self._get_beta_testers_squad_uuid()
+        if beta_squad in current_squads and beta_squad not in squads:
+            squads.append(beta_squad)
+        return squads
+
+    async def _restart_hysteria_canary_nodes(self) -> None:
+        response = await self.remnawave.nodes.get_all_nodes()
+        nodes = [
+            node
+            for node in response.root
+            if HYSTERIA_CANARY_NODE_MARKER in node.name.strip().casefold()
+        ]
+        if not nodes:
+            raise ValueError("Remnawave Hysteria canary node is not configured")
+        for node in nodes:
+            try:
+                await self.remnawave.nodes.restart_node(node.uuid)
+            except ValidationError as exc:
+                errors = exc.errors()
+                accepted_restart = (
+                    len(errors) == 1
+                    and tuple(errors[0].get("loc", ())) == ("eventSent",)
+                    and errors[0].get("type") == "missing"
+                    and errors[0].get("input") == {"success": True}
+                )
+                if not accepted_restart:
+                    raise
+                logger.warning(
+                    "Remnawave accepted Hysteria canary restart but returned the "
+                    "legacy success-only response"
+                )
+            logger.info(f"Restarted Hysteria canary node '{node.name}' after beta enrollment")
+
+    async def enroll_beta_tester(self, user: UserDto) -> BetaTesterEnrollmentResult:
+        subscription = await self.subscription_service.get_current(user.telegram_id)
+        if subscription is None or subscription.is_trial or not subscription.is_active:
+            return BetaTesterEnrollmentResult.INELIGIBLE
+
+        beta_squad = await self._get_beta_testers_squad_uuid()
+        already_enrolled = beta_squad in subscription.internal_squads
+        if not already_enrolled:
+            subscription.internal_squads = list(
+                dict.fromkeys([*subscription.internal_squads, beta_squad])
+            )
+            updated = await self.subscription_service.update(subscription)
+            if updated is None:
+                raise ValueError("Billing did not return the updated beta subscription")
+            subscription = updated
+
+        await self.updated_user(
+            user=user,
+            uuid=subscription.user_remna_id,
+            subscription=subscription,
+        )
+        await self._restart_hysteria_canary_nodes()
+        user.current_subscription = subscription
+
+        if already_enrolled:
+            return BetaTesterEnrollmentResult.ALREADY_ENROLLED
+        return BetaTesterEnrollmentResult.ENROLLED
 
     def _rewrite_sub_url(self, url: str) -> str:
         domain = self.config.remnawave.sub_public_domain

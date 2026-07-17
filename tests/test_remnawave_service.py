@@ -8,12 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import ValidationError
 from remnapy.enums import TrafficLimitStrategy
 from remnapy.exceptions import ApiErrorResponse, ConflictError, NotFoundError
 from remnapy.models import (
     CreateUserResponseDto,
     DeleteUserResponseDto,
     GetStatsResponseDto,
+    RestartNodeResponseDto,
     UserResponseDto,
 )
 from remnapy.models.hwid import (
@@ -22,15 +24,15 @@ from remnapy.models.hwid import (
     HwidDeviceDto,
 )
 from remnapy.models.webhook import (
-    InternalSquadDto,
     NodeDto,
-    UserDto as UserWebhookDto,
     UserTrafficDto,
+)
+from remnapy.models.webhook import (
+    UserDto as UserWebhookDto,
 )
 
 from src.core.constants import IMPORTED_TAG
 from src.core.enums import (
-    PlanType,
     RemnaNodeEvent,
     RemnaUserEvent,
     RemnaUserHwidDevicesEvent,
@@ -39,11 +41,9 @@ from src.core.enums import (
     UserNotificationType,
     UserRole,
 )
-from src.models.dto import PlanSnapshotDto, SubscriptionDto
-from src.services.remnawave import RemnawaveService
-
+from src.models.dto import SubscriptionDto
+from src.services.remnawave import BetaTesterEnrollmentResult, RemnawaveService
 from tests.conftest import make_plan_snapshot, make_subscription, make_user
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -92,6 +92,121 @@ def _make_service(
         notification_service=notification_service,
     )
     return svc
+
+
+def _configure_beta_squad(svc: RemnawaveService, squad_uuid: UUID) -> None:
+    squad = MagicMock()
+    squad.uuid = squad_uuid
+    squad.name = "Beta Testers"
+    svc.redis_client.get.return_value = None
+    svc.remnawave.internal_squads.get_internal_squads.return_value = MagicMock(
+        internal_squads=[squad]
+    )
+
+
+def _configure_hysteria_node(svc: RemnawaveService) -> MagicMock:
+    node = MagicMock()
+    node.uuid = uuid4()
+    node.name = "Admin-Hysteria-Canary"
+    svc.remnawave.nodes.get_all_nodes.return_value = MagicMock(root=[node])
+    return node
+
+
+class TestBetaTesterEnrollment:
+    async def test_enrolls_paid_user_persists_and_restarts_hysteria(self):
+        svc = _make_service()
+        beta_squad = uuid4()
+        _configure_beta_squad(svc, beta_squad)
+        node = _configure_hysteria_node(svc)
+        subscription = make_subscription()
+        svc.subscription_service.get_current.return_value = subscription
+        svc.subscription_service.update.return_value = subscription
+        svc.remnawave.users.update_user.return_value = _make_remna_user_response(
+            uuid=subscription.user_remna_id
+        )
+        user = make_user(subscription=subscription)
+
+        result = await svc.enroll_beta_tester(user)
+
+        assert result == BetaTesterEnrollmentResult.ENROLLED
+        assert beta_squad in subscription.internal_squads
+        svc.subscription_service.update.assert_awaited_once_with(subscription)
+        update_request = svc.remnawave.users.update_user.call_args.args[0]
+        assert beta_squad in update_request.active_internal_squads
+        svc.remnawave.nodes.restart_node.assert_awaited_once_with(node.uuid)
+        assert user.current_subscription is subscription
+
+    async def test_already_enrolled_is_idempotent_and_reconciles_remnawave(self):
+        svc = _make_service()
+        beta_squad = uuid4()
+        _configure_beta_squad(svc, beta_squad)
+        node = _configure_hysteria_node(svc)
+        subscription = make_subscription()
+        subscription.internal_squads = [beta_squad]
+        svc.subscription_service.get_current.return_value = subscription
+        svc.remnawave.users.update_user.return_value = _make_remna_user_response(
+            uuid=subscription.user_remna_id
+        )
+        user = make_user(subscription=subscription)
+
+        result = await svc.enroll_beta_tester(user)
+
+        assert result == BetaTesterEnrollmentResult.ALREADY_ENROLLED
+        svc.subscription_service.update.assert_not_awaited()
+        svc.remnawave.users.update_user.assert_awaited_once()
+        svc.remnawave.nodes.restart_node.assert_awaited_once_with(node.uuid)
+
+    async def test_accepts_legacy_success_only_restart_response(self):
+        svc = _make_service()
+        beta_squad = uuid4()
+        _configure_beta_squad(svc, beta_squad)
+        node = _configure_hysteria_node(svc)
+        subscription = make_subscription()
+        svc.subscription_service.get_current.return_value = subscription
+        svc.subscription_service.update.return_value = subscription
+        svc.remnawave.users.update_user.return_value = _make_remna_user_response(
+            uuid=subscription.user_remna_id
+        )
+        user = make_user(subscription=subscription)
+
+        try:
+            RestartNodeResponseDto.model_validate({"success": True})
+        except ValidationError as exc:
+            svc.remnawave.nodes.restart_node.side_effect = exc
+        else:  # pragma: no cover - remove when the SDK accepts the backend response
+            pytest.fail("remnapy unexpectedly accepted a success-only restart response")
+
+        result = await svc.enroll_beta_tester(user)
+
+        assert result == BetaTesterEnrollmentResult.ENROLLED
+        svc.remnawave.nodes.restart_node.assert_awaited_once_with(node.uuid)
+
+    async def test_rejects_trial_without_mutating_subscription(self):
+        svc = _make_service()
+        subscription = make_subscription()
+        subscription.is_trial = True
+        svc.subscription_service.get_current.return_value = subscription
+        user = make_user(subscription=subscription)
+
+        result = await svc.enroll_beta_tester(user)
+
+        assert result == BetaTesterEnrollmentResult.INELIGIBLE
+        svc.subscription_service.update.assert_not_awaited()
+        svc.remnawave.users.update_user.assert_not_awaited()
+        svc.remnawave.nodes.restart_node.assert_not_awaited()
+
+    async def test_preserves_beta_squad_when_plan_changes(self):
+        svc = _make_service()
+        beta_squad = uuid4()
+        plan_squad = uuid4()
+        _configure_beta_squad(svc, beta_squad)
+
+        got = await svc.preserve_beta_tester_squad(
+            current_squads=[beta_squad],
+            target_squads=[plan_squad],
+        )
+
+        assert got == [plan_squad, beta_squad]
 
 
 def _make_remna_user_response(

@@ -7,6 +7,23 @@ msg-web-purchase-redirect =
     Web purchases are managed at <a href="https://app.componovpn.com">app.componovpn.com</a>.
     This bot is for Telegram-native purchases only.
 
+msg-beta-tester-enrolled =
+    🧪 <b>Готово — вы стали бета-тестером Compono!</b>
+
+    Мы подключили вам ранний доступ к новым протоколам и функциям, включая Hysteria2.
+
+    Обновите профиль подписки в VPN-приложении, чтобы новые подключения появились в списке.
+
+msg-beta-tester-already-enrolled =
+    🧪 <b>Вы уже участвуете в программе бета-тестирования.</b>
+
+    Ранний доступ активен. Если Hysteria2 ещё не отображается, обновите профиль подписки в VPN-приложении.
+
+msg-beta-tester-ineligible =
+    🧪 Бета-тестирование доступно пользователям с активной оплаченной подпиской.
+
+    Оформите или продлите подписку и нажмите кнопку ещё раз.
+
 
 # Cancel survey
 msg-cancel-survey-other-prompt = ✍️ Напишите в двух словах, что произошло — мы прочитаем.

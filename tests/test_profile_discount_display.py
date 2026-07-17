@@ -51,7 +51,13 @@ def test_frg_user_externals_supplied_by_menu_getter() -> None:
 def test_frg_user_shows_loyalty_discount_when_set() -> None:
     value, errors = _bundle().format(
         "frg-user",
-        {"user_id": "1", "user_name": "Anton", "personal_discount": 0, "loyalty_discount": 30},
+        {
+            "user_id": "1",
+            "user_name": "Anton",
+            "personal_discount": 0,
+            "loyalty_discount": 30,
+            "is_beta_tester": 0,
+        },
     )
     assert not errors
     assert "постоянного клиента" in value and "30" in value
@@ -60,7 +66,28 @@ def test_frg_user_shows_loyalty_discount_when_set() -> None:
 def test_frg_user_hides_loyalty_discount_when_zero() -> None:
     value, errors = _bundle().format(
         "frg-user",
-        {"user_id": "1", "user_name": "Anton", "personal_discount": 0, "loyalty_discount": 0},
+        {
+            "user_id": "1",
+            "user_name": "Anton",
+            "personal_discount": 0,
+            "loyalty_discount": 0,
+            "is_beta_tester": 0,
+        },
     )
     assert not errors
     assert "постоянного клиента" not in value
+
+
+def test_frg_user_shows_beta_tester_status() -> None:
+    value, errors = _bundle().format(
+        "frg-user",
+        {
+            "user_id": "1",
+            "user_name": "Anton",
+            "personal_discount": 0,
+            "loyalty_discount": 0,
+            "is_beta_tester": 1,
+        },
+    )
+    assert not errors
+    assert "Бета-тестер" in value and "Да" in value
