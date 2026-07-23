@@ -729,6 +729,8 @@ async def on_promocode_input(
             i18n_key = "ntf-promocode-not-found"
         elif e.status_code == 409:
             i18n_key = "ntf-promocode-already-activated"
+        elif e.status_code == 403:
+            i18n_key = "ntf-promocode-not-available"
         else:
             i18n_key = "ntf-promocode-activation-failed"
         await notification_service.notify_user(
