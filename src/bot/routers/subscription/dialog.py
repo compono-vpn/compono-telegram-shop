@@ -1,6 +1,8 @@
+from aiogram.enums import ButtonStyle
 from aiogram_dialog import Dialog, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Column, Group, Row, Select, SwitchTo, Url, WebApp
+from aiogram_dialog.widgets.style import EMPTY_STYLE, Style, StyleCase
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
@@ -67,6 +69,16 @@ subscription = Window(
     getter=subscription_getter,
 )
 
+PLAN_BUTTON_STYLES = StyleCase(
+    styles={
+        1: Style(style=ButtonStyle.SUCCESS),  # ⚡️ Старт
+        2: Style(style=ButtonStyle.DANGER),  # 🚀 Про
+        3: Style(style=ButtonStyle.PRIMARY),  # 💎 Макс
+        ...: EMPTY_STYLE,
+    },
+    selector=F["item"]["id"],
+)
+
 plans = Window(
     Banner(BannerName.SUBSCRIPTION),
     I18nFormat("msg-subscription-plans"),
@@ -78,6 +90,7 @@ plans = Window(
             items="plans",
             type_factory=int,
             on_click=on_plan_select,
+            style=PLAN_BUTTON_STYLES,
         ),
     ),
     Row(
