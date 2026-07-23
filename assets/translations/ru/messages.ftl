@@ -972,7 +972,10 @@ msg-notifications-system = <b>⚙️ Системные уведомления</
 
 # Subscription
 msg-subscription-main = <b>💳 Подписка</b>
-msg-subscription-plans = <b>📦 Выберите план</b>
+msg-subscription-plans =
+    <b>📦 Выберите план</b>
+
+    { $summary }
 msg-subscription-new-success = Чтобы начать пользоваться нашим сервисом, нажмите кнопку <code>`{ btn-subscription-connect }`</code> и следуйте инструкциям!
 msg-subscription-renew-success = Ваша подписка продлена на { $added_duration }.
 

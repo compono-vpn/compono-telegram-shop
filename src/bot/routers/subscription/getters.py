@@ -74,6 +74,7 @@ async def subscription_getter(
 async def plans_getter(
     dialog_manager: DialogManager,
     user: UserDto,
+    i18n: FromDishka[TranslatorRunner],
     billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -88,8 +89,16 @@ async def plans_getter(
         for plan in plans
     ]
 
+    summary = "\n".join(
+        f"{plan.name} — "
+        f"{i18n.get('unit-gigabyte', value=plan.traffic_limit)}/мес, "
+        f"{i18n.get('unit-device', value=plan.device_limit)}"
+        for plan in plans
+    )
+
     return {
         "plans": formatted_plans,
+        "summary": summary,
     }
 
 
