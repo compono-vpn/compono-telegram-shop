@@ -7,11 +7,13 @@ and identity management. Protected by X-Internal-Secret header.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Optional
 
 import httpx
 from loguru import logger
 
+from src.core.utils.time import to_rfc3339_utc
 from src.models.dto import PlanSnapshotDto
 
 
@@ -34,6 +36,13 @@ class ProvisionResult:
     subscription_url: str
     status: str
     expire_at: str
+
+
+@dataclass(frozen=True)
+class ConnectedStats:
+    """Response from GET /api/v1/internal/stats/connected."""
+
+    connected: int
 
 
 class ApiClient:
@@ -148,3 +157,18 @@ class ApiClient:
             status=data["status"],
             expire_at=data["expireAt"],
         )
+
+    async def get_connected_stats(self, date_from: datetime, date_to: datetime) -> ConnectedStats:
+        """Fetch the count of users who connected during a UTC time range.
+
+        Calls GET /api/v1/internal/stats/connected?from=<RFC3339 UTC>&to=<RFC3339 UTC>.
+        """
+        data = await self._request(
+            "GET",
+            "/stats/connected",
+            params={
+                "from": to_rfc3339_utc(date_from),
+                "to": to_rfc3339_utc(date_to),
+            },
+        )
+        return ConnectedStats(connected=data.get("connected", 0) if data else 0)

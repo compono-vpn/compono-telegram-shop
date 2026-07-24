@@ -274,6 +274,17 @@ class BillingStatistics(BaseModel):
     today_transactions: int = 0
 
 
+class BillingFunnelStats(BaseModel):
+    """Maps the internal funnel stats response (explicit json tags, snake_case).
+
+    GET /api/v1/internal/stats/funnel?from=<RFC3339 UTC>&to=<RFC3339 UTC>
+    """
+
+    new_users: int = 0
+    used_trial: int = 0
+    bought_sub: int = 0
+
+
 # --- Customers ---
 
 
