@@ -4,14 +4,18 @@ Calls the internal API endpoints that are protected by X-Internal-Secret
 header authentication. All methods are async and use httpx.AsyncClient.
 """
 
+from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
 import httpx
 from loguru import logger
 
+from src.core.utils.time import to_rfc3339_utc
+
 from .models import (
     BillingCustomer,
+    BillingFunnelStats,
     BillingPaymentGateway,
     BillingPaymentResult,
     BillingPlan,
@@ -513,6 +517,20 @@ class BillingClient:
     async def get_statistics(self) -> BillingStatistics:
         data = await self._get("/statistics")
         return BillingStatistics.model_validate(data)
+
+    async def get_funnel_stats(self, date_from: datetime, date_to: datetime) -> BillingFunnelStats:
+        """Fetch new-user/trial/purchase funnel counts for a UTC time range.
+
+        Calls GET /api/v1/internal/stats/funnel?from=<RFC3339 UTC>&to=<RFC3339 UTC>.
+        """
+        data = await self._get(
+            "/stats/funnel",
+            params={
+                "from": to_rfc3339_utc(date_from),
+                "to": to_rfc3339_utc(date_to),
+            },
+        )
+        return BillingFunnelStats.model_validate(data)
 
     # ------------------------------------------------------------------ #
     # Payment Gateways
