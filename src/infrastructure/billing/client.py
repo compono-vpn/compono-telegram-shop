@@ -658,6 +658,24 @@ class BillingClient:
         data = await self._get(f"/referrals/by-referrer/{telegram_id}")
         return [BillingReferral.model_validate(r) for r in (data or [])]
 
+    async def grant_subscription(
+        self,
+        telegram_id: int,
+        plan_id: int,
+        duration_days: int,
+        reason: str,
+    ) -> dict[str, Any]:
+        data = await self._post(
+            "/subscriptions/grant",
+            json={
+                "telegram_id": telegram_id,
+                "plan_id": plan_id,
+                "duration_days": duration_days,
+                "reason": reason,
+            },
+        )
+        return data if isinstance(data, dict) else {}
+
     async def create_referral_reward(
         self,
         referral_id: int,
