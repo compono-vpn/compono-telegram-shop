@@ -93,7 +93,7 @@ This pass is contract-pinning only (tests/fixtures/CI); it deliberately does
 **not** change any production code. Two things were found that are worth
 flagging separately:
 
-1. **Live bug: referral stats always report 0.** `GET /referral/{id}/stats`
+1. **Fixed 2026-09-29: referral stats always reported 0.** The shop now counts `Referrals`/`Rewards` from this response instead of reading keys that don't exist; the history below is kept for context. `GET /referral/{id}/stats`
    (and the unused `GET /referral/{id}`) return `port.ReferralInfo`
    (`internal/port/usecase.go`), which has no json tags and serializes as
    `{"Referrals": [...], "Rewards": [...], "Code": "..."}` — see
