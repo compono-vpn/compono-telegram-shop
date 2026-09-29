@@ -643,3 +643,86 @@ class TestFlushPendingRewards:
 
         sub_svc.update.assert_not_awaited()
         billing.update_referral_reward.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# issue_pending_rewards()
+# ---------------------------------------------------------------------------
+
+
+class TestIssuePendingRewards:
+    """Billing creates referrer rewards unissued and emits referral.reward;
+    the shop grants every pending one exactly once."""
+
+    @staticmethod
+    def _patch_task(monkeypatch) -> MagicMock:
+        task = MagicMock()
+        task.kiq = AsyncMock()
+        monkeypatch.setattr(
+            "src.infrastructure.taskiq.tasks.referrals.give_referrer_reward_task", task
+        )
+        return task
+
+    @staticmethod
+    def _service(rewards, referrals, lock_acquired=True):
+        billing = AsyncMock()
+        billing.list_referral_rewards.return_value = rewards
+        billing.get_referrals_by_referrer.return_value = referrals
+        svc, _, user_service, _, _, _, _ = _make_service(billing)
+        svc.redis_client = AsyncMock()
+        svc.redis_client.set.return_value = lock_acquired
+        user_service.get.side_effect = lambda tg: {201: make_user(telegram_id=201, name="Елена")}.get(
+            tg
+        )
+        return svc, billing
+
+    async def test_enqueues_each_unissued_reward_with_referred_name(self, monkeypatch):
+        task = self._patch_task(monkeypatch)
+        svc, _ = self._service(
+            rewards=[
+                _make_billing_reward(ID=7, ReferralID=40, Type="EXTRA_DAYS", Amount=14),
+                _make_billing_reward(ID=8, ReferralID=41, Type="EXTRA_DAYS", Amount=30),
+                _make_billing_reward(ID=6, ReferralID=39, Type="EXTRA_DAYS", IsIssued=True),
+            ],
+            referrals=[
+                _make_billing_referral(ID=40, ReferredTelegramID=201),
+                _make_billing_referral(ID=41, ReferredTelegramID=202),
+            ],
+        )
+
+        enqueued = await svc.issue_pending_rewards(100)
+
+        assert enqueued == 2
+        calls = task.kiq.await_args_list
+        assert [c.kwargs["reward"].id for c in calls] == [7, 8]
+        assert [c.kwargs["reward"].amount for c in calls] == [14, 30]
+        assert [c.kwargs["referred_name"] for c in calls] == ["Елена", "202"]
+        assert all(c.kwargs["user_telegram_id"] == 100 for c in calls)
+
+    async def test_takes_a_per_reward_lock_so_redelivery_cannot_double_grant(self, monkeypatch):
+        task = self._patch_task(monkeypatch)
+        svc, _ = self._service(
+            rewards=[_make_billing_reward(ID=7, ReferralID=40, Type="EXTRA_DAYS", Amount=14)],
+            referrals=[_make_billing_referral(ID=40, ReferredTelegramID=201)],
+            lock_acquired=None,
+        )
+
+        enqueued = await svc.issue_pending_rewards(100)
+
+        assert enqueued == 0
+        task.kiq.assert_not_awaited()
+        lock = svc.redis_client.set.await_args.kwargs
+        assert lock["name"] == "referral:reward:grant:7"
+        assert lock["nx"] is True
+        assert lock["ex"] > 0
+
+    async def test_nothing_pending_skips_lookups(self, monkeypatch):
+        task = self._patch_task(monkeypatch)
+        svc, billing = self._service(
+            rewards=[_make_billing_reward(ID=6, IsIssued=True)],
+            referrals=[],
+        )
+
+        assert await svc.issue_pending_rewards(100) == 0
+        task.kiq.assert_not_awaited()
+        billing.get_referrals_by_referrer.assert_not_awaited()

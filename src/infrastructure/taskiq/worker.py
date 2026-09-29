@@ -11,6 +11,7 @@ from src.core.metrics import start_metrics_server
 from src.infrastructure.di import create_container
 from src.infrastructure.kafka.consumer import UserNotificationConsumer
 from src.infrastructure.kafka.pricing_outcome_consumer import PricingOutcomeConsumer
+from src.infrastructure.kafka.referral_reward_consumer import ReferralRewardConsumer
 from src.infrastructure.kafka.trial_reminder_consumer import TrialReminderConsumer
 
 from .broker import broker
@@ -37,6 +38,7 @@ def worker() -> RedisStreamBroker:
         _kafka_consumers = [
             UserNotificationConsumer(config, container),
             TrialReminderConsumer(config, container),
+            ReferralRewardConsumer(config, container),
             PricingOutcomeConsumer(
                 config,
                 container,
