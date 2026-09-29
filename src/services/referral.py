@@ -259,11 +259,11 @@ class ReferralService(BaseService):
 
     async def get_referral_count(self, telegram_id: int) -> int:
         info = await self.billing.get_referral_stats(telegram_id)
-        return info.get("referral_count", 0)
+        return len(info.get("Referrals") or [])
 
     async def get_reward_count(self, telegram_id: int) -> int:
         info = await self.billing.get_referral_stats(telegram_id)
-        return info.get("reward_count", 0)
+        return len(info.get("Rewards") or [])
 
     async def get_total_rewards_amount(
         self,
@@ -271,7 +271,11 @@ class ReferralService(BaseService):
         reward_type: ReferralRewardType,
     ) -> int:
         info = await self.billing.get_referral_stats(telegram_id)
-        return info.get("total_rewards_amount", 0)
+        return sum(
+            int(reward.get("Amount") or 0)
+            for reward in info.get("Rewards") or []
+            if reward.get("Type") == reward_type.value
+        )
 
     #
 

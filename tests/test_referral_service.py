@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -29,6 +31,7 @@ from tests.conftest import make_config, make_plan_snapshot, make_subscription, m
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_billing_referral(**overrides) -> BillingReferral:
     defaults = {
@@ -248,53 +251,64 @@ class TestMarkRewardAsIssued:
 
 
 class TestReferralStats:
+    """Billing's /referral/{id}/stats returns port.ReferralInfo, pinned in
+    contracts/shop-billing/v1/http/referral_info.json."""
+
+    @staticmethod
+    def _billing_info() -> dict:
+        root = Path(__file__).resolve().parents[1]
+        path = root / "contracts/shop-billing/v1/http/referral_info.json"
+        info = json.loads(path.read_text())
+        info["Referrals"].append({**info["Referrals"][0], "ID": 2, "ReferredTelegramID": 111})
+        info["Rewards"].append({**info["Rewards"][0], "ID": 2, "Amount": 30, "IsIssued": True})
+        return info
+
     async def test_get_referral_count(self):
         billing = AsyncMock()
-        billing.get_referral_stats.return_value = {
-            "referral_count": 5,
-            "reward_count": 3,
-            "total_rewards_amount": 100,
-        }
+        billing.get_referral_stats.return_value = self._billing_info()
         svc, _, _, _, _, _, _ = _make_service(billing)
 
         count = await svc.get_referral_count(100)
 
         billing.get_referral_stats.assert_awaited_once_with(100)
-        assert count == 5
+        assert count == 2
 
     async def test_get_reward_count(self):
         billing = AsyncMock()
-        billing.get_referral_stats.return_value = {
-            "referral_count": 5,
-            "reward_count": 3,
-        }
+        billing.get_referral_stats.return_value = self._billing_info()
         svc, _, _, _, _, _, _ = _make_service(billing)
 
         count = await svc.get_reward_count(100)
 
         billing.get_referral_stats.assert_awaited_once_with(100)
-        assert count == 3
+        assert count == 2
 
     async def test_get_total_rewards_amount(self):
         billing = AsyncMock()
-        billing.get_referral_stats.return_value = {
-            "total_rewards_amount": 250,
-        }
+        billing.get_referral_stats.return_value = self._billing_info()
         svc, _, _, _, _, _, _ = _make_service(billing)
 
-        amount = await svc.get_total_rewards_amount(100, ReferralRewardType.POINTS)
+        amount = await svc.get_total_rewards_amount(100, ReferralRewardType.EXTRA_DAYS)
 
         billing.get_referral_stats.assert_awaited_once_with(100)
-        assert amount == 250
+        assert amount == 37
 
-    async def test_returns_zero_when_key_missing(self):
+    async def test_total_rewards_amount_counts_only_requested_type(self):
         billing = AsyncMock()
-        billing.get_referral_stats.return_value = {}
+        billing.get_referral_stats.return_value = self._billing_info()
         svc, _, _, _, _, _, _ = _make_service(billing)
 
-        assert await svc.get_referral_count(100) == 0
-        assert await svc.get_reward_count(100) == 0
         assert await svc.get_total_rewards_amount(100, ReferralRewardType.POINTS) == 0
+
+    async def test_returns_zero_when_lists_missing_or_null(self):
+        billing = AsyncMock()
+        for payload in ({}, {"Referrals": None, "Rewards": None, "Code": "X"}):
+            billing.get_referral_stats.return_value = payload
+            svc, _, _, _, _, _, _ = _make_service(billing)
+
+            assert await svc.get_referral_count(100) == 0
+            assert await svc.get_reward_count(100) == 0
+            assert await svc.get_total_rewards_amount(100, ReferralRewardType.EXTRA_DAYS) == 0
 
 
 # ---------------------------------------------------------------------------
