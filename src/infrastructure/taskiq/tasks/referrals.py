@@ -16,6 +16,7 @@ from src.core.enums import (
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import datetime_now
 from src.infrastructure.api import ApiClient
+from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.broker import broker
 from src.models.dto import PlanSnapshotDto, ReferralRewardDto, SubscriptionDto, UserDto
 from src.services.notification import NotificationService
@@ -26,20 +27,20 @@ from src.services.subscription import SubscriptionService
 from src.services.user import UserService
 
 
-async def _extend_subscription(
+async def _grant_on_current_plan(
     user: UserDto,
     subscription: SubscriptionDto,
     days: int,
+    billing: BillingClient,
     subscription_service: SubscriptionService,
-    remnawave_service: RemnawaveService,
 ) -> None:
-    subscription.expire_at = max(subscription.expire_at, datetime_now()) + timedelta(days=days)
-    await subscription_service.update(subscription)
-    await remnawave_service.updated_user(
-        user=user,
-        uuid=subscription.user_remna_id,
-        subscription=subscription,
+    await billing.grant_subscription(
+        telegram_id=user.telegram_id,
+        plan_id=subscription.plan.id,
+        duration_days=days,
+        reason="referral_reward",
     )
+    await subscription_service.clear_subscription_cache(subscription.id, user.telegram_id)
 
 
 async def _provision_reward_subscription(
@@ -132,6 +133,7 @@ async def grant_extra_days(
     api_client: ApiClient,
     subscription_service: SubscriptionService,
     remnawave_service: RemnawaveService,
+    billing: BillingClient,
 ) -> tuple[bool, Optional[str]]:
     """Give `days` of access whatever subscription state the referrer is in.
 
@@ -139,9 +141,7 @@ async def grant_extra_days(
     newly provisioned, so the caller can offer a connect link.
     """
     if subscription and not subscription.is_trial:
-        await _extend_subscription(
-            user, subscription, days, subscription_service, remnawave_service
-        )
+        await _grant_on_current_plan(user, subscription, days, billing, subscription_service)
         return True, None
 
     entry_plan = await plan_service.get_entry_plan()
@@ -185,6 +185,7 @@ async def give_referrer_reward_task(
     remnawave_service: FromDishka[RemnawaveService],
     notification_service: FromDishka[NotificationService],
     referral_service: FromDishka[ReferralService],
+    billing: FromDishka[BillingClient],
 ) -> None:
     logger.info(
         f"Start applying reward of '{reward.amount}' '{reward.type}' to user '{user_telegram_id}'"
@@ -210,6 +211,7 @@ async def give_referrer_reward_task(
             api_client=api_client,
             subscription_service=subscription_service,
             remnawave_service=remnawave_service,
+            billing=billing,
         )
         if not granted:
             await notification_service.notify_user(
@@ -253,3 +255,4 @@ async def give_referrer_reward_task(
     )
     await referral_service.mark_reward_as_issued(reward.id)  # type: ignore[arg-type]
     logger.info(f"Finished applying reward to user '{user_telegram_id}'")
+    await referral_service.issue_pending_rewards(user_telegram_id)

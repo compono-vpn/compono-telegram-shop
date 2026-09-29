@@ -207,9 +207,7 @@ class TestGetReferralsByReferrer:
 class TestCreateReward:
     async def test_calls_billing_create_referral_reward(self):
         billing = AsyncMock()
-        billing.create_referral_reward.return_value = _make_billing_reward(
-            Amount=25, Type="POINTS"
-        )
+        billing.create_referral_reward.return_value = _make_billing_reward(Amount=25, Type="POINTS")
         svc, _, _, _, _, _, _ = _make_service(billing)
 
         result = await svc.create_reward(
@@ -671,17 +669,17 @@ class TestIssuePendingRewards:
         svc, _, user_service, _, _, _, _ = _make_service(billing)
         svc.redis_client = AsyncMock()
         svc.redis_client.set.return_value = lock_acquired
-        user_service.get.side_effect = lambda tg: {201: make_user(telegram_id=201, name="Елена")}.get(
-            tg
-        )
+        user_service.get.side_effect = lambda tg: {
+            201: make_user(telegram_id=201, name="Елена")
+        }.get(tg)
         return svc, billing
 
-    async def test_enqueues_each_unissued_reward_with_referred_name(self, monkeypatch):
+    async def test_enqueues_only_the_oldest_unissued_reward(self, monkeypatch):
         task = self._patch_task(monkeypatch)
         svc, _ = self._service(
             rewards=[
-                _make_billing_reward(ID=7, ReferralID=40, Type="EXTRA_DAYS", Amount=14),
                 _make_billing_reward(ID=8, ReferralID=41, Type="EXTRA_DAYS", Amount=30),
+                _make_billing_reward(ID=7, ReferralID=40, Type="EXTRA_DAYS", Amount=14),
                 _make_billing_reward(ID=6, ReferralID=39, Type="EXTRA_DAYS", IsIssued=True),
             ],
             referrals=[
@@ -692,12 +690,22 @@ class TestIssuePendingRewards:
 
         enqueued = await svc.issue_pending_rewards(100)
 
-        assert enqueued == 2
-        calls = task.kiq.await_args_list
-        assert [c.kwargs["reward"].id for c in calls] == [7, 8]
-        assert [c.kwargs["reward"].amount for c in calls] == [14, 30]
-        assert [c.kwargs["referred_name"] for c in calls] == ["Елена", "202"]
-        assert all(c.kwargs["user_telegram_id"] == 100 for c in calls)
+        assert enqueued == 1
+        kwargs = task.kiq.await_args.kwargs
+        assert (kwargs["reward"].id, kwargs["reward"].amount) == (7, 14)
+        assert kwargs["referred_name"] == "Елена"
+        assert kwargs["user_telegram_id"] == 100
+
+    async def test_falls_back_to_the_referred_id_when_the_user_is_unknown(self, monkeypatch):
+        task = self._patch_task(monkeypatch)
+        svc, _ = self._service(
+            rewards=[_make_billing_reward(ID=8, ReferralID=41, Type="EXTRA_DAYS", Amount=30)],
+            referrals=[_make_billing_referral(ID=41, ReferredTelegramID=202)],
+        )
+
+        await svc.issue_pending_rewards(100)
+
+        assert task.kiq.await_args.kwargs["referred_name"] == "202"
 
     async def test_takes_a_per_reward_lock_so_redelivery_cannot_double_grant(self, monkeypatch):
         task = self._patch_task(monkeypatch)

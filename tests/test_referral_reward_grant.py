@@ -58,10 +58,13 @@ def _remnawave(url: str = "https://sub.example/upgraded") -> AsyncMock:
     return svc
 
 
-async def _grant(subscription, plan_service=None, api_client=None, remnawave=None, days=14):
+async def _grant(
+    subscription, plan_service=None, api_client=None, remnawave=None, days=14, billing=None
+):
     sub_svc = AsyncMock()
     api = api_client or _api_client()
     remna = remnawave or _remnawave()
+    billing = billing or AsyncMock()
     granted, url = await grant_extra_days(
         user=make_user(telegram_id=100),
         days=days,
@@ -70,34 +73,48 @@ async def _grant(subscription, plan_service=None, api_client=None, remnawave=Non
         api_client=api,
         subscription_service=sub_svc,
         remnawave_service=remna,
+        billing=billing,
     )
-    return granted, url, sub_svc, api, remna
+    return granted, url, sub_svc, api, remna, billing
 
 
 class TestPaidSubscription:
-    async def test_extends_in_place_and_returns_no_connect_url(self):
-        subscription = make_subscription(active=True)
+    """Billing derives expiry from transactions, so the days must land as a
+    MANUAL_GRANT transaction; writing expire_at directly is ignored by
+    billing's GetCurrent and later overwritten (it cost a referrer 7 days)."""
+
+    async def test_grants_the_days_through_billing_on_the_current_plan(self):
+        subscription = make_subscription(active=True, plan_id=2)
         original = subscription.expire_at
 
-        granted, url, sub_svc, api, remna = await _grant(subscription)
+        granted, url, sub_svc, api, remna, billing = await _grant(subscription)
 
         assert (granted, url) == (True, None)
-        assert subscription.expire_at == original + timedelta(days=14)
-        sub_svc.update.assert_awaited_once_with(subscription)
+        billing.grant_subscription.assert_awaited_once_with(
+            telegram_id=100, plan_id=2, duration_days=14, reason="referral_reward"
+        )
+        assert subscription.expire_at == original
+        sub_svc.update.assert_not_awaited()
+        remna.updated_user.assert_not_awaited()
         sub_svc.create.assert_not_awaited()
         api.provision_user.assert_not_awaited()
+        sub_svc.clear_subscription_cache.assert_awaited_once_with(subscription.id, 100)
 
-    async def test_expired_paid_subscription_extends_from_now_not_from_the_past(self):
-        subscription = make_subscription(active=False)
+    async def test_expired_paid_subscription_is_also_granted_through_billing(self):
+        subscription = make_subscription(active=False, plan_id=3)
 
-        await _grant(subscription)
+        granted, _, sub_svc, _, _, billing = await _grant(subscription, days=30)
 
-        assert subscription.expire_at > datetime_now() + timedelta(days=13)
+        assert granted is True
+        billing.grant_subscription.assert_awaited_once_with(
+            telegram_id=100, plan_id=3, duration_days=30, reason="referral_reward"
+        )
+        sub_svc.update.assert_not_awaited()
 
 
 class TestNoSubscription:
     async def test_provisions_entry_plan_for_the_reward_days(self):
-        granted, url, sub_svc, api, _ = await _grant(None)
+        granted, url, sub_svc, api, _, _ = await _grant(None)
 
         assert granted is True
         assert url == "https://sub.example/abc"
@@ -109,7 +126,7 @@ class TestNoSubscription:
         assert sub_svc.create.await_args.args[1].is_trial is False
 
     async def test_reports_failure_without_provisioning_when_no_plan_exists(self):
-        granted, url, sub_svc, api, _ = await _grant(None, plan_service=_plan_service(None))
+        granted, url, sub_svc, api, _, _ = await _grant(None, plan_service=_plan_service(None))
 
         assert (granted, url) == (False, None)
         api.provision_user.assert_not_awaited()
@@ -120,7 +137,7 @@ class TestTrialSubscription:
     async def test_upgrades_trial_to_the_entry_plan(self):
         trial = make_subscription(active=True, is_trial=True)
 
-        granted, url, sub_svc, api, remna = await _grant(trial)
+        granted, url, sub_svc, api, remna, billing = await _grant(trial)
 
         assert granted is True
         assert url == "https://sub.example/upgraded"
@@ -130,12 +147,13 @@ class TestTrialSubscription:
         sub_svc.create.assert_awaited_once()
         assert sub_svc.create.await_args.args[1].plan.name == "⚡️ Старт"
         api.provision_user.assert_not_awaited()
+        billing.grant_subscription.assert_not_awaited()
 
     async def test_carries_the_remaining_trial_days_into_the_reward_subscription(self):
         trial = make_subscription(active=True, is_trial=True)
         remaining = (trial.expire_at - datetime_now()).total_seconds() / 86400
 
-        _, _, _, _, remna = await _grant(trial)
+        _, _, _, _, remna, _ = await _grant(trial)
 
         proposed = remna.updated_user.await_args.kwargs["subscription"]
         expected = datetime_now() + timedelta(days=14 + remaining)
@@ -173,6 +191,7 @@ class TestGiveReferrerRewardTask:
             remnawave_service=_remnawave(),
             notification_service=notification_service,
             referral_service=referral_service,
+            billing=AsyncMock(),
         )
         return notification_service, referral_service
 
@@ -191,3 +210,8 @@ class TestGiveReferrerRewardTask:
         assert payload.i18n_key == "ntf-event-user-referral-reward"
         assert payload.reply_markup is None
         referral_service.mark_reward_as_issued.assert_awaited_once_with(7)
+
+    async def test_hands_off_to_the_next_pending_reward_after_issuing(self):
+        _, referral_service = await self._run(subscription=make_subscription(active=True))
+
+        referral_service.issue_pending_rewards.assert_awaited_once_with(100)
