@@ -46,6 +46,8 @@ from src.services.user import UserService
 
 from .base import BaseService
 
+REWARD_GRANT_LOCK_SECONDS = 24 * 60 * 60
+
 
 class ReferralService(BaseService):
     billing: BillingClient
@@ -170,6 +172,50 @@ class ReferralService(BaseService):
                 f"Flushed banked referral reward '{reward.id}' "
                 f"({reward.amount} days) for user '{user_telegram_id}'"
             )
+
+    async def issue_pending_rewards(self, referrer_telegram_id: int) -> int:
+        _tasks = importlib.import_module("src.infrastructure.taskiq.tasks.referrals")
+        give_referrer_reward_task = _tasks.give_referrer_reward_task
+
+        billing_rewards = await self.billing.list_referral_rewards(referrer_telegram_id)
+        pending = [r for r in billing_rewards if not r.IsIssued]
+        if not pending:
+            return 0
+
+        referred_by_referral = {
+            ref.ID: ref.ReferredTelegramID
+            for ref in await self.billing.get_referrals_by_referrer(referrer_telegram_id)
+        }
+
+        enqueued = 0
+        for billing_reward in pending:
+            acquired = await self.redis_client.set(
+                name=f"referral:reward:grant:{billing_reward.ID}",
+                value=1,
+                nx=True,
+                ex=REWARD_GRANT_LOCK_SECONDS,
+            )
+            if not acquired:
+                logger.info(
+                    f"Referral reward '{billing_reward.ID}' already being granted, skipping"
+                )
+                continue
+
+            referred_telegram_id = referred_by_referral.get(billing_reward.ReferralID)
+            referred = (
+                await self.user_service.get(referred_telegram_id) if referred_telegram_id else None
+            )
+            await give_referrer_reward_task.kiq(
+                user_telegram_id=referrer_telegram_id,
+                reward=billing_referral_reward_to_dto(billing_reward),
+                referred_name=referred.name if referred else str(referred_telegram_id or ""),
+            )
+            enqueued += 1
+            logger.info(
+                f"Queued referral reward '{billing_reward.ID}' ({billing_reward.Amount} "
+                f"{billing_reward.Type}) for referrer '{referrer_telegram_id}'"
+            )
+        return enqueued
 
     @staticmethod
     def _compute_reward_amount(
