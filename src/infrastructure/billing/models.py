@@ -313,4 +313,5 @@ class BillingTGProxy(BaseModel):
     server: str = Field("", alias="server")
     port: int = Field(0, alias="port")
     secret: str = Field("", alias="secret")
+    kind: str = Field("MTPROTO", alias="kind")
     link: str = Field("", alias="link")

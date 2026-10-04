@@ -252,8 +252,17 @@ async def tg_proxy_getter(
         logger.opt(exception=True).warning("Failed to fetch TG proxies")
         proxies = []
     proxy_list = [
-        {"id": str(p.id), "server": p.server, "port": p.port, "link": p.link} for p in proxies
+        {
+            "id": str(p.id),
+            "server": p.server,
+            "port": p.port,
+            "link": p.link,
+            "kind": p.kind,
+        }
+        for p in proxies
     ]
+    phone_proxies = [p for p in proxy_list if p["kind"] != "WEB"]
+    desktop_proxies = [p for p in proxy_list if p["kind"] == "WEB"]
 
     lines = ["<b>📡 Прокси для Telegram</b>\n"]
     if proxy_list:
@@ -267,8 +276,16 @@ async def tg_proxy_getter(
             " <b>выключенным VPN</b> — иначе соединение"
             " может не установиться.\n"
         )
-        for p in proxy_list:
-            lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
+        if phone_proxies:
+            lines.append("📱 <b>Телефон</b>")
+            for p in phone_proxies:
+                lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
+        if desktop_proxies:
+            if phone_proxies:
+                lines.append("")
+            lines.append("💻 <b>Компьютер</b> (Telegram Desktop 7.1.1 и новее)")
+            for p in desktop_proxies:
+                lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}</a>')
         lines.append("\nНажмите на ссылку, прокси подключится автоматически.")
     else:
         lines.append("Нет доступных прокси.")

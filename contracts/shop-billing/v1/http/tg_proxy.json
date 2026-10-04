@@ -3,6 +3,7 @@
   "server": "176.108.250.74",
   "port": 443,
   "secret": "abc123",
+  "kind": "MTPROTO",
   "eligible_plan_ids": [1, 2],
   "is_active": true,
   "link": "tg://proxy?server=176.108.250.74&port=443&secret=abc123",
