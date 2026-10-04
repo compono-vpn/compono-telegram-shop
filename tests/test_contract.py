@@ -266,7 +266,7 @@ class TestCustomerContract:
 class TestTGProxyContract:
     async def test_get_tg_proxies(self):
         """BillingTGProxy intentionally only consumes a subset of the fields
-        billing actually serves (id/server/port/secret/link) -- it does not
+        billing actually serves (id/server/port/secret/kind/link) -- it does not
         use eligible_plan_ids/is_active/created_at/updated_at. So this only
         asserts the fields the model DOES declare, not full fixture parity;
         see contracts/shop-billing/v1/README.md.

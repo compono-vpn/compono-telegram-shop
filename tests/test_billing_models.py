@@ -34,6 +34,25 @@ class TestBillingTGProxy:
         assert proxy.secret == "abc123"
         assert proxy.link == "tg://proxy?server=176.108.250.74&port=443&secret=abc123"
 
+    def test_kind_defaults_to_mtproto_when_absent(self):
+        raw = {"id": 1, "server": "1.2.3.4", "port": 443, "secret": "x", "link": "tg://proxy?server=1.2.3.4&port=443&secret=x"}
+
+        assert BillingTGProxy.model_validate(raw).kind == "MTPROTO"
+
+    def test_parses_web_kind(self):
+        raw = {
+            "id": 2,
+            "server": "tg.cdn.mynetcloud.online",
+            "port": 443,
+            "secret": "e7ddfe619b1b5e5d53bdb85d5070cc82",
+            "kind": "WEB",
+            "link": "https://t.me/webproxy?server=tg.cdn.mynetcloud.online&secret=e7ddfe619b1b5e5d53bdb85d5070cc82",
+        }
+        proxy = BillingTGProxy.model_validate(raw)
+
+        assert proxy.kind == "WEB"
+        assert proxy.link.startswith("https://t.me/webproxy?")
+
     def test_server_not_empty_after_parsing(self):
         """Regression: PascalCase model fields caused empty server/port from lowercase JSON."""
         raw = {"id": 1, "server": "1.2.3.4", "port": 443, "secret": "x", "link": "tg://proxy?server=1.2.3.4&port=443&secret=x"}
