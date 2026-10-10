@@ -69,6 +69,7 @@ class ConnectedActivityStats:
     nodes_total: int
     nodes_fresh: int
     oldest_apply_ok_at: Optional[datetime]
+    last_observation_at: Optional[datetime] = None
 
 
 def _count(value: Any, name: str) -> int:
@@ -274,5 +275,8 @@ class ApiClient:
             nodes_fresh=_count(collection.get("nodes_fresh"), "nodes_fresh"),
             oldest_apply_ok_at=_utc_or_none(
                 collection.get("oldest_apply_ok_at"), "oldest_apply_ok_at"
+            ),
+            last_observation_at=_utc_or_none(
+                collection.get("last_observation_at"), "last_observation_at"
             ),
         )

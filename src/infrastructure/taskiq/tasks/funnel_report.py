@@ -28,7 +28,7 @@ def _activity_lines(activity: Optional[ConnectedActivityStats]) -> str:
         return "Connected users (observed on exit nodes): unavailable (activity endpoint failed)\n"
 
     if activity.fresh:
-        freshness = f"current ({activity.nodes_fresh}/{activity.nodes_total} nodes)"
+        freshness = f"node counters current ({activity.nodes_fresh}/{activity.nodes_total} nodes)"
     else:
         ok = (
             "never completed"
@@ -42,13 +42,14 @@ def _activity_lines(activity: Optional[ConnectedActivityStats]) -> str:
     elif activity.since is None:
         coverage = "NO DATA: collector has not covered every exit node yet"
     else:
-        coverage = f"PARTIAL: collection only started {_msk_label(activity.since)}"
+        coverage = f"PARTIAL: recording only started {_msk_label(activity.since)}"
 
     return (
         f"Connected users (observed on exit nodes): {activity.connected_users}\n"
         "  Direct and per-user routes only. Relay (whitelist) users are not observable "
         "and are not counted.\n"
-        f"  Collector: {coverage}; {freshness}\n"
+        f"  Collector: {coverage}; {freshness}; "
+        f"last recorded activity {_msk_label(activity.last_observation_at)}\n"
     )
 
 

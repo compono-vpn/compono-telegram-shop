@@ -278,6 +278,7 @@ def _activity(**overrides) -> ConnectedActivityStats:
         nodes_total=8,
         nodes_fresh=8,
         oldest_apply_ok_at=datetime(2026, 10, 10, 5, 59, 40, tzinfo=timezone.utc),
+        last_observation_at=datetime(2026, 10, 10, 5, 58, 0, tzinfo=timezone.utc),
     )
     values.update(overrides)
     return ConnectedActivityStats(**values)
@@ -444,6 +445,7 @@ class TestConnectedActivityClient:
                     "nodes_total": 8,
                     "nodes_fresh": 8,
                     "oldest_apply_ok_at": "2026-10-10T05:59:40Z",
+                    "last_observation_at": "2026-10-10T05:58:00Z",
                 },
             },
         )
@@ -454,6 +456,7 @@ class TestConnectedActivityClient:
         assert stats.since == datetime(2026, 10, 9, 20, 0, tzinfo=timezone.utc)
         assert stats.covers_range is True and stats.fresh is True
         assert (stats.nodes_total, stats.nodes_fresh) == (8, 8)
+        assert stats.last_observation_at == datetime(2026, 10, 10, 5, 58, tzinfo=timezone.utc)
         args = transport.request.call_args
         assert args.args == ("GET", f"{BASE_URL}/api/v1/internal/stats/connected-activity")
         assert args.kwargs["params"] == {
@@ -482,6 +485,7 @@ class TestConnectedActivityClient:
         now = datetime(2026, 10, 9, tzinfo=timezone.utc)
         stats = await client.get_connected_activity(now, now + timedelta(days=1))
         assert stats.since is None and stats.oldest_apply_ok_at is None
+        assert stats.last_observation_at is None
 
     @pytest.mark.parametrize(
         "payload",
@@ -526,13 +530,18 @@ class TestReportConnectedActivityLines:
         assert "Connected users (observed on exit nodes): 5" in text
         assert "Direct and per-user routes only" in text
         assert "Relay (whitelist) users are not observable and are not counted" in text
-        assert "Collector: covers the whole day; current (8/8 nodes)" in text
+        assert "Collector: covers the whole day; node counters current (8/8 nodes)" in text
+        assert "last recorded activity 2026-10-10 08:58 MSK" in text
         assert "PARTIAL" not in text and "STALE" not in text
 
     async def test_collection_started_mid_day_is_labelled_partial_in_moscow_time(self):
         since = datetime(2026, 10, 9, 15, 30, tzinfo=timezone.utc)  # 18:30 MSK
         text = await self._text(_activity(covers_range=False, since=since))
-        assert "PARTIAL: collection only started 2026-10-09 18:30 MSK" in text
+        assert "PARTIAL: recording only started 2026-10-09 18:30 MSK" in text
+
+    async def test_no_recorded_activity_yet_is_spelled_out(self):
+        text = await self._text(_activity(last_observation_at=None))
+        assert "last recorded activity never" in text
 
     async def test_never_collected_says_no_data_not_zero_people(self):
         text = await self._text(
