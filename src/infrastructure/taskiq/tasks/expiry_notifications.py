@@ -101,8 +101,11 @@ async def notify_subscription_expired(
     if not user or not can_receive_reminders(user):
         return False
 
-    renewed = await subscription_service.get_current(int(telegram_id))
-    if renewed and renewed.is_active and _utc(renewed.expire_at) > current:  # type: ignore[operator]
+    current_subscription = await subscription_service.get_current(int(telegram_id))
+    if current_subscription is None or current_subscription.id != int(subscription_id):
+        logger.info(f"Expired event for '{telegram_id}' skipped: not their current subscription")
+        return False
+    if current_subscription.is_active and _utc(current_subscription.expire_at) > current:  # type: ignore[operator]
         logger.info(f"Expired event for '{telegram_id}' skipped: subscription already renewed")
         return False
 

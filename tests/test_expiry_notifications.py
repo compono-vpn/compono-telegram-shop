@@ -243,6 +243,19 @@ class TestExpiredEvent:
 
         assert await _expired(s, _payload()) is False
 
+    async def test_older_subscription_that_is_not_current_is_not_notified(self):
+        s = _services(current=_current(sub_id=99, active=False, expires_in=-timedelta(minutes=2)))
+        s.billing.by_id[7] = _billing_sub()
+
+        assert await _expired(s, _payload(sub_id=7)) is False
+        assert s.billing.claims == {}
+
+    async def test_user_without_a_current_subscription_is_not_notified(self):
+        s = _services(current=None)
+        s.billing.by_id[7] = _billing_sub()
+
+        assert await _expired(s, _payload()) is False
+
     async def test_switch_off_and_bot_blocked_send_nothing(self):
         off = _services(current=_current(active=False), EXPIRED=False)
         off.billing.by_id[7] = _billing_sub()
