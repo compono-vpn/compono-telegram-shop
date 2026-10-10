@@ -24,6 +24,13 @@ from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 
 
+def _proxy_plan_id(user: UserDto) -> int:
+    subscription = user.current_subscription
+    if subscription and subscription.is_active and not subscription.is_trial and subscription.plan:
+        return subscription.plan.id
+    return 0
+
+
 @inject
 async def menu_getter(
     dialog_manager: DialogManager,
@@ -67,6 +74,12 @@ async def menu_getter(
         }
 
         subscription = user.current_subscription
+        try:
+            tg_proxies = await billing.get_tg_proxies(_proxy_plan_id(user))
+        except Exception:
+            logger.opt(exception=True).warning("Failed to fetch TG proxies, hiding button")
+            tg_proxies = []
+        base_data["tg_proxy_available"] = bool(tg_proxies)
 
         if not subscription:
             base_data.update(
@@ -78,26 +91,16 @@ async def menu_getter(
                     ),
                     "has_device_limit": False,
                     "connectable": False,
-                    "tg_proxy_available": False,
                 }
             )
             return base_data
 
-        plan_id = subscription.plan.id if subscription.plan else 0
         try:
             base_data["is_beta_tester"] = int(await remnawave_service.is_beta_tester(subscription))
         except Exception:
             logger.opt(exception=True).warning(
                 f"Failed to resolve beta tester status for user '{user.telegram_id}'"
             )
-        try:
-            tg_proxies = (
-                await billing.get_tg_proxies(plan_id) if subscription.is_active and plan_id else []
-            )
-        except Exception:
-            logger.opt(exception=True).warning("Failed to fetch TG proxies, hiding button")
-            tg_proxies = []
-
         base_data.update(
             {
                 "status": subscription.get_status,
@@ -241,11 +244,7 @@ async def tg_proxy_getter(
     billing: FromDishka[BillingClient],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    plan_id = (
-        user.current_subscription.plan.id
-        if user.current_subscription and user.current_subscription.plan
-        else 0
-    )
+    plan_id = _proxy_plan_id(user)
     try:
         proxies = await billing.get_tg_proxies(plan_id)
     except Exception:
@@ -297,6 +296,7 @@ async def tg_proxy_getter(
         "proxies": proxy_list,
         "proxy_message": "\n".join(lines),
         "has_proxies": len(proxy_list) > 0,
+        "show_vpn_offer": not user.current_subscription or not user.current_subscription.is_active,
     }
 
 

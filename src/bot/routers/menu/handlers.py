@@ -115,6 +115,13 @@ async def on_start_command(
     # subscription on the billing side.
     if message.text and len(message.text.split()) > 1:
         param = message.text.split()[1]
+        if param in {"proxy", "source-channel_proxy"}:
+            await dialog_manager.start(
+                MainMenu.TG_PROXY,
+                mode=StartMode.RESET_STACK,
+                show_mode=ShowMode.DELETE_AND_SEND,
+            )
+            return
         if param.startswith("web_"):
             logger.info(
                 f"{log(user)} Received legacy web deep link '{param}' — "
