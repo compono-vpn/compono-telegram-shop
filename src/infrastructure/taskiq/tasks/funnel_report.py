@@ -10,10 +10,46 @@ from loguru import logger
 from src.core.config import AppConfig
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.time import MSK, compute_msk_previous_day_window
-from src.infrastructure.api import ApiClient
+from src.infrastructure.api import ApiClient, ConnectedActivityStats
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
+
+
+def _msk_label(moment: Optional[datetime]) -> str:
+    if moment is None:
+        return "never"
+    return moment.astimezone(MSK).strftime("%Y-%m-%d %H:%M") + " MSK"
+
+
+def _activity_lines(activity: Optional[ConnectedActivityStats]) -> str:
+    """Connected-user count for the day with explicit coverage and freshness labels."""
+    if activity is None:
+        return "Connected users (observed on exit nodes): unavailable (activity endpoint failed)\n"
+
+    if activity.fresh:
+        freshness = f"current ({activity.nodes_fresh}/{activity.nodes_total} nodes)"
+    else:
+        ok = (
+            "never completed"
+            if activity.oldest_apply_ok_at is None
+            else f"oldest ok {_msk_label(activity.oldest_apply_ok_at)}"
+        )
+        freshness = f"STALE: only {activity.nodes_fresh}/{activity.nodes_total} nodes current, {ok}"
+
+    if activity.covers_range:
+        coverage = "covers the whole day"
+    elif activity.since is None:
+        coverage = "NO DATA: collector has not covered every exit node yet"
+    else:
+        coverage = f"PARTIAL: collection only started {_msk_label(activity.since)}"
+
+    return (
+        f"Connected users (observed on exit nodes): {activity.connected_users}\n"
+        "  Direct and per-user routes only. Relay (whitelist) users are not observable "
+        "and are not counted.\n"
+        f"  Collector: {coverage}; {freshness}\n"
+    )
 
 
 async def _build_funnel_report_text(
@@ -28,6 +64,13 @@ async def _build_funnel_report_text(
 
     profile_stats = await api_client.get_profile_requester_stats(start_utc, end_utc)
 
+    activity: Optional[ConnectedActivityStats]
+    try:
+        activity = await api_client.get_connected_activity(start_utc, end_utc)
+    except Exception as exception:
+        logger.warning(f"Connected activity unavailable for daily report: {exception}")
+        activity = None
+
     report_date = start_utc.astimezone(MSK).date().isoformat()
 
     return (
@@ -35,6 +78,7 @@ async def _build_funnel_report_text(
         f"New users: {funnel_stats.new_users}\n"
         f"Used trial: {funnel_stats.used_trial}\n"
         f"Profile requesters: {profile_stats.profile_requesters}\n"
+        f"{_activity_lines(activity)}"
         f"Last seen on VPN that day: {connected_stats.connected}\n"
         f"Paid purchases: {funnel_stats.bought_sub}\n\n"
         "Daily totals, not a signup cohort. Profile requests include refreshes and failures. "
