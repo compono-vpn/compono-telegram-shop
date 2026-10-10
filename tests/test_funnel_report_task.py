@@ -510,13 +510,13 @@ class TestConnectedActivityClient:
 class TestReportConnectedActivityLines:
     NOW = datetime(2026, 10, 10, 9, 0, tzinfo=MSK)
 
-    async def _text(self, activity=None, error=None):
+    async def _text(self, activity=None, error=None, now=None):
         api_client = _make_api_client()
         if error:
             api_client.get_connected_activity.side_effect = error
         elif activity is not None:
             api_client.get_connected_activity.return_value = activity
-        return await _build_funnel_report_text(_make_billing(), api_client, self.NOW)
+        return await _build_funnel_report_text(_make_billing(), api_client, now or self.NOW)
 
     async def test_queries_the_same_moscow_day_window(self):
         api_client = _make_api_client()
@@ -530,8 +530,8 @@ class TestReportConnectedActivityLines:
         assert "Connected users (observed on exit nodes): 5" in text
         assert "Direct and per-user routes only" in text
         assert "Relay (whitelist) users are not observable and are not counted" in text
-        assert "Collector: covers the whole day; node counters current (8/8 nodes)" in text
-        assert "last recorded activity 2026-10-10 08:58 MSK" in text
+        assert "Collector: covers the whole day; worker poll current (8/8 nodes)" in text
+        assert "recorder: last activity 2026-10-10 08:58 MSK (2 min ago)" in text
         assert "PARTIAL" not in text and "STALE" not in text
 
     async def test_collection_started_mid_day_is_labelled_partial_in_moscow_time(self):
@@ -541,7 +541,7 @@ class TestReportConnectedActivityLines:
 
     async def test_no_recorded_activity_yet_is_spelled_out(self):
         text = await self._text(_activity(last_observation_at=None))
-        assert "last recorded activity never" in text
+        assert "recorder STALE: no activity recorded yet" in text
 
     async def test_never_recorded_says_so_instead_of_zero_people(self):
         text = await self._text(
@@ -564,6 +564,52 @@ class TestReportConnectedActivityLines:
     async def test_stale_with_no_success_ever_says_never(self):
         text = await self._text(_activity(fresh=False, nodes_fresh=0, oldest_apply_ok_at=None))
         assert "STALE: only 0/8 nodes current, never completed" in text
+
+    async def test_recorder_silent_for_hours_in_waking_hours_is_stale_even_when_poll_is_fresh(self):
+        last = datetime(2026, 10, 10, 1, 0, tzinfo=timezone.utc)  # 04:00 MSK, 8 h before 12:00 MSK
+        text = await self._text(
+            _activity(fresh=True, last_observation_at=last),
+            now=datetime(2026, 10, 10, 12, 0, tzinfo=MSK),
+        )
+        assert "worker poll current (8/8 nodes)" in text
+        assert (
+            "recorder STALE: no recorded activity for over 6 h (last 2026-10-10 04:00 MSK)" in text
+        )
+
+    async def test_recorder_quiet_at_night_is_not_stale(self):
+        last = datetime(2026, 10, 9, 23, 0, tzinfo=timezone.utc)  # 02:00 MSK
+        text = await self._text(
+            _activity(last_observation_at=last), now=datetime(2026, 10, 10, 5, 0, tzinfo=MSK)
+        )
+        assert "recorder: last activity 2026-10-10 02:00 MSK (3 h ago)" in text
+        assert "recorder STALE" not in text
+
+    async def test_recorder_exactly_at_threshold_is_not_stale(self):
+        last = datetime(2026, 10, 10, 3, 0, tzinfo=timezone.utc)  # 06:00 MSK
+        text = await self._text(
+            _activity(last_observation_at=last), now=datetime(2026, 10, 10, 12, 0, tzinfo=MSK)
+        )
+        assert "recorder STALE" not in text
+        assert "recorder: last activity 2026-10-10 06:00 MSK (6 h ago)" in text
+
+    async def test_recorder_never_recorded_at_night_is_not_stale(self):
+        text = await self._text(
+            _activity(last_observation_at=None), now=datetime(2026, 10, 10, 3, 0, tzinfo=MSK)
+        )
+        assert "recorder: no activity recorded yet" in text
+        assert "recorder STALE" not in text
+
+    async def test_recorder_just_under_threshold_is_not_stale(self):
+        last = datetime(2026, 10, 10, 6, 30, tzinfo=timezone.utc)  # 09:30 MSK
+        text = await self._text(
+            _activity(last_observation_at=last), now=datetime(2026, 10, 10, 12, 0, tzinfo=MSK)
+        )
+        assert "recorder STALE" not in text
+        assert "recorder: last activity 2026-10-10 09:30 MSK (2 h ago)" in text
+
+    async def test_poll_freshness_is_not_labelled_as_node_counters(self):
+        text = await self._text()
+        assert "node counters current" not in text
 
     async def test_endpoint_failure_does_not_hide_the_rest_of_the_report(self):
         text = await self._text(error=RuntimeError("boom"))

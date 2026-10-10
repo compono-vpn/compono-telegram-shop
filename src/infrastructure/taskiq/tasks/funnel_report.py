@@ -1,6 +1,6 @@
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from aiogram.utils.formatting import Text
@@ -22,7 +22,35 @@ def _msk_label(moment: Optional[datetime]) -> str:
     return moment.astimezone(MSK).strftime("%Y-%m-%d %H:%M") + " MSK"
 
 
-def _activity_lines(activity: Optional[ConnectedActivityStats], window_end: datetime) -> str:
+RECORDER_STALE_AFTER = timedelta(hours=6)
+WAKING_HOURS_MSK = range(8, 23)
+
+
+def _age_label(age: timedelta) -> str:
+    minutes = max(int(age.total_seconds() // 60), 0)
+    if minutes < 60:
+        return f"{minutes} min ago"
+    return f"{minutes // 60} h ago"
+
+
+def _recorder_line(activity: ConnectedActivityStats, now: datetime) -> str:
+    """Freshness of the activity recorder itself, independent of the worker's node poll."""
+    waking = now.astimezone(MSK).hour in WAKING_HOURS_MSK
+    last = activity.last_observation_at
+    if last is None:
+        if waking:
+            return "recorder STALE: no activity recorded yet"
+        return "recorder: no activity recorded yet"
+    age = now - last
+    hours = int(RECORDER_STALE_AFTER.total_seconds() // 3600)
+    if waking and age > RECORDER_STALE_AFTER:
+        return f"recorder STALE: no recorded activity for over {hours} h (last {_msk_label(last)})"
+    return f"recorder: last activity {_msk_label(last)} ({_age_label(age)})"
+
+
+def _activity_lines(
+    activity: Optional[ConnectedActivityStats], window_end: datetime, now: datetime
+) -> str:
     """Connected-user count for the day with explicit coverage and freshness labels."""
     if activity is None:
         return "Connected users (observed on exit nodes): unavailable (activity endpoint failed)\n"
@@ -36,14 +64,17 @@ def _activity_lines(activity: Optional[ConnectedActivityStats], window_end: date
         )
 
     if activity.fresh:
-        freshness = f"node counters current ({activity.nodes_fresh}/{activity.nodes_total} nodes)"
+        freshness = f"worker poll current ({activity.nodes_fresh}/{activity.nodes_total} nodes)"
     else:
         ok = (
             "never completed"
             if activity.oldest_apply_ok_at is None
             else f"oldest ok {_msk_label(activity.oldest_apply_ok_at)}"
         )
-        freshness = f"STALE: only {activity.nodes_fresh}/{activity.nodes_total} nodes current, {ok}"
+        freshness = (
+            f"worker poll STALE: only {activity.nodes_fresh}/{activity.nodes_total} "
+            f"nodes current, {ok}"
+        )
 
     if activity.covers_range:
         coverage = "covers the whole day"
@@ -54,8 +85,7 @@ def _activity_lines(activity: Optional[ConnectedActivityStats], window_end: date
         f"Connected users (observed on exit nodes): {activity.connected_users}\n"
         "  Direct and per-user routes only. Relay (whitelist) users are not observable "
         "and are not counted.\n"
-        f"  Collector: {coverage}; {freshness}; "
-        f"last recorded activity {_msk_label(activity.last_observation_at)}\n"
+        f"  Collector: {coverage}; {freshness}; {_recorder_line(activity, now)}\n"
     )
 
 
@@ -65,6 +95,8 @@ async def _build_funnel_report_text(
     now: Optional[datetime] = None,
 ) -> str:
     start_utc, end_utc = compute_msk_previous_day_window(now)
+    moment = now.replace(tzinfo=MSK) if now is not None and now.tzinfo is None else now
+    moment = moment or datetime.now(tz=timezone.utc)
 
     funnel_stats = await billing.get_funnel_stats(start_utc, end_utc)
     connected_stats = await api_client.get_connected_stats(start_utc, end_utc)
@@ -85,7 +117,7 @@ async def _build_funnel_report_text(
         f"New users: {funnel_stats.new_users}\n"
         f"Used trial: {funnel_stats.used_trial}\n"
         f"Profile requesters: {profile_stats.profile_requesters}\n"
-        f"{_activity_lines(activity, end_utc)}"
+        f"{_activity_lines(activity, end_utc, moment)}"
         f"Last seen on VPN that day: {connected_stats.connected}\n"
         f"Paid purchases: {funnel_stats.bought_sub}\n\n"
         "Daily totals, not a signup cohort. Profile requests include refreshes and failures. "
