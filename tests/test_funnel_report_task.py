@@ -21,14 +21,14 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 
-from src.infrastructure.api.client import ApiClient, ConnectedStats
+from src.core.utils.time import MSK, compute_msk_previous_day_window, to_rfc3339_utc
+from src.infrastructure.api.client import ApiClient, ConnectedStats, ProfileRequesterStats
 from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.billing.models import BillingFunnelStats
 from src.infrastructure.taskiq.tasks.funnel_report import (
     _build_funnel_report_text,
     send_daily_funnel_report,
 )
-from src.core.utils.time import MSK, compute_msk_previous_day_window, to_rfc3339_utc
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -115,7 +115,7 @@ class TestComputeMskPreviousDayWindow:
         assert end.tzinfo == timezone.utc
 
     def test_naive_now_is_treated_as_already_msk(self):
-        naive_now = datetime(2026, 7, 24, 9, 0)
+        naive_now = datetime(2026, 7, 24, 9, 0)  # noqa: DTZ001 - intentional naive-input test
         aware_now = datetime(2026, 7, 24, 9, 0, tzinfo=MSK)
 
         assert compute_msk_previous_day_window(naive_now) == compute_msk_previous_day_window(
@@ -173,7 +173,7 @@ class TestToRfc3339Utc:
         assert to_rfc3339_utc(dt) == "2026-07-23T00:00:00+00:00"
 
     def test_naive_datetime_is_assumed_utc(self):
-        dt = datetime(2026, 7, 23, 0, 0)
+        dt = datetime(2026, 7, 23, 0, 0)  # noqa: DTZ001 - intentional naive-input test
         assert to_rfc3339_utc(dt) == "2026-07-23T00:00:00+00:00"
 
 
@@ -268,6 +268,9 @@ def _make_api_client(connected: ConnectedStats | None = None, error: Exception |
         api_client.get_connected_stats.side_effect = error
     else:
         api_client.get_connected_stats.return_value = connected or ConnectedStats(connected=6)
+    api_client.get_profile_requester_stats.return_value = ProfileRequesterStats(
+        profile_requesters=8
+    )
     return api_client
 
 
@@ -279,11 +282,15 @@ class TestBuildFunnelReportText:
 
         text = await _build_funnel_report_text(billing, api_client, now)
 
-        assert "📊 Daily Funnel — 2026-07-23" in text
+        assert "📊 Daily activity — 2026-07-23" in text
         assert "New users: 10" in text
         assert "Used trial: 4" in text
-        assert "Connected: 6" in text
-        assert "Bought sub: 2" in text
+        assert "Last seen on VPN that day: 6" in text
+        assert "Paid purchases: 2" in text
+        assert "Profile requesters: 8" in text
+        assert "not a signup cohort" in text
+        assert "refreshes and failures" in text
+        assert "can decrease after later activity" in text
 
     async def test_queries_both_apis_with_the_same_previous_day_window(self):
         billing = _make_billing()
@@ -295,6 +302,9 @@ class TestBuildFunnelReportText:
         expected_start, expected_end = compute_msk_previous_day_window(now)
         billing.get_funnel_stats.assert_awaited_once_with(expected_start, expected_end)
         api_client.get_connected_stats.assert_awaited_once_with(expected_start, expected_end)
+        api_client.get_profile_requester_stats.assert_awaited_once_with(
+            expected_start, expected_end
+        )
 
 
 class TestSendDailyFunnelReport:
@@ -313,8 +323,8 @@ class TestSendDailyFunnelReport:
         assert call_kwargs["chat_id"] == 1750352084
         assert "New users: 10" in call_kwargs["text"]
         assert "Used trial: 4" in call_kwargs["text"]
-        assert "Connected: 6" in call_kwargs["text"]
-        assert "Bought sub: 2" in call_kwargs["text"]
+        assert "Last seen on VPN that day: 6" in call_kwargs["text"]
+        assert "Paid purchases: 2" in call_kwargs["text"]
 
         notification_service.error_notify.assert_not_awaited()
 
@@ -351,3 +361,46 @@ class TestSendDailyFunnelReport:
         assert "compono-api unreachable" in error_call.kwargs["traceback_str"]
 
         notification_service.bot.send_message.assert_not_awaited()
+
+
+class TestProfileRequesterStats:
+    async def test_request_and_count(self):
+        client, transport = _make_api_client_with_mock()
+        transport.request.return_value = _make_response(200, {"profile_requesters": 8})
+        start = datetime(2026, 10, 9, tzinfo=MSK)
+        end = start + timedelta(days=1)
+        stats = await client.get_profile_requester_stats(start, end)
+        assert stats.profile_requesters == 8
+        args = transport.request.call_args
+        assert args.args == ("GET", f"{BASE_URL}/api/v1/internal/stats/profile-requesters")
+        assert args.kwargs["params"] == {
+            "from": "2026-10-08T21:00:00+00:00",
+            "to": "2026-10-09T21:00:00+00:00",
+        }
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {},
+            None,
+            {"profile_requesters": -1},
+            {"profile_requesters": "8"},
+            {"profile_requesters": True},
+        ],
+    )
+    async def test_malformed_counter_is_not_silent_zero(self, payload):
+        client, transport = _make_api_client_with_mock()
+        transport.request.return_value = _make_response(200, payload)
+        now = datetime(2026, 10, 9, tzinfo=timezone.utc)
+        with pytest.raises(ValueError):
+            await client.get_profile_requester_stats(now, now + timedelta(days=1))
+
+    async def test_unavailable_requester_endpoint_uses_existing_error_path(self):
+        api_client = _make_api_client()
+        api_client.get_profile_requester_stats.side_effect = RuntimeError(
+            "profile count unavailable"
+        )
+        notifications = AsyncMock()
+        await send_daily_funnel_report(MagicMock(), _make_billing(), api_client, notifications)
+        notifications.error_notify.assert_awaited_once()
+        notifications.bot.send_message.assert_not_awaited()

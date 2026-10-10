@@ -26,14 +26,19 @@ async def _build_funnel_report_text(
     funnel_stats = await billing.get_funnel_stats(start_utc, end_utc)
     connected_stats = await api_client.get_connected_stats(start_utc, end_utc)
 
+    profile_stats = await api_client.get_profile_requester_stats(start_utc, end_utc)
+
     report_date = start_utc.astimezone(MSK).date().isoformat()
 
     return (
-        f"📊 Daily Funnel — {report_date}\n\n"
+        f"📊 Daily activity — {report_date}\n\n"
         f"New users: {funnel_stats.new_users}\n"
         f"Used trial: {funnel_stats.used_trial}\n"
-        f"Connected: {connected_stats.connected}\n"
-        f"Bought sub: {funnel_stats.bought_sub}"
+        f"Profile requesters: {profile_stats.profile_requesters}\n"
+        f"Last seen on VPN that day: {connected_stats.connected}\n"
+        f"Paid purchases: {funnel_stats.bought_sub}\n\n"
+        "Daily totals, not a signup cohort. Profile requests include refreshes and failures. "
+        "Last-seen counts can decrease after later activity."
     )
 
 

@@ -45,6 +45,13 @@ class ConnectedStats:
     connected: int
 
 
+@dataclass(frozen=True)
+class ProfileRequesterStats:
+    """Distinct accounts requesting profiles, including refreshes and failures."""
+
+    profile_requesters: int
+
+
 class ApiClient:
     """Async HTTP client for compono-api internal endpoints."""
 
@@ -159,7 +166,7 @@ class ApiClient:
         )
 
     async def get_connected_stats(self, date_from: datetime, date_to: datetime) -> ConnectedStats:
-        """Fetch the count of users who connected during a UTC time range.
+        """Fetch users whose latest recorded VPN activity falls in a UTC range.
 
         Calls GET /api/v1/internal/stats/connected?from=<RFC3339 UTC>&to=<RFC3339 UTC>.
         """
@@ -172,3 +179,19 @@ class ApiClient:
             },
         )
         return ConnectedStats(connected=data.get("connected", 0) if data else 0)
+
+    async def get_profile_requester_stats(
+        self, date_from: datetime, date_to: datetime
+    ) -> ProfileRequesterStats:
+        data = await self._request(
+            "GET",
+            "/stats/profile-requesters",
+            params={
+                "from": to_rfc3339_utc(date_from),
+                "to": to_rfc3339_utc(date_to),
+            },
+        )
+        count = data.get("profile_requesters") if isinstance(data, dict) else None
+        if type(count) is not int or count < 0:
+            raise ValueError("Invalid profile requester count")
+        return ProfileRequesterStats(profile_requesters=count)
