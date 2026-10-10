@@ -31,11 +31,21 @@ from .handlers import (
     on_plan_select,
     on_promocode_input,
     on_subscription_plans,
+    on_trial_monthly_upgrade,
 )
 
 subscription = Window(
     Banner(BannerName.SUBSCRIPTION),
     I18nFormat("msg-subscription-main"),
+    I18nFormat("msg-trial-monthly-offer", F["monthly_trial_offer"]),
+    Row(
+        Button(
+            text=I18nFormat("btn-trial-monthly-upgrade"),
+            id="trial_monthly_upgrade",
+            on_click=on_trial_monthly_upgrade,
+            when=F["monthly_trial_offer"],
+        ),
+    ),
     Row(
         Button(
             text=I18nFormat("btn-subscription-new"),

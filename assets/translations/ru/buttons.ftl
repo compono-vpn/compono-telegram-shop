@@ -460,3 +460,5 @@ btn-promocode-max-activations = 🔢 Лимит активаций
 btn-promocode-plan = 📦 План
 btn-promocode-max-days = 📅 Макс. дней
 btn-promocode-confirm = ✅ Подтвердить
+
+btn-trial-monthly-upgrade = Продолжить на 30 дней

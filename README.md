@@ -371,3 +371,14 @@ Any support helps me dedicate more time to development and accelerate project pr
 > SBP, ЮMoney, SberPay, T-Pay - [**ЮKassa**](https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l)
 
 > USDT TRC-20 - **`TPnpmwD4P9znKs3Hp4Hrh9rhJ7u1m6UA1B`**
+
+### Trial activation shortcut (2026-10-10)
+
+The Subscription menu offers an eligible active trial user a 30-day upgrade only
+when the linked VPN account reports positive current or lifetime traffic. Importing
+an app profile alone is not activation. The shortcut chooses the first available,
+active monthly plan in catalog order and revalidates it on click; payment methods,
+user discounts and payment creation remain in the existing billing flow. Missing
+telemetry hides the shortcut without blocking the ordinary purchase menu. This does
+not send marketing messages or change existing reminder schedules. Tested with the
+full Python suite (763 tests). Funnel analysis: billing PR #44 / Plane COM-144.
