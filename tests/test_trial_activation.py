@@ -3,7 +3,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.services.trial_activation import has_verified_traffic, get_monthly_trial_plan
+from src.services.trial_activation import (
+    get_monthly_trial_plan,
+    has_opened_subscription,
+    has_verified_traffic,
+    is_connected,
+)
 from tests.conftest import make_subscription, make_user
 
 
@@ -96,3 +101,22 @@ def test_shortcut_preserves_free_checkout_for_fully_discounted_price():
     _save_payment_data(dm, {"payment_id": "test", "payment_url": None,
                            "final_pricing": PriceDetailsDto(final_amount=0).model_dump_json()})
     assert dm.dialog_data["is_free"] is True
+
+
+def test_subscription_opened_once_counts_as_connected_signal():
+    opened = SimpleNamespace(sub_last_opened_at="2026-10-10T09:00:00Z", user_traffic=None)
+    assert has_opened_subscription(opened)
+    assert not has_opened_subscription(SimpleNamespace(sub_last_opened_at=None))
+    assert not has_opened_subscription(SimpleNamespace())
+    assert not has_opened_subscription(None)
+
+    assert is_connected(opened, devices=[])
+    assert is_connected(None, devices=[object()])
+    assert is_connected(SimpleNamespace(user_traffic=SimpleNamespace(
+        used_traffic_bytes=10, lifetime_used_traffic_bytes=10)), devices=[])
+    assert not is_connected(SimpleNamespace(sub_last_opened_at=None, user_traffic=None), devices=[])
+
+
+def test_opened_subscription_alone_does_not_unlock_paid_offer():
+    remote = SimpleNamespace(sub_last_opened_at="2026-10-10T09:00:00Z", user_traffic=None)
+    assert not has_verified_traffic(remote)
