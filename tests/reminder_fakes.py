@@ -79,8 +79,13 @@ class FakeBilling:
             if t == telegram_id and (not kind or k == kind)
         ]
 
-    async def list_all_subscriptions(self):
-        return self.subscriptions
+    async def list_expiring_subscriptions(self, expires_after, expires_until):
+        """Same contract as billing: (after, until] over ACTIVE subscriptions."""
+        return [
+            sub
+            for sub in self.subscriptions
+            if expires_after < sub.ExpireAt <= expires_until
+        ]
 
     async def get_subscription(self, subscription_id: int):
         return self.by_id.get(subscription_id)
