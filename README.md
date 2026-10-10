@@ -394,6 +394,11 @@ user DTO may have no embedded subscription even when billing returned an active
 one. Other device-lookup callers retain the existing embedded-subscription fallback.
 A Telegram response saying the recipient blocked the bot is an expected skipped
 delivery and logs at INFO; other forbidden responses retain exception logging.
-This does not change message copy, schedules, or the activation gate. PR #56's
-additional config-fetch/traffic signals remain a separate change; its helper must
-also pass `subscription=subscription` when merged with this fix.
+The reminder also skips users with recorded profile fetches or traffic, even when
+HWID reporting is disabled. A profile fetch suppresses setup reminders but does not
+unlock the paid offer, which still requires traffic. Existing schedules and reminder
+copy are unchanged. The proxy menu explains when phone proxies are unavailable and
+suggests trying the other Desktop proxy. PR #56 is incorporated into PR #57.
+
+Validation: the existing task-level regression failed against the integrated helper
+without its explicit subscription argument, then passed with that argument restored.

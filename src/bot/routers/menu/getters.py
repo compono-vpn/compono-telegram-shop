@@ -276,16 +276,19 @@ async def tg_proxy_getter(
             " <b>выключенным VPN</b> — иначе соединение"
             " может не установиться.\n"
         )
+        lines.append("📱 <b>Телефон</b>")
         if phone_proxies:
-            lines.append("📱 <b>Телефон</b>")
             for p in phone_proxies:
                 lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
+        else:
+            lines.append("▸ Прокси для телефона временно недоступны — на телефоне используйте VPN.")
         if desktop_proxies:
-            if phone_proxies:
-                lines.append("")
+            lines.append("")
             lines.append("💻 <b>Компьютер</b> (Telegram Desktop 7.1.1 и новее)")
             for p in desktop_proxies:
                 lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}</a>')
+            if len(desktop_proxies) > 1:
+                lines.append("Если один не подключается — попробуйте другой.")
         lines.append("\nНажмите на ссылку, прокси подключится автоматически.")
     else:
         lines.append("Нет доступных прокси.")

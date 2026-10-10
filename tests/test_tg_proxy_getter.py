@@ -177,13 +177,14 @@ class TestTGProxyGetterKinds:
         assert "Telegram Desktop" not in msg
 
     @pytest.mark.asyncio
-    async def test_omits_phone_section_when_no_mtproto_proxies(self):
+    async def test_phone_section_explains_absence_when_no_mtproto_proxies(self):
         billing = make_billing_client(tg_proxies=[_web_proxy()])
 
         msg = (await _call_tg_proxy_getter(billing=billing))["proxy_message"]
 
         assert DESKTOP_HEADER in msg
-        assert "Телефон" not in msg
+        assert PHONE_HEADER in msg
+        assert "временно недоступны" in msg
         assert "tg://proxy" not in msg
 
     @pytest.mark.asyncio
@@ -228,3 +229,36 @@ class TestTGProxyGetterKinds:
         assert "Нет доступных прокси." in msg
         assert PHONE_HEADER not in msg
         assert DESKTOP_HEADER not in msg
+
+
+class TestWebOnlyProxyList:
+    @pytest.mark.asyncio
+    async def test_phone_section_says_phone_proxies_unavailable_when_only_web_rows_exist(self):
+        proxies = [
+            _web_proxy(id=7, server="russia.compono.online",
+                       link="https://t.me/webproxy?server=russia.compono.online&secret=aa"),
+            _web_proxy(id=8, server="eu.compono.online",
+                       link="https://t.me/webproxy?server=eu.compono.online&secret=bb"),
+        ]
+        result = await _call_tg_proxy_getter(
+            billing=make_billing_client(tg_proxies=proxies),
+            user=make_user(subscription=make_subscription(plan_id=4)),
+        )
+        msg = result["proxy_message"]
+
+        assert PHONE_HEADER in msg
+        assert "временно недоступны" in msg
+        assert DESKTOP_HEADER in msg
+        assert msg.index(PHONE_HEADER) < msg.index(DESKTOP_HEADER)
+        assert "Подключить russia.compono.online" in msg
+        assert "Подключить eu.compono.online" in msg
+        assert "попробуйте другой" in msg
+        assert result["has_proxies"] is True
+
+    @pytest.mark.asyncio
+    async def test_phone_proxies_present_keeps_old_phone_section(self):
+        proxies = [_mtproto_proxy(), _web_proxy()]
+        result = await _call_tg_proxy_getter(billing=make_billing_client(tg_proxies=proxies))
+        msg = result["proxy_message"]
+        assert "временно недоступны" not in msg
+        assert "1.2.3.4:443" in msg
