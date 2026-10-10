@@ -28,7 +28,7 @@ from src.infrastructure.billing import (
 )
 from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey_check
-from src.models.dto import PlanDto, UserDto
+from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
@@ -65,6 +65,8 @@ def _save_payment_data(dialog_manager: DialogManager, payment_data: CachedPaymen
     dialog_manager.dialog_data["payment_id"] = payment_data["payment_id"]
     dialog_manager.dialog_data["payment_url"] = payment_data["payment_url"]
     dialog_manager.dialog_data["final_pricing"] = payment_data["final_pricing"]
+    pricing = PriceDetailsDto.model_validate_json(payment_data["final_pricing"])
+    dialog_manager.dialog_data["is_free"] = pricing.is_free
 
 
 async def _create_payment_and_get_data(
@@ -163,8 +165,6 @@ async def _create_payment_and_get_data(
             )
             pricing = billing_price_details_to_dto(price_details)
         else:
-            from src.models.dto import PriceDetailsDto  # noqa: PLC0415
-
             pricing = PriceDetailsDto()
 
         return CachedPaymentData(

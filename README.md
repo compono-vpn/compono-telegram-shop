@@ -382,3 +382,6 @@ user discounts and payment creation remain in the existing billing flow. Missing
 telemetry hides the shortcut without blocking the ordinary purchase menu. This does
 not send marketing messages or change existing reminder schedules. Tested with the
 full Python suite (763 tests). Funnel analysis: billing PR #44 / Plane COM-144.
+
+The checkout cache also carries the free/paid flag derived from the final billing
+quote, including the monthly shortcut and 100% discounts (764-test suite).
