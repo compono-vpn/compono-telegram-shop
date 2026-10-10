@@ -66,7 +66,27 @@ def test_is_public_false_is_parsed():
 
 
 @pytest.mark.parametrize(
-    "subscription", [None, make_subscription(active=False), make_subscription(is_trial=True)]
+    "subscription",
+    [
+        None,
+        make_subscription(active=False),
+        make_subscription(plan_id=1, active=False),
+        make_subscription(is_trial=True),
+        make_subscription(plan_id=4),
+        make_subscription(plan_id=4, is_trial=True),
+        make_subscription(plan_id=0),
+        make_subscription(plan_id=-1),
+    ],
+    ids=[
+        "none",
+        "expired-default-plan",
+        "expired-plan-1",
+        "trial-flag",
+        "plan-4-without-trial-flag",
+        "plan-4-trial",
+        "plan-0",
+        "plan-minus-1",
+    ],
 )
 async def test_free_user_sees_public_proxies_and_paid_teaser(subscription):
     result = await _render(_public_rows(), subscription)

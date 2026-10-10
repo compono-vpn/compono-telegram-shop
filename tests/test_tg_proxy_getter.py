@@ -242,7 +242,7 @@ class TestWebOnlyProxyList:
         ]
         result = await _call_tg_proxy_getter(
             billing=make_billing_client(tg_proxies=proxies),
-            user=make_user(subscription=make_subscription(plan_id=4)),
+            user=make_user(subscription=make_subscription(plan_id=2)),
         )
         msg = result["proxy_message"]
 
