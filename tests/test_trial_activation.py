@@ -86,3 +86,13 @@ async def test_monthly_shortcut_resets_stale_checkout_and_keeps_payment_explicit
     assert "payment_id" not in dm.dialog_data and "payment_cache" not in dm.dialog_data
     dm.switch_to.assert_awaited_once_with(state=Subscription.PAYMENT_METHOD)
     billing.create_payment.assert_not_called()
+
+
+def test_shortcut_preserves_free_checkout_for_fully_discounted_price():
+    from src.bot.routers.subscription.handlers import _save_payment_data
+    from src.models.dto import PriceDetailsDto
+    from tests.conftest import make_dialog_manager
+    dm = make_dialog_manager()
+    _save_payment_data(dm, {"payment_id": "test", "payment_url": None,
+                           "final_pricing": PriceDetailsDto(final_amount=0).model_dump_json()})
+    assert dm.dialog_data["is_free"] is True
