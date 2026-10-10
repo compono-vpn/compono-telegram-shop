@@ -14,9 +14,12 @@ from src.core.utils.iterables import chunked
 from src.core.utils.message_payload import MessagePayload
 from src.core.utils.types import RemnaUserDto
 from src.infrastructure.taskiq.broker import broker
+from src.models.dto.subscription import BaseSubscriptionDto
+from src.models.dto.user import UserDto
 from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
+from src.services.trial_activation import is_connected
 from src.services.user import UserService
 
 NOT_CONNECTED_REMINDER_DELAY = 2 * 60 * 60  # 2 hours
@@ -165,6 +168,24 @@ async def schedule_not_connected_reminder(
     logger.debug(f"Scheduled not-connected reminder for '{user_telegram_id}' at {send_at}")
 
 
+async def user_already_connected(
+    user: UserDto,
+    subscription: BaseSubscriptionDto,
+    remnawave_service: RemnawaveService,
+) -> bool:
+    devices = await remnawave_service.get_devices_user(user, subscription=subscription)
+    if devices:
+        return True
+    try:
+        remote = await remnawave_service.get_user(subscription.user_remna_id)
+    except Exception:
+        logger.warning(
+            f"Could not read RemnaUser for '{user.telegram_id}'; using device signal only"
+        )
+        return False
+    return is_connected(remote, devices)
+
+
 @broker.task(schedule=[{"cron": "*/5 * * * *"}], retry_on_error=False)
 @inject
 async def process_pending_not_connected_reminders_task(
@@ -219,8 +240,7 @@ async def process_pending_not_connected_reminders_task(
             )
             continue
 
-        devices = await remnawave_service.get_devices_user(user)
-        if devices:
+        if await user_already_connected(user, subscription, remnawave_service):
             logger.debug(
                 f"Skipping not-connected reminder for '{user_telegram_id}': already connected"
             )

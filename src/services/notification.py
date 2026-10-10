@@ -202,6 +202,11 @@ class NotificationService(BaseService):
             return sent_message
 
         except TelegramForbiddenError as exception:
+            if "bot was blocked by the user" in exception.message.lower():
+                logger.info(
+                    f"Notification '{payload.i18n_key}' skipped: recipient blocked the bot"
+                )
+                return None
             logger.exception(
                 f"Failed to send notification '{payload.i18n_key}' "
                 f"to '{user.telegram_id}': {exception}"

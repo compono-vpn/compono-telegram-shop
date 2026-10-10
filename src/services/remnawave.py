@@ -57,6 +57,7 @@ from src.models.dto import (
     SubscriptionDto,
     UserDto,
 )
+from src.models.dto.subscription import BaseSubscriptionDto
 from src.services.notification import NotificationService
 from src.services.subscription import SubscriptionService
 from src.services.user import UserService
@@ -413,14 +414,17 @@ class RemnawaveService(BaseService):
 
         return result.is_deleted
 
-    async def get_devices_user(self, user: UserDto) -> list[HwidDeviceDto]:
+    async def get_devices_user(
+        self, user: UserDto, *, subscription: Optional[BaseSubscriptionDto] = None
+    ) -> list[HwidDeviceDto]:
         logger.info(f"Fetching devices for RemnaUser '{user.telegram_id}'")
 
-        if not user.current_subscription:
+        subscription = subscription or user.current_subscription
+        if not subscription:
             logger.warning(f"No subscription found for user '{user.telegram_id}'")
             return []
 
-        result = await self.remnawave.hwid.get_hwid_user(user.current_subscription.user_remna_id)
+        result = await self.remnawave.hwid.get_hwid_user(subscription.user_remna_id)
 
         if result.total:
             logger.info(f"Found '{result.total}' device(s) for RemnaUser '{user.telegram_id}'")

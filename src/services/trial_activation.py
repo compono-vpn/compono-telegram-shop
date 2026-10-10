@@ -1,6 +1,7 @@
 """User-initiated upgrade offers; importing a profile is not VPN activation."""
 
 import asyncio
+from collections.abc import Sequence
 from typing import Any
 
 from loguru import logger
@@ -19,6 +20,16 @@ def has_verified_traffic(remote_user: Any) -> bool:
             getattr(traffic, "used_traffic_bytes", None),
             getattr(traffic, "lifetime_used_traffic_bytes", None),
         )
+    )
+
+
+def has_opened_subscription(remote_user: Any) -> bool:
+    return bool(getattr(remote_user, "sub_last_opened_at", None))
+
+
+def is_connected(remote_user: Any, devices: Sequence[Any]) -> bool:
+    return (
+        bool(devices) or has_verified_traffic(remote_user) or has_opened_subscription(remote_user)
     )
 
 

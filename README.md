@@ -385,3 +385,20 @@ full Python suite (763 tests). Funnel analysis: billing PR #44 / Plane COM-144.
 
 The checkout cache also carries the free/paid flag derived from the final billing
 quote, including the monthly shortcut and 100% discounts (764-test suite).
+
+### Reminder delivery follow-up (2026-10-10)
+
+The scheduled not-connected reminder loads the current subscription separately
+from the user DTO. Device lookup must receive that subscription explicitly; the
+user DTO may have no embedded subscription even when billing returned an active
+one. Other device-lookup callers retain the existing embedded-subscription fallback.
+A Telegram response saying the recipient blocked the bot is an expected skipped
+delivery and logs at INFO; other forbidden responses retain exception logging.
+The reminder also skips users with recorded profile fetches or traffic, even when
+HWID reporting is disabled. A profile fetch suppresses setup reminders but does not
+unlock the paid offer, which still requires traffic. Existing schedules and reminder
+copy are unchanged. The proxy menu explains when phone proxies are unavailable and
+suggests trying the other Desktop proxy. PR #56 is incorporated into PR #57.
+
+Validation: the existing task-level regression failed against the integrated helper
+without its explicit subscription argument, then passed with that argument restored.
