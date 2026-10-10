@@ -219,7 +219,7 @@ async def process_pending_not_connected_reminders_task(
             )
             continue
 
-        devices = await remnawave_service.get_devices_user(user)
+        devices = await remnawave_service.get_devices_user(user, subscription=subscription)
         if devices:
             logger.debug(
                 f"Skipping not-connected reminder for '{user_telegram_id}': already connected"

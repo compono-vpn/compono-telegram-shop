@@ -385,3 +385,15 @@ full Python suite (763 tests). Funnel analysis: billing PR #44 / Plane COM-144.
 
 The checkout cache also carries the free/paid flag derived from the final billing
 quote, including the monthly shortcut and 100% discounts (764-test suite).
+
+### Reminder delivery follow-up (2026-10-10)
+
+The scheduled not-connected reminder loads the current subscription separately
+from the user DTO. Device lookup must receive that subscription explicitly; the
+user DTO may have no embedded subscription even when billing returned an active
+one. Other device-lookup callers retain the existing embedded-subscription fallback.
+A Telegram response saying the recipient blocked the bot is an expected skipped
+delivery and logs at INFO; other forbidden responses retain exception logging.
+This does not change message copy, schedules, or the activation gate. PR #56's
+additional config-fetch/traffic signals remain a separate change; its helper must
+also pass `subscription=subscription` when merged with this fix.
