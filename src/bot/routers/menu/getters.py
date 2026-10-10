@@ -237,6 +237,63 @@ async def info_getter(app_config: FromDishka[AppConfig], **kwargs: Any) -> dict[
     }
 
 
+def _phone_proxy_lines(phone_proxies: list[dict[str, Any]], show_plans_offer: bool) -> list[str]:
+    lines = ["📱 <b>Телефон</b>"]
+    if phone_proxies:
+        for p in phone_proxies:
+            lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
+    elif show_plans_offer:
+        lines.append("▸ Прокси для телефона входит в платный тариф.")
+    else:
+        lines.append("▸ Прокси для телефона временно недоступны — на телефоне используйте VPN.")
+    return lines
+
+
+def _desktop_proxy_lines(desktop_proxies: list[dict[str, Any]]) -> list[str]:
+    stable = [p for p in desktop_proxies if not p["is_public"]]
+    backup = [p for p in desktop_proxies if p["is_public"]]
+    lines = ["", "💻 <b>Компьютер</b> (Telegram Desktop 7.1.1 и новее)"]
+    for p in stable:
+        lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}</a> — стабильный')
+    if stable and backup:
+        lines.append("Запасные, если стабильный не подключается:")
+    for p in backup:
+        lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}</a>')
+    if not stable and len(desktop_proxies) > 1:
+        lines.append("Если один не подключается — попробуйте другой.")
+    return lines
+
+
+def _proxy_message(proxy_list: list[dict[str, Any]], show_plans_offer: bool) -> str:
+    lines = ["<b>📡 Прокси для Telegram</b>\n"]
+    if not proxy_list:
+        lines.append("Нет доступных прокси.")
+        return "\n".join(lines)
+    phone_proxies = [p for p in proxy_list if p["kind"] != "WEB"]
+    desktop_proxies = [p for p in proxy_list if p["kind"] == "WEB"]
+    lines.append(
+        "Telegram-прокси позволяет пользоваться мессенджером"
+        " даже без включённого VPN. Полезно, когда VPN"
+        " недоступен или вы хотите сэкономить трафик.\n"
+    )
+    lines.append(
+        "⚠️ <b>Важно:</b> подключайте прокси с"
+        " <b>выключенным VPN</b> — иначе соединение"
+        " может не установиться.\n"
+    )
+    lines.extend(_phone_proxy_lines(phone_proxies, show_plans_offer))
+    if desktop_proxies:
+        lines.extend(_desktop_proxy_lines(desktop_proxies))
+    if show_plans_offer:
+        lines.append("")
+        lines.append(
+            "⭐ <b>В платном тарифе</b>: прокси для телефона и свой стабильный"
+            " прокси для компьютера — им пользуются только подписчики."
+        )
+    lines.append("\nНажмите на ссылку, прокси подключится автоматически.")
+    return "\n".join(lines)
+
+
 @inject
 async def tg_proxy_getter(
     dialog_manager: DialogManager,
@@ -257,45 +314,17 @@ async def tg_proxy_getter(
             "port": p.port,
             "link": p.link,
             "kind": p.kind,
+            "is_public": p.is_public,
         }
         for p in proxies
     ]
-    phone_proxies = [p for p in proxy_list if p["kind"] != "WEB"]
-    desktop_proxies = [p for p in proxy_list if p["kind"] == "WEB"]
-
-    lines = ["<b>📡 Прокси для Telegram</b>\n"]
-    if proxy_list:
-        lines.append(
-            "Telegram-прокси позволяет пользоваться мессенджером"
-            " даже без включённого VPN. Полезно, когда VPN"
-            " недоступен или вы хотите сэкономить трафик.\n"
-        )
-        lines.append(
-            "⚠️ <b>Важно:</b> подключайте прокси с"
-            " <b>выключенным VPN</b> — иначе соединение"
-            " может не установиться.\n"
-        )
-        lines.append("📱 <b>Телефон</b>")
-        if phone_proxies:
-            for p in phone_proxies:
-                lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
-        else:
-            lines.append("▸ Прокси для телефона временно недоступны — на телефоне используйте VPN.")
-        if desktop_proxies:
-            lines.append("")
-            lines.append("💻 <b>Компьютер</b> (Telegram Desktop 7.1.1 и новее)")
-            for p in desktop_proxies:
-                lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}</a>')
-            if len(desktop_proxies) > 1:
-                lines.append("Если один не подключается — попробуйте другой.")
-        lines.append("\nНажмите на ссылку, прокси подключится автоматически.")
-    else:
-        lines.append("Нет доступных прокси.")
+    show_plans_offer = plan_id == 0
 
     return {
         "proxies": proxy_list,
-        "proxy_message": "\n".join(lines),
+        "proxy_message": _proxy_message(proxy_list, show_plans_offer),
         "has_proxies": len(proxy_list) > 0,
+        "show_plans_offer": show_plans_offer,
         "show_vpn_offer": not user.current_subscription or not user.current_subscription.is_active,
     }
 

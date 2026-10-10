@@ -469,3 +469,4 @@ btn-menu-vpn-offer = 🌐 VPN для всего интернета
 
 btn-setup-checkin-yes = ✅ Да, работает
 btn-setup-checkin-no = ❌ Нет, не получилось
+btn-menu-proxy-plans = 💳 Тарифы

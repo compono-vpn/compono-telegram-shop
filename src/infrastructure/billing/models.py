@@ -326,3 +326,4 @@ class BillingTGProxy(BaseModel):
     secret: str = Field("", alias="secret")
     kind: str = Field("MTPROTO", alias="kind")
     link: str = Field("", alias="link")
+    is_public: bool = Field(True, alias="is_public")
