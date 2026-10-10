@@ -462,3 +462,5 @@ btn-promocode-max-days = 📅 Макс. дней
 btn-promocode-confirm = ✅ Подтвердить
 
 btn-trial-monthly-upgrade = Продолжить на 30 дней
+
+btn-menu-vpn-offer = 🌐 VPN для всего интернета

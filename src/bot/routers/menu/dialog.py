@@ -274,6 +274,14 @@ tg_proxy = Window(
     Format("{proxy_message}"),
     Row(
         SwitchTo(
+            text=I18nFormat("btn-menu-vpn-offer"),
+            id="vpn_offer",
+            state=MainMenu.MAIN,
+            when=F["show_vpn_offer"],
+        ),
+    ),
+    Row(
+        SwitchTo(
             text=I18nFormat("btn-back"),
             id="back",
             state=MainMenu.MAIN,
