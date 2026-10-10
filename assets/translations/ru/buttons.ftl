@@ -317,6 +317,8 @@ btn-notifications-user-choice = { $enabled ->
     [REFERRAL_ATTACHED] Реферал закреплен
     [REFERRAL_REWARD] Получено вознаграждение
     [NOT_CONNECTED] Напоминание о подключении
+    [SETUP_REMINDER_24H] Напоминание о подключении (через сутки)
+    [SETUP_CHECKIN] Вопрос «Подключилось?»
     *[OTHER] { $type }
     }
 
@@ -464,3 +466,6 @@ btn-promocode-confirm = ✅ Подтвердить
 btn-trial-monthly-upgrade = Продолжить на 30 дней
 
 btn-menu-vpn-offer = 🌐 VPN для всего интернета
+
+btn-setup-checkin-yes = ✅ Да, работает
+btn-setup-checkin-no = ❌ Нет, не получилось

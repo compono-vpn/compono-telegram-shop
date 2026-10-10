@@ -29,6 +29,7 @@ from .models import (
     BillingTGProxy,
     BillingTransaction,
     BillingUser,
+    BillingUserReminder,
 )
 
 
@@ -717,3 +718,42 @@ class BillingClient:
     async def get_tg_proxies(self, plan_id: int) -> list[BillingTGProxy]:
         data = await self._get("/tg-proxies", params={"plan_id": plan_id})
         return [BillingTGProxy.model_validate(p) for p in (data or [])]
+
+    # ------------------------------------------------------------------ #
+    # User reminders (durable claims and answers)
+    # ------------------------------------------------------------------ #
+
+    async def claim_user_reminder(self, telegram_id: int, kind: str, dedup_key: str) -> bool:
+        """Record a reminder; False means the same (user, kind, key) already exists."""
+        data = await self._post(
+            "/user-reminders/claim",
+            json={"telegram_id": telegram_id, "kind": kind, "dedup_key": dedup_key},
+        )
+        return bool(data and data.get("claimed"))
+
+    async def release_user_reminder(self, telegram_id: int, kind: str, dedup_key: str) -> bool:
+        data = await self._post(
+            "/user-reminders/release",
+            json={"telegram_id": telegram_id, "kind": kind, "dedup_key": dedup_key},
+        )
+        return bool(data and data.get("released"))
+
+    async def answer_user_reminder(
+        self, telegram_id: int, kind: str, dedup_key: str, answer: str
+    ) -> bool:
+        data = await self._post(
+            "/user-reminders/answer",
+            json={
+                "telegram_id": telegram_id,
+                "kind": kind,
+                "dedup_key": dedup_key,
+                "answer": answer,
+            },
+        )
+        return bool(data and data.get("updated"))
+
+    async def list_user_reminders(
+        self, telegram_id: int, kind: str = ""
+    ) -> list[BillingUserReminder]:
+        data = await self._get(f"/user-reminders/{telegram_id}", params={"kind": kind})
+        return [BillingUserReminder.model_validate(r) for r in (data or [])]

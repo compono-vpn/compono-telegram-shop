@@ -118,6 +118,12 @@ KAFKA_CONSUMER_DISCARDED_MESSAGES_TOTAL = Counter(
 )
 
 
+SETUP_CHECKIN_ANSWERS_TOTAL = Counter(
+    "bot_setup_checkin_answers_total",
+    "Answers to the post-setup 'did it connect?' check-in",
+    ["answer"],
+)
+
 CANCEL_SURVEY_SENT_TOTAL = Counter(
     "bot_cancel_survey_sent_total",
     "Cancel-reason survey prompts sent, by payment gateway",
