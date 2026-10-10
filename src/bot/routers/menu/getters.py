@@ -24,9 +24,18 @@ from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 
 
+PAID_PROXY_PLAN_IDS = frozenset({1, 2, 3})
+
+
 def _proxy_plan_id(user: UserDto) -> int:
     subscription = user.current_subscription
-    if subscription and subscription.is_active and not subscription.is_trial and subscription.plan:
+    if (
+        subscription
+        and subscription.is_active
+        and not subscription.is_trial
+        and subscription.plan
+        and subscription.plan.id in PAID_PROXY_PLAN_IDS
+    ):
         return subscription.plan.id
     return 0
 
