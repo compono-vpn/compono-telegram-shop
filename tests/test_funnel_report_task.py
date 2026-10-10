@@ -22,7 +22,12 @@ import httpx
 import pytest
 
 from src.core.utils.time import MSK, compute_msk_previous_day_window, to_rfc3339_utc
-from src.infrastructure.api.client import ApiClient, ConnectedStats, ProfileRequesterStats
+from src.infrastructure.api.client import (
+    ApiClient,
+    ConnectedActivityStats,
+    ConnectedStats,
+    ProfileRequesterStats,
+)
 from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.billing.models import BillingFunnelStats
 from src.infrastructure.taskiq.tasks.funnel_report import (
@@ -262,6 +267,23 @@ def _make_billing(funnel_stats: BillingFunnelStats | None = None, error: Excepti
     return billing
 
 
+def _activity(**overrides) -> ConnectedActivityStats:
+    values = dict(
+        connected_users=5,
+        scope="exit_attributable",
+        not_observed=("relay_whitelist",),
+        since=datetime(2026, 10, 9, 20, 0, tzinfo=timezone.utc),
+        covers_range=True,
+        fresh=True,
+        nodes_total=8,
+        nodes_fresh=8,
+        oldest_apply_ok_at=datetime(2026, 10, 10, 5, 59, 40, tzinfo=timezone.utc),
+        last_observation_at=datetime(2026, 10, 10, 5, 58, 0, tzinfo=timezone.utc),
+    )
+    values.update(overrides)
+    return ConnectedActivityStats(**values)
+
+
 def _make_api_client(connected: ConnectedStats | None = None, error: Exception | None = None):
     api_client = AsyncMock()
     if error:
@@ -271,6 +293,7 @@ def _make_api_client(connected: ConnectedStats | None = None, error: Exception |
     api_client.get_profile_requester_stats.return_value = ProfileRequesterStats(
         profile_requesters=8
     )
+    api_client.get_connected_activity.return_value = _activity()
     return api_client
 
 
@@ -404,3 +427,143 @@ class TestProfileRequesterStats:
         await send_daily_funnel_report(MagicMock(), _make_billing(), api_client, notifications)
         notifications.error_notify.assert_awaited_once()
         notifications.bot.send_message.assert_not_awaited()
+
+
+class TestConnectedActivityClient:
+    async def test_request_shape_and_parsing(self):
+        client, transport = _make_api_client_with_mock()
+        transport.request.return_value = _make_response(
+            200,
+            {
+                "connected_users": 5,
+                "scope": "exit_attributable",
+                "not_observed": ["relay_whitelist"],
+                "collection": {
+                    "since": "2026-10-09T20:00:00Z",
+                    "covers_range": True,
+                    "fresh": True,
+                    "nodes_total": 8,
+                    "nodes_fresh": 8,
+                    "oldest_apply_ok_at": "2026-10-10T05:59:40Z",
+                    "last_observation_at": "2026-10-10T05:58:00Z",
+                },
+            },
+        )
+        start = datetime(2026, 10, 9, tzinfo=MSK)
+        stats = await client.get_connected_activity(start, start + timedelta(days=1))
+        assert stats.connected_users == 5
+        assert stats.not_observed == ("relay_whitelist",)
+        assert stats.since == datetime(2026, 10, 9, 20, 0, tzinfo=timezone.utc)
+        assert stats.covers_range is True and stats.fresh is True
+        assert (stats.nodes_total, stats.nodes_fresh) == (8, 8)
+        assert stats.last_observation_at == datetime(2026, 10, 10, 5, 58, tzinfo=timezone.utc)
+        args = transport.request.call_args
+        assert args.args == ("GET", f"{BASE_URL}/api/v1/internal/stats/connected-activity")
+        assert args.kwargs["params"] == {
+            "from": "2026-10-08T21:00:00+00:00",
+            "to": "2026-10-09T21:00:00+00:00",
+        }
+
+    async def test_null_timestamps_are_none(self):
+        client, transport = _make_api_client_with_mock()
+        transport.request.return_value = _make_response(
+            200,
+            {
+                "connected_users": 0,
+                "scope": "exit_attributable",
+                "not_observed": ["relay_whitelist"],
+                "collection": {
+                    "since": None,
+                    "covers_range": False,
+                    "fresh": False,
+                    "nodes_total": 8,
+                    "nodes_fresh": 0,
+                    "oldest_apply_ok_at": None,
+                },
+            },
+        )
+        now = datetime(2026, 10, 9, tzinfo=timezone.utc)
+        stats = await client.get_connected_activity(now, now + timedelta(days=1))
+        assert stats.since is None and stats.oldest_apply_ok_at is None
+        assert stats.last_observation_at is None
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            None,
+            {},
+            {"connected_users": -1, "collection": {}},
+            {"connected_users": "5", "collection": {}},
+            {"connected_users": True, "collection": {}},
+            {"connected_users": 1},
+            {"connected_users": 1, "collection": {"covers_range": "yes"}},
+        ],
+    )
+    async def test_malformed_payload_is_not_silent_zero(self, payload):
+        client, transport = _make_api_client_with_mock()
+        transport.request.return_value = _make_response(200, payload)
+        now = datetime(2026, 10, 9, tzinfo=timezone.utc)
+        with pytest.raises(ValueError):
+            await client.get_connected_activity(now, now + timedelta(days=1))
+
+
+class TestReportConnectedActivityLines:
+    NOW = datetime(2026, 10, 10, 9, 0, tzinfo=MSK)
+
+    async def _text(self, activity=None, error=None):
+        api_client = _make_api_client()
+        if error:
+            api_client.get_connected_activity.side_effect = error
+        elif activity is not None:
+            api_client.get_connected_activity.return_value = activity
+        return await _build_funnel_report_text(_make_billing(), api_client, self.NOW)
+
+    async def test_queries_the_same_moscow_day_window(self):
+        api_client = _make_api_client()
+        await _build_funnel_report_text(_make_billing(), api_client, self.NOW)
+        start, end = compute_msk_previous_day_window(self.NOW)
+        api_client.get_connected_activity.assert_awaited_once_with(start, end)
+        assert start == datetime(2026, 10, 8, 21, 0, tzinfo=timezone.utc)
+
+    async def test_complete_and_fresh_names_scope_and_what_is_missing(self):
+        text = await self._text()
+        assert "Connected users (observed on exit nodes): 5" in text
+        assert "Direct and per-user routes only" in text
+        assert "Relay (whitelist) users are not observable and are not counted" in text
+        assert "Collector: covers the whole day; node counters current (8/8 nodes)" in text
+        assert "last recorded activity 2026-10-10 08:58 MSK" in text
+        assert "PARTIAL" not in text and "STALE" not in text
+
+    async def test_collection_started_mid_day_is_labelled_partial_in_moscow_time(self):
+        since = datetime(2026, 10, 9, 15, 30, tzinfo=timezone.utc)  # 18:30 MSK
+        text = await self._text(_activity(covers_range=False, since=since))
+        assert "PARTIAL: recording only started 2026-10-09 18:30 MSK" in text
+
+    async def test_no_recorded_activity_yet_is_spelled_out(self):
+        text = await self._text(_activity(last_observation_at=None))
+        assert "last recorded activity never" in text
+
+    async def test_never_collected_says_no_data_not_zero_people(self):
+        text = await self._text(
+            _activity(connected_users=0, covers_range=False, since=None, fresh=False, nodes_fresh=0)
+        )
+        assert "NO DATA: collector has not covered every exit node yet" in text
+
+    async def test_stale_collector_is_flagged_with_node_counts(self):
+        oldest = datetime(2026, 10, 10, 2, 0, tzinfo=timezone.utc)  # 05:00 MSK
+        text = await self._text(_activity(fresh=False, nodes_fresh=5, oldest_apply_ok_at=oldest))
+        assert "STALE: only 5/8 nodes current, oldest ok 2026-10-10 05:00 MSK" in text
+
+    async def test_stale_with_no_success_ever_says_never(self):
+        text = await self._text(_activity(fresh=False, nodes_fresh=0, oldest_apply_ok_at=None))
+        assert "STALE: only 0/8 nodes current, never completed" in text
+
+    async def test_endpoint_failure_does_not_hide_the_rest_of_the_report(self):
+        text = await self._text(error=RuntimeError("boom"))
+        assert "Connected users (observed on exit nodes): unavailable" in text
+        assert "New users: 10" in text
+        assert "Profile requesters: 8" in text
+
+    async def test_latest_seen_line_stays_but_is_labelled_as_not_history(self):
+        text = await self._text()
+        assert "Last seen on VPN that day: 6" in text

@@ -52,6 +52,52 @@ class ProfileRequesterStats:
     profile_requesters: int
 
 
+@dataclass(frozen=True)
+class ConnectedActivityStats:
+    """Users observed with traffic in a range, with coverage and collector freshness.
+
+    Counts only users identifiable per account on exit nodes; users listed in
+    ``not_observed`` (relay/whitelist) are never part of the count.
+    """
+
+    connected_users: int
+    scope: str
+    not_observed: tuple[str, ...]
+    since: Optional[datetime]
+    covers_range: bool
+    fresh: bool
+    nodes_total: int
+    nodes_fresh: int
+    oldest_apply_ok_at: Optional[datetime]
+    last_observation_at: Optional[datetime] = None
+
+
+def _count(value: Any, name: str) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"Invalid {name}")
+    return value
+
+
+def _flag(value: Any, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"Invalid {name}")
+    return value
+
+
+def _utc_or_none(value: Any, name: str) -> Optional[datetime]:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"Invalid {name}")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exception:
+        raise ValueError(f"Invalid {name}") from exception
+    if parsed.tzinfo is None:
+        raise ValueError(f"Invalid {name}")
+    return parsed
+
+
 class ApiClient:
     """Async HTTP client for compono-api internal endpoints."""
 
@@ -195,3 +241,42 @@ class ApiClient:
         if type(count) is not int or count < 0:
             raise ValueError("Invalid profile requester count")
         return ProfileRequesterStats(profile_requesters=count)
+
+    async def get_connected_activity(
+        self, date_from: datetime, date_to: datetime
+    ) -> ConnectedActivityStats:
+        """Fetch distinct users observed with traffic in a UTC range, with coverage labels.
+
+        Calls GET /api/v1/internal/stats/connected-activity?from=...&to=....
+        Raises ValueError on a malformed body instead of reporting a silent zero.
+        """
+        data = await self._request(
+            "GET",
+            "/stats/connected-activity",
+            params={
+                "from": to_rfc3339_utc(date_from),
+                "to": to_rfc3339_utc(date_to),
+            },
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("collection"), dict):
+            raise ValueError("Invalid connected activity response")
+        collection = data["collection"]
+        not_observed = data.get("not_observed")
+        if not isinstance(not_observed, list) or not all(isinstance(i, str) for i in not_observed):
+            not_observed = []
+        return ConnectedActivityStats(
+            connected_users=_count(data.get("connected_users"), "connected_users"),
+            scope=str(data.get("scope", "")),
+            not_observed=tuple(not_observed),
+            since=_utc_or_none(collection.get("since"), "since"),
+            covers_range=_flag(collection.get("covers_range"), "covers_range"),
+            fresh=_flag(collection.get("fresh"), "fresh"),
+            nodes_total=_count(collection.get("nodes_total"), "nodes_total"),
+            nodes_fresh=_count(collection.get("nodes_fresh"), "nodes_fresh"),
+            oldest_apply_ok_at=_utc_or_none(
+                collection.get("oldest_apply_ok_at"), "oldest_apply_ok_at"
+            ),
+            last_observation_at=_utc_or_none(
+                collection.get("last_observation_at"), "last_observation_at"
+            ),
+        )
