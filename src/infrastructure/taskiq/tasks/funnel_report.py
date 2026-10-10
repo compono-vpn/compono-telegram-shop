@@ -22,10 +22,18 @@ def _msk_label(moment: Optional[datetime]) -> str:
     return moment.astimezone(MSK).strftime("%Y-%m-%d %H:%M") + " MSK"
 
 
-def _activity_lines(activity: Optional[ConnectedActivityStats]) -> str:
+def _activity_lines(activity: Optional[ConnectedActivityStats], window_end: datetime) -> str:
     """Connected-user count for the day with explicit coverage and freshness labels."""
     if activity is None:
         return "Connected users (observed on exit nodes): unavailable (activity endpoint failed)\n"
+
+    if activity.since is None or activity.since >= window_end:
+        # Recording was off for the whole day: a zero here would read as "nobody connected".
+        since = "never" if activity.since is None else _msk_label(activity.since)
+        return (
+            "Connected users (observed on exit nodes): not recorded for this day "
+            f"(recording started {since})\n"
+        )
 
     if activity.fresh:
         freshness = f"node counters current ({activity.nodes_fresh}/{activity.nodes_total} nodes)"
@@ -39,8 +47,6 @@ def _activity_lines(activity: Optional[ConnectedActivityStats]) -> str:
 
     if activity.covers_range:
         coverage = "covers the whole day"
-    elif activity.since is None:
-        coverage = "NO DATA: collector has not covered every exit node yet"
     else:
         coverage = f"PARTIAL: recording only started {_msk_label(activity.since)}"
 
@@ -79,7 +85,7 @@ async def _build_funnel_report_text(
         f"New users: {funnel_stats.new_users}\n"
         f"Used trial: {funnel_stats.used_trial}\n"
         f"Profile requesters: {profile_stats.profile_requesters}\n"
-        f"{_activity_lines(activity)}"
+        f"{_activity_lines(activity, end_utc)}"
         f"Last seen on VPN that day: {connected_stats.connected}\n"
         f"Paid purchases: {funnel_stats.bought_sub}\n\n"
         "Daily totals, not a signup cohort. Profile requests include refreshes and failures. "
