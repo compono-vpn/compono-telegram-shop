@@ -257,11 +257,15 @@ async def tg_proxy_getter(
             "port": p.port,
             "link": p.link,
             "kind": p.kind,
+            "is_public": p.is_public,
         }
         for p in proxies
     ]
     phone_proxies = [p for p in proxy_list if p["kind"] != "WEB"]
     desktop_proxies = [p for p in proxy_list if p["kind"] == "WEB"]
+    stable_proxies = [p for p in desktop_proxies if not p["is_public"]]
+    backup_proxies = [p for p in desktop_proxies if p["is_public"]]
+    show_plans_offer = plan_id == 0
 
     lines = ["<b>📡 Прокси для Telegram</b>\n"]
     if proxy_list:
@@ -279,15 +283,27 @@ async def tg_proxy_getter(
         if phone_proxies:
             for p in phone_proxies:
                 lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}:{p["port"]}</a>')
+        elif show_plans_offer:
+            lines.append("▸ Прокси для телефона входит в платный тариф.")
         else:
             lines.append("▸ Прокси для телефона временно недоступны — на телефоне используйте VPN.")
         if desktop_proxies:
             lines.append("")
             lines.append("💻 <b>Компьютер</b> (Telegram Desktop 7.1.1 и новее)")
-            for p in desktop_proxies:
+            for p in stable_proxies:
+                lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}</a> — стабильный')
+            if stable_proxies and backup_proxies:
+                lines.append("Запасные, если стабильный не подключается:")
+            for p in backup_proxies:
                 lines.append(f'▸ <a href="{p["link"]}">Подключить {p["server"]}</a>')
-            if len(desktop_proxies) > 1:
+            if not stable_proxies and len(desktop_proxies) > 1:
                 lines.append("Если один не подключается — попробуйте другой.")
+        if show_plans_offer:
+            lines.append("")
+            lines.append(
+                "⭐ <b>В платном тарифе</b>: прокси для телефона и свой стабильный"
+                " прокси для компьютера — им пользуются только подписчики."
+            )
         lines.append("\nНажмите на ссылку, прокси подключится автоматически.")
     else:
         lines.append("Нет доступных прокси.")
@@ -296,6 +312,7 @@ async def tg_proxy_getter(
         "proxies": proxy_list,
         "proxy_message": "\n".join(lines),
         "has_proxies": len(proxy_list) > 0,
+        "show_plans_offer": show_plans_offer,
         "show_vpn_offer": not user.current_subscription or not user.current_subscription.is_active,
     }
 

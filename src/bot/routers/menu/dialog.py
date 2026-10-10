@@ -273,6 +273,14 @@ tg_proxy = Window(
     Banner(BannerName.MENU),
     Format("{proxy_message}"),
     Row(
+        Start(
+            text=I18nFormat("btn-menu-proxy-plans"),
+            id="proxy_plans",
+            state=Subscription.MAIN,
+            when=F["show_plans_offer"],
+        ),
+    ),
+    Row(
         SwitchTo(
             text=I18nFormat("btn-menu-vpn-offer"),
             id="vpn_offer",
