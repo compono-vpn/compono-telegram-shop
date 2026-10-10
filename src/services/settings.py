@@ -45,6 +45,10 @@ class SettingsService(BaseBillingService):
         self._settings_memo = await self._fetch_settings()
         return self._settings_memo
 
+    async def refresh(self) -> None:
+        """Drop every cached copy so the next read comes from billing."""
+        await self._clear_cache()
+
     async def update(self, settings: SettingsDto) -> SettingsDto:
         changed_data = settings.prepare_changed_data()
 

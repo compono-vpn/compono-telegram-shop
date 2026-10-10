@@ -30,6 +30,7 @@ REFERRAL_PREFIX: Final[str] = "ref_"
 SOURCE_PREFIX: Final[str] = "source-"
 AFFILIATE_PREFIX: Final[str] = "aff-"
 CANCEL_SURVEY_PREFIX: Final[str] = "cs:"
+SETUP_CHECKIN_PREFIX: Final[str] = "sck:"
 
 IMPORTED_TAG: Final[str] = "IMPORTED"
 

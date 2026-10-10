@@ -45,6 +45,8 @@ class UserNotificationDto(TrackableDto):  # == UserNotificationType
     referral_attached: bool = True
     referral_reward: bool = True
     not_connected: bool = True
+    setup_reminder_24h: bool = True
+    setup_checkin: bool = True
 
     def is_enabled(self, ntf_type: UserNotificationType) -> bool:
         return getattr(self, ntf_type.value.lower(), False)

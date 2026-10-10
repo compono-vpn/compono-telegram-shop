@@ -54,6 +54,10 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
         return f"{self.kafka_topic_env}.compono-billing.subscription.created.v1"
 
     @property
+    def kafka_subscription_expired_topic(self) -> str:
+        return f"{self.kafka_topic_env}.compono-billing.subscription.expired.v1"
+
+    @property
     def kafka_payment_completed_topic(self) -> str:
         return f"{self.kafka_topic_env}.compono-billing.payment.completed.v1"
 

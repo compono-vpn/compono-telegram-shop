@@ -144,6 +144,13 @@ class UserNotificationType(UpperStrEnum):  # == UserNotificationDto
     REFERRAL_REWARD = auto()
     #
     NOT_CONNECTED = auto()
+    SETUP_REMINDER_24H = auto()
+    SETUP_CHECKIN = auto()
+
+
+class SetupCheckinAnswer(UpperStrEnum):
+    CONNECTED = auto()
+    NOT_CONNECTED = auto()
 
 
 class UserRoleHierarchy(Enum):

@@ -5,6 +5,7 @@ from redis.asyncio import Redis
 from src.core.config import AppConfig
 from src.infrastructure.kafka.base_consumer import SupervisedKafkaConsumer
 from src.infrastructure.taskiq.tasks.notifications import schedule_not_connected_reminder
+from src.infrastructure.taskiq.tasks.setup_followups import schedule_setup_followups
 from src.services.subscription import SubscriptionService
 
 
@@ -53,4 +54,8 @@ class TrialReminderConsumer(SupervisedKafkaConsumer):
                 subscription.url, config.website_url
             )
             await schedule_not_connected_reminder(redis_client, int(telegram_id), connect_url)
+            if subscription.id:
+                await schedule_setup_followups(
+                    redis_client, int(telegram_id), subscription.id, connect_url
+                )
             logger.info(f"Scheduled trial reminder for telegram_id={telegram_id}")

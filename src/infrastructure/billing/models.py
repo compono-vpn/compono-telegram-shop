@@ -304,6 +304,17 @@ class BillingCustomer(BaseModel):
 # --- TG Proxies ---
 
 
+class BillingUserReminder(BaseModel):
+    """Maps domain.UserReminder from billing API (lowercase JSON keys)."""
+
+    telegram_id: int = 0
+    kind: str = ""
+    dedup_key: str = ""
+    sent_at: Optional[datetime] = None
+    answer: Optional[str] = None
+    answered_at: Optional[datetime] = None
+
+
 class BillingTGProxy(BaseModel):
     """Maps domain.TGProxy from billing API (lowercase JSON keys)."""
 

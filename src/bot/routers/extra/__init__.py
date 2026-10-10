@@ -1,4 +1,14 @@
-from . import cancel_survey, commands, error, goto, member, notification, payment, test
+from . import (
+    cancel_survey,
+    commands,
+    error,
+    goto,
+    member,
+    notification,
+    payment,
+    setup_checkin,
+    test,
+)
 
 __all__ = [
     "cancel_survey",
@@ -8,5 +18,6 @@ __all__ = [
     "member",
     "notification",
     "payment",
+    "setup_checkin",
     "test",
 ]

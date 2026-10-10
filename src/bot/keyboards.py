@@ -10,8 +10,15 @@ from magic_filter import F
 
 from src.bot.states import DashboardUser, MainMenu, Subscription
 from src.bot.widgets.i18n_format import I18nFormat
-from src.core.constants import CANCEL_SURVEY_PREFIX, GOTO_PREFIX, PURCHASE_PREFIX, REPOSITORY, T_ME
-from src.core.enums import CancelSurveyReason, PurchaseType
+from src.core.constants import (
+    CANCEL_SURVEY_PREFIX,
+    GOTO_PREFIX,
+    PURCHASE_PREFIX,
+    REPOSITORY,
+    SETUP_CHECKIN_PREFIX,
+    T_ME,
+)
+from src.core.enums import CancelSurveyReason, PurchaseType, SetupCheckinAnswer
 from src.core.utils.formatters import format_username_to_url
 
 CALLBACK_CHANNEL_CONFIRM: Final[str] = "channel_confirm"
@@ -211,5 +218,27 @@ def get_cancel_survey_keyboard(payment_id: str) -> InlineKeyboardMarkup:
     builder.row(
         _button("btn-cancel-survey-will-think", CancelSurveyReason.WILL_THINK),
         _button("btn-cancel-survey-other", CancelSurveyReason.OTHER),
+    )
+    return builder.as_markup()
+
+
+def get_setup_reminder_keyboard(connect_url: str, support_url: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="btn-notification-connect", url=connect_url))
+    builder.row(InlineKeyboardButton(text="btn-contact-support", url=support_url))
+    return builder.as_markup()
+
+
+def get_setup_checkin_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="btn-setup-checkin-yes",
+            callback_data=f"{SETUP_CHECKIN_PREFIX}{SetupCheckinAnswer.CONNECTED.value}",
+        ),
+        InlineKeyboardButton(
+            text="btn-setup-checkin-no",
+            callback_data=f"{SETUP_CHECKIN_PREFIX}{SetupCheckinAnswer.NOT_CONNECTED.value}",
+        ),
     )
     return builder.as_markup()
