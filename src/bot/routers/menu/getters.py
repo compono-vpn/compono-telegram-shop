@@ -23,7 +23,6 @@ from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 
-
 PAID_PROXY_PLAN_IDS = frozenset({1, 2, 3})
 
 
