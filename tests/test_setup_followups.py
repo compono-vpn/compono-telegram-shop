@@ -167,6 +167,18 @@ class TestSetup24hReminder:
         assert await _run_24h(s) == 0
         assert s.billing.claims == {}
 
+    async def test_user_missing_from_the_panel_is_skipped_not_retried(self):
+        from remnapy.exceptions import NotFoundError
+
+        s = _services()
+        s.remnawave.get_devices_user.side_effect = NotFoundError(404, MagicMock(message="User not found", code="A025"))
+        await _schedule(s)
+
+        assert await _run_24h(s) == 0
+        assert s.notifications.sent == []
+        assert s.billing.claims == {}
+        assert s.redis.members(sf._REMINDERS_KEY.pack()) == {}
+
     async def test_skips_users_with_a_registered_device(self):
         s = _services(devices=[object()])
         await _schedule(s)

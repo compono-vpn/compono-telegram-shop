@@ -12,6 +12,7 @@ from typing import Any, Optional
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
 from redis.asyncio import Redis
+from remnapy.exceptions import NotFoundError
 
 from src.bot.keyboards import get_setup_checkin_keyboard, get_setup_reminder_keyboard
 from src.core.config import AppConfig
@@ -167,7 +168,14 @@ async def process_setup_reminders(
             ):
                 continue
             assert user.current_subscription is not None
-            if await user_already_connected(user, user.current_subscription, remnawave_service):
+            try:
+                connected = await user_already_connected(
+                    user, user.current_subscription, remnawave_service
+                )
+            except NotFoundError:
+                logger.info(f"Setup 24h reminder skipped for '{telegram_id}': no panel user")
+                continue
+            if connected:
                 logger.debug(f"Setup 24h reminder skipped for '{telegram_id}': already connected")
                 continue
             message = await claim_and_send(
