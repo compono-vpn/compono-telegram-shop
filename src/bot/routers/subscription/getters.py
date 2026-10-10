@@ -28,7 +28,9 @@ from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
+from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
+from src.services.trial_activation import get_monthly_trial_plan
 
 from .checkout_experiments import build_checkout_context
 
@@ -60,11 +62,16 @@ async def _await_billing_subscription(
 async def subscription_getter(
     dialog_manager: DialogManager,
     user: UserDto,
+    billing: FromDishka[BillingClient],
+    remnawave_service: FromDishka[RemnawaveService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     has_active = bool(user.current_subscription and not user.current_subscription.is_trial)
     is_unlimited = user.current_subscription.is_unlimited if user.current_subscription else False
+    monthly_plan = await get_monthly_trial_plan(user, remnawave_service, billing)
     return {
+        "monthly_trial_offer": monthly_plan is not None,
+        "monthly_trial_plan": monthly_plan.name if monthly_plan else "",
         "has_active_subscription": has_active,
         "is_not_unlimited": not is_unlimited,
     }

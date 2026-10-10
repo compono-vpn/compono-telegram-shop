@@ -32,7 +32,9 @@ from src.models.dto import PlanDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
+from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
+from src.services.trial_activation import get_monthly_trial_plan
 
 from .checkout_experiments import build_checkout_context, track_checkout_event
 
@@ -743,3 +745,34 @@ async def on_promocode_input(
             user=user,
             payload=MessagePayload(i18n_key="ntf-promocode-activation-failed"),
         )
+
+
+@inject
+async def on_trial_monthly_upgrade(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    billing: FromDishka[BillingClient],
+    remnawave_service: FromDishka[RemnawaveService],
+) -> None:
+    """Revalidate eligibility; quotes and payment creation use the existing flow."""
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    plan = await get_monthly_trial_plan(user, remnawave_service, billing)
+    if plan is None:
+        await dialog_manager.switch_to(state=Subscription.MAIN)
+        return
+    gateways = await billing.list_active_gateways()
+    if not any(g.IsActive and g.Channel in ("BOT", "ALL") for g in gateways):
+        await dialog_manager.switch_to(state=Subscription.MAIN)
+        return
+    dialog_manager.dialog_data.clear()
+    DialogDataAdapter(dialog_manager).save(plan)
+    dialog_manager.dialog_data.update(
+        {
+            "purchase_type": PurchaseType.NEW,
+            CURRENT_DURATION_KEY: 30,
+            "only_single_plan": False,
+            "only_single_duration": False,
+        }
+    )
+    await dialog_manager.switch_to(state=Subscription.PAYMENT_METHOD)
