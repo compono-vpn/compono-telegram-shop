@@ -40,6 +40,9 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
 
     api_url: str = ""
     api_internal_secret: SecretStr = SecretStr("")
+    # Direct billing address, used for the reminder endpoints that compono-api does not proxy.
+    billing_url: str = ""
+    billing_internal_secret: SecretStr = SecretStr("")
 
     kafka_brokers: str = "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
     kafka_topic_env: str = "stage"

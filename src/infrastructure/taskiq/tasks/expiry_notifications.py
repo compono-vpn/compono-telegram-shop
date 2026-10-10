@@ -143,18 +143,25 @@ def due_expiring_marks(
     ]
 
 
-def collect_due_notices(
-    subscriptions: list[Any], now: datetime
+async def collect_due_notices(
+    billing: BillingClient, now: datetime
 ) -> list[tuple[Any, int, UserNotificationType, datetime]]:
+    """Ask billing for each N-day window, keep the marks that apply to the plan kind."""
     due: list[tuple[Any, int, UserNotificationType, datetime]] = []
-    for subscription in subscriptions:
-        expire_at = _utc(subscription.ExpireAt)
-        if subscription.Status != "ACTIVE" or expire_at is None:
-            continue
-        for days, ntf_type in due_expiring_marks(
-            is_trial=subscription.IsTrial, expire_at=expire_at, now=now
-        ):
-            due.append((subscription, days, ntf_type, expire_at))
+    for days in sorted(set(PAID_MARKS_DAYS) | set(TRIAL_MARKS_DAYS)):
+        window_end = now + timedelta(days=days)
+        window_start = window_end - EXPIRING_WINDOW
+        for subscription in await billing.list_expiring_subscriptions(window_start, window_end):
+            expire_at = _utc(subscription.ExpireAt)
+            if subscription.Status != "ACTIVE" or expire_at is None:
+                continue
+            if any(
+                days == mark
+                for mark, _ in due_expiring_marks(
+                    is_trial=subscription.IsTrial, expire_at=expire_at, now=now
+                )
+            ):
+                due.append((subscription, days, _EXPIRING_TYPES[days], expire_at))
     return due
 
 
@@ -170,7 +177,7 @@ async def send_expiring_notifications(
 ) -> int:
     """Send 'expires in N days' notices to subscriptions entering the final N-day window."""
     current = now or datetime.now(timezone.utc)
-    due = collect_due_notices(await billing.list_all_subscriptions(), current)
+    due = await collect_due_notices(billing, current)
     if not due:
         return 0
 

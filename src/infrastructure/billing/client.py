@@ -45,11 +45,21 @@ class BillingClientError(Exception):
 class BillingClient:
     """Async HTTP client for the compono-billing internal API."""
 
-    def __init__(self, base_url: str, internal_secret: str, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        internal_secret: str,
+        timeout: float = 10.0,
+        direct_base_url: str = "",
+        direct_internal_secret: str = "",
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self._internal_secret = internal_secret
         self._timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
+        self._direct_base_url = direct_base_url.rstrip("/")
+        self._direct_internal_secret = direct_internal_secret or internal_secret
+        self._direct_client: Optional[httpx.AsyncClient] = None
 
     @property
     def _base_path(self) -> str:
@@ -72,6 +82,41 @@ class BillingClient:
     async def close(self) -> None:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
+        if self._direct_client and not self._direct_client.is_closed:
+            await self._direct_client.aclose()
+
+    async def _direct_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any = None,
+        params: Optional[dict[str, Any]] = None,
+    ) -> Any:
+        """Call billing itself for endpoints compono-api does not proxy (user reminders)."""
+        if not self._direct_base_url:
+            return await self._request(method, path, json=json, params=params)
+
+        if self._direct_client is None or self._direct_client.is_closed:
+            self._direct_client = httpx.AsyncClient(
+                timeout=self._timeout,
+                headers={
+                    "X-Internal-Secret": self._direct_internal_secret,
+                    "Content-Type": "application/json",
+                },
+            )
+        url = f"{self._direct_base_url}/api/v1/internal{path}"
+        try:
+            response = await self._direct_client.request(method, url, json=json, params=params)
+        except httpx.HTTPError as e:
+            logger.error(f"Billing direct request failed: {method} {path} - {e}")
+            raise BillingClientError(0, str(e)) from e
+        if response.status_code >= 400:
+            logger.error(
+                f"Billing direct error: {method} {path} -> {response.status_code}: {response.text}"
+            )
+            raise BillingClientError(response.status_code, response.text)
+        return response.json()
 
     async def _request(
         self,
@@ -725,14 +770,16 @@ class BillingClient:
 
     async def claim_user_reminder(self, telegram_id: int, kind: str, dedup_key: str) -> bool:
         """Record a reminder; False means the same (user, kind, key) already exists."""
-        data = await self._post(
+        data = await self._direct_request(
+            "POST",
             "/user-reminders/claim",
             json={"telegram_id": telegram_id, "kind": kind, "dedup_key": dedup_key},
         )
         return bool(data and data.get("claimed"))
 
     async def release_user_reminder(self, telegram_id: int, kind: str, dedup_key: str) -> bool:
-        data = await self._post(
+        data = await self._direct_request(
+            "POST",
             "/user-reminders/release",
             json={"telegram_id": telegram_id, "kind": kind, "dedup_key": dedup_key},
         )
@@ -741,7 +788,8 @@ class BillingClient:
     async def answer_user_reminder(
         self, telegram_id: int, kind: str, dedup_key: str, answer: str
     ) -> bool:
-        data = await self._post(
+        data = await self._direct_request(
+            "POST",
             "/user-reminders/answer",
             json={
                 "telegram_id": telegram_id,
@@ -752,8 +800,24 @@ class BillingClient:
         )
         return bool(data and data.get("updated"))
 
+    async def list_expiring_subscriptions(
+        self, expires_after: datetime, expires_until: datetime
+    ) -> list[BillingSubscription]:
+        """Current ACTIVE subscriptions expiring in (expires_after, expires_until]."""
+        data = await self._direct_request(
+            "GET",
+            "/subscriptions/expiring",
+            params={
+                "from": to_rfc3339_utc(expires_after),
+                "to": to_rfc3339_utc(expires_until),
+            },
+        )
+        return [BillingSubscription.model_validate(s) for s in (data or [])]
+
     async def list_user_reminders(
         self, telegram_id: int, kind: str = ""
     ) -> list[BillingUserReminder]:
-        data = await self._get(f"/user-reminders/{telegram_id}", params={"kind": kind})
+        data = await self._direct_request(
+            "GET", f"/user-reminders/{telegram_id}", params={"kind": kind}
+        )
         return [BillingUserReminder.model_validate(r) for r in (data or [])]
