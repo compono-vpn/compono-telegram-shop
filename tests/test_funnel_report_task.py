@@ -543,11 +543,18 @@ class TestReportConnectedActivityLines:
         text = await self._text(_activity(last_observation_at=None))
         assert "last recorded activity never" in text
 
-    async def test_never_collected_says_no_data_not_zero_people(self):
+    async def test_never_recorded_says_so_instead_of_zero_people(self):
         text = await self._text(
             _activity(connected_users=0, covers_range=False, since=None, fresh=False, nodes_fresh=0)
         )
-        assert "NO DATA: collector has not covered every exit node yet" in text
+        assert "not recorded for this day (recording started never)" in text
+        assert "Connected users (observed on exit nodes): 0" not in text
+
+    async def test_day_entirely_before_recording_is_not_reported_as_zero(self):
+        since = datetime(2026, 10, 10, 17, 24, tzinfo=timezone.utc)  # after the 09-Oct MSK day
+        text = await self._text(_activity(connected_users=0, covers_range=False, since=since))
+        assert "not recorded for this day (recording started 2026-10-10 20:24 MSK)" in text
+        assert "PARTIAL" not in text
 
     async def test_stale_collector_is_flagged_with_node_counts(self):
         oldest = datetime(2026, 10, 10, 2, 0, tzinfo=timezone.utc)  # 05:00 MSK
