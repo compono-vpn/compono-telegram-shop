@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fluentogram import TranslatorHub
 from fluentogram.storage import FileStorage
+from loguru import logger
 
 from src.core.enums import Locale, UserNotificationType
 from src.core.i18n.translator import get_translated_kwargs
@@ -119,9 +120,10 @@ class TestExpiringWindows:
 
     def test_a_subscription_whose_mark_passed_before_deploy_is_not_caught(self):
         # 3-day mark of a subscription that expires in 48 h passed a day ago: no backfill.
-        assert en.due_expiring_marks(
-            is_trial=False, expire_at=NOW + timedelta(hours=48), now=NOW
-        ) == []
+        assert (
+            en.due_expiring_marks(is_trial=False, expire_at=NOW + timedelta(hours=48), now=NOW)
+            == []
+        )
 
 
 class TestExpiringScan:
@@ -175,6 +177,33 @@ class TestExpiringScan:
         s.billing.subscriptions = [_billing_sub(sub_id=7)]
 
         assert await _scan(s) == 0
+
+    async def test_stale_current_expiry_does_not_drop_a_due_subscription(self):
+        stale = _current(sub_id=7, active=False, expires_in=timedelta(days=-174))
+        s = _services(current=stale)
+        s.billing.subscriptions = [_billing_sub(sub_id=7)]
+
+        assert await _scan(s) == 1
+        assert (TG, "SUB_EXPIRING_1D", "sub-7:20261012") in s.billing.claims
+
+    async def test_user_without_a_current_subscription_is_skipped(self):
+        s = _services(current=None)
+        s.billing.subscriptions = [_billing_sub(sub_id=7)]
+
+        assert await _scan(s) == 0
+        assert s.billing.claims == {}
+
+    async def test_scan_logs_skip_counts_per_reason(self):
+        s = _services(current=_current(sub_id=99))
+        s.billing.subscriptions = [_billing_sub(sub_id=7)]
+        records: list[str] = []
+        handler = logger.add(lambda m: records.append(str(m)), level="INFO")
+        try:
+            await _scan(s)
+        finally:
+            logger.remove(handler)
+
+        assert any("not_current=1" in line for line in records)
 
     async def test_many_users_are_paced_under_twenty_per_second(self):
         s = _services(current=_current())

@@ -183,17 +183,21 @@ async def send_expiring_notifications(
 
     enabled: dict[UserNotificationType, bool] = {}
     sent = 0
+    skipped = {"switched_off": 0, "unreachable": 0, "not_current": 0, "failed": 0}
     for subscription, days, ntf_type, expire_at in due:
         if ntf_type not in enabled:
             enabled[ntf_type] = await reminder_enabled(settings_service, ntf_type)
         if not enabled[ntf_type]:
+            skipped["switched_off"] += 1
             continue
         try:
             user: Optional[UserDto] = await user_service.get(subscription.UserTelegramID)
             if not user or not can_receive_reminders(user):
+                skipped["unreachable"] += 1
                 continue
             active = await subscription_service.get_current(subscription.UserTelegramID)
-            if not active or active.id != subscription.ID or not active.is_active:
+            if not active or active.id != subscription.ID:
+                skipped["not_current"] += 1
                 continue
             message = await claim_and_send(
                 billing=billing,
@@ -213,9 +217,14 @@ async def send_expiring_notifications(
             )
             sent += 1 if message else 0
         except Exception:
+            skipped["failed"] += 1
             logger.exception(
                 f"Expiring notice for '{subscription.UserTelegramID}' failed; next scan retries"
             )
+    logger.info(
+        f"Expiring scan: due={len(due)} sent={sent} "
+        + " ".join(f"{reason}={count}" for reason, count in skipped.items())
+    )
     return sent
 
 
