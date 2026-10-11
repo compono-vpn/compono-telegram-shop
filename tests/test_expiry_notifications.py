@@ -321,28 +321,32 @@ def _render(translator, key, **kwargs):
 
 
 class TestRussianCopy:
-    def test_trial_expiring_mentions_first30_and_plain_wording(self, translator):
+    def test_trial_expiring_mentions_compono30_and_plain_wording(self, translator):
         text = _render(translator, "ntf-event-user-expiring", is_trial=True, value=1)
         assert "через 1 день" in text
         assert "пробный период" in text
-        assert "FIRST30" in text
+        assert "COMPONO30" in text
+        assert "FIRST30" not in text
         assert "пробник" not in text
 
     def test_paid_expiring_does_not_offer_first_month_discount(self, translator):
         text = _render(translator, "ntf-event-user-expiring", is_trial=False, value=3)
         assert "через 3 дня" in text
         assert "FIRST30" not in text
+        assert "COMPONO30" not in text
         assert "Продлите" in text
 
-    def test_trial_expired_mentions_first30(self, translator):
+    def test_trial_expired_mentions_compono30(self, translator):
         text = _render(translator, "ntf-event-user-expired", is_trial=True)
         assert "пробный период закончился" in text
-        assert "FIRST30" in text
+        assert "COMPONO30" in text
+        assert "FIRST30" not in text
 
     def test_paid_expired_asks_to_renew(self, translator):
         text = _render(translator, "ntf-event-user-expired", is_trial=False)
         assert "подписка истекла" in text
         assert "FIRST30" not in text
+        assert "COMPONO30" not in text
 
     def test_setup_messages_render_without_placeholders(self, translator):
         for key in (
@@ -357,7 +361,8 @@ class TestRussianCopy:
     def test_checkin_answers_carry_the_promised_content(self, translator):
         yes = _render(translator, "ntf-setup-checkin-connected")
         no = _render(translator, "ntf-setup-checkin-not-connected")
-        assert "FIRST30" in yes and "30 дней" in yes
+        assert "COMPONO30" in yes and "30 дней" in yes
+        assert "FIRST30" not in yes and "FIRST30" not in no
         assert "Белый список" in no and "Direct" in no
         assert "Обновите подписку" in no and "другое приложение" in no
         assert "поддержку" in no
