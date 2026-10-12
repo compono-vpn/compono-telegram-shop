@@ -1,5 +1,5 @@
 from aiogram.enums import ButtonStyle
-from aiogram_dialog import Dialog, Window
+from aiogram_dialog import Dialog, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import (
     Button,
@@ -8,6 +8,7 @@ from aiogram_dialog.widgets.kbd import (
     Group,
     Row,
     Select,
+    Start,
     SwitchTo,
     Url,
     WebApp,
@@ -17,7 +18,7 @@ from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
 from src.bot.keyboards import back_main_menu_button, connect_buttons
-from src.bot.states import Subscription
+from src.bot.states import MainMenu, Subscription
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import PURCHASE_PREFIX
 from src.core.enums import BannerName, PaymentGatewayType, PurchaseType
@@ -304,23 +305,22 @@ failed = Window(
     state=Subscription.FAILED,
 )
 
+PROXY_CONNECT_STYLE = Style(style=ButtonStyle.SUCCESS)
+PROXY_PAY_STYLE = Style(style=ButtonStyle.PRIMARY)
+
 proxy_confirm = Window(
     Banner(BannerName.SUBSCRIPTION),
     I18nFormat("msg-proxy-confirm"),
-    Row(
-        Url(
-            text=I18nFormat("btn-subscription-pay"),
-            url=Format("{url}"),
-            id=f"{PURCHASE_PREFIX}proxy_pay",
-        ),
+    Url(
+        text=I18nFormat("btn-proxy-pay"),
+        url=Format("{url}"),
+        id=f"{PURCHASE_PREFIX}proxy_pay",
+        style=PROXY_PAY_STYLE,
     ),
-    Row(
-        Cancel(
-            text=I18nFormat("btn-back"),
-            id=f"{PURCHASE_PREFIX}proxy_back",
-        ),
+    Cancel(
+        text=I18nFormat("btn-back"),
+        id=f"{PURCHASE_PREFIX}proxy_back",
     ),
-    *back_main_menu_button,
     IgnoreUpdate(),
     state=Subscription.PROXY_CONFIRM,
     getter=proxy_confirm_getter,
@@ -329,7 +329,26 @@ proxy_confirm = Window(
 proxy_success = Window(
     Banner(BannerName.SUBSCRIPTION),
     Format("{proxy_message}"),
-    *back_main_menu_button,
+    Url(
+        text=I18nFormat("btn-proxy-phone"),
+        url=Format("{phone_url}"),
+        id="proxy_success_phone",
+        style=PROXY_CONNECT_STYLE,
+        when=F["has_phone"],
+    ),
+    Url(
+        text=I18nFormat("btn-proxy-desktop"),
+        url=Format("{desktop_url}"),
+        id="proxy_success_desktop",
+        style=PROXY_CONNECT_STYLE,
+        when=F["has_desktop"],
+    ),
+    Start(
+        text=I18nFormat("btn-proxy-to-menu"),
+        id="proxy_success_menu",
+        state=MainMenu.MAIN,
+        mode=StartMode.RESET_STACK,
+    ),
     IgnoreUpdate(),
     state=Subscription.PROXY_SUCCESS,
     getter=proxy_success_getter,
