@@ -548,6 +548,8 @@ ntf-subscription-gateways-not-available = <i>❌ Нет доступных пл�
 ntf-subscription-renew-plan-unavailable = <i>❌ Ваш план устарел и не доступен для продления.</i>
 ntf-subscription-payment-creation-failed = <i>❌ Произошла ошибка при создании платежа, попробуйте позже.</i>
 
+ntf-proxy-already-included = <i>🎁 Личный прокси уже входит в вашу подписку Compono VPN — покупать его не нужно.</i>
+
 ntf-broadcast-list-empty = <i>❌ Список рассылок пуст.</i>
 ntf-broadcast-audience-not-available = <i>❌ Нет доступных пользователей для выбранной аудитории.</i>
 ntf-broadcast-audience-not-active = <i>❌ Нет пользователей у которых есть АКТИВНАЯ подписка с данным планом.</i>

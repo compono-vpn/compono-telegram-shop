@@ -32,6 +32,7 @@ from src.infrastructure.billing.models import (
     BillingCustomer,
     BillingPaymentGateway,
     BillingPaymentResult,
+    BillingPersonalProxies,
     BillingPlan,
     BillingPlanSnapshot,
     BillingPromocode,
@@ -281,6 +282,42 @@ class TestTGProxyContract:
         assert_model_matches_fixture(proxies[0], fixture)
 
 
+class TestPersonalTGProxiesContract:
+    async def test_get_personal_tg_proxies_matches_fixture(self):
+        fixture = load_fixture("tg_proxies_personal.json")
+        client = _make_client_with_mock(fixture)
+
+        personal = await client.get_personal_tg_proxies(42)
+
+        assert isinstance(personal, BillingPersonalProxies)
+        assert_model_matches_fixture(personal, fixture)
+        assert personal.proxies[0].id < 0
+        assert personal.proxies[0].is_public is False
+
+    async def test_null_plan_and_price_are_accepted(self):
+        fixture = {**load_fixture("tg_proxies_personal.json")}
+        fixture.update(
+            entitled=False, source=None, expires_at=None, proxy_plan_id=None, price_rub=None
+        )
+        client = _make_client_with_mock(fixture)
+
+        personal = await client.get_personal_tg_proxies(42)
+
+        assert personal.proxy_plan_id is None
+        assert personal.price_rub is None
+        assert personal.source is None and personal.expires_at is None
+
+    async def test_fractional_price_is_accepted(self):
+        fixture = {**load_fixture("tg_proxies_personal.json"), "price_rub": 24.9}
+        client = _make_client_with_mock(fixture)
+
+        assert (await client.get_personal_tg_proxies(42)).price_rub == 24.9
+
+    def test_tg_proxy_users_fixture_shape(self):
+        fixture = load_fixture("tg_proxy_users.json")
+        assert {"name", "phone_secret", "web_secret", "expires_at"} <= fixture["users"][0].keys()
+
+
 class TestUsersCountContract:
     """GET /users (no role) returns {"count": N} -- pins that count_users()
     still reads the real count rather than silently returning its 0
@@ -319,6 +356,7 @@ class TestUsersListContract:
     [
         "notify_user_system.json",
         "notify_user_redirect.json",
+        "notify_user_redirect_proxy.json",
     ],
 )
 def test_kafka_notify_user_fixtures_have_documented_shape(fixture_name):

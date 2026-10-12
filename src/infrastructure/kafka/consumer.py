@@ -1,4 +1,5 @@
 from aiogram import Bot
+from aiogram.fsm.state import State
 from aiogram_dialog import BgManagerFactory, ShowMode, StartMode
 from dishka import AsyncContainer
 from fluentogram.exceptions import FormatError
@@ -127,6 +128,10 @@ class UserNotificationConsumer(SupervisedKafkaConsumer):
 
     async def _handle_redirect(self, telegram_id: int, payload: dict) -> None:
         redirect_to = payload.get("redirect_to", "")
+        if redirect_to == "proxy_success":
+            await self._start_redirect(telegram_id, Subscription.PROXY_SUCCESS, {})
+            logger.info(f"Redirected user {telegram_id} to proxy success")
+            return
         if redirect_to != "subscription_success":
             logger.warning(f"Unknown redirect_to '{redirect_to}', skipping")
             return
@@ -137,6 +142,13 @@ class UserNotificationConsumer(SupervisedKafkaConsumer):
         except ValueError:
             purchase_type = PurchaseType.NEW
 
+        await self._start_redirect(
+            telegram_id, Subscription.SUCCESS, {"purchase_type": purchase_type}
+        )
+
+        logger.info(f"Redirected user {telegram_id} to subscription success")
+
+    async def _start_redirect(self, telegram_id: int, state: State, data: dict) -> None:
         async with self._container() as request_container:
             bot = await request_container.get(Bot)
             bg_factory = await request_container.get(BgManagerFactory)
@@ -146,10 +158,8 @@ class UserNotificationConsumer(SupervisedKafkaConsumer):
                 chat_id=telegram_id,
             )
             await bg_manager.start(
-                state=Subscription.SUCCESS,
-                data={"purchase_type": purchase_type},
+                state=state,
+                data=data,
                 mode=StartMode.RESET_STACK,
                 show_mode=ShowMode.DELETE_AND_SEND,
             )
-
-        logger.info(f"Redirected user {telegram_id} to subscription success")

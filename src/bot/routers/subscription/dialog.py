@@ -1,7 +1,17 @@
 from aiogram.enums import ButtonStyle
 from aiogram_dialog import Dialog, Window
 from aiogram_dialog.widgets.input import MessageInput
-from aiogram_dialog.widgets.kbd import Button, Column, Group, Row, Select, SwitchTo, Url, WebApp
+from aiogram_dialog.widgets.kbd import (
+    Button,
+    Cancel,
+    Column,
+    Group,
+    Row,
+    Select,
+    SwitchTo,
+    Url,
+    WebApp,
+)
 from aiogram_dialog.widgets.style import EMPTY_STYLE, Style, StyleCase
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
@@ -20,6 +30,8 @@ from .getters import (
     payment_method_getter,
     plans_getter,
     promocode_success_getter,
+    proxy_confirm_getter,
+    proxy_success_getter,
     subscription_getter,
     success_payment_getter,
 )
@@ -292,6 +304,37 @@ failed = Window(
     state=Subscription.FAILED,
 )
 
+proxy_confirm = Window(
+    Banner(BannerName.SUBSCRIPTION),
+    I18nFormat("msg-proxy-confirm"),
+    Row(
+        Url(
+            text=I18nFormat("btn-subscription-pay"),
+            url=Format("{url}"),
+            id=f"{PURCHASE_PREFIX}proxy_pay",
+        ),
+    ),
+    Row(
+        Cancel(
+            text=I18nFormat("btn-back"),
+            id=f"{PURCHASE_PREFIX}proxy_back",
+        ),
+    ),
+    *back_main_menu_button,
+    IgnoreUpdate(),
+    state=Subscription.PROXY_CONFIRM,
+    getter=proxy_confirm_getter,
+)
+
+proxy_success = Window(
+    Banner(BannerName.SUBSCRIPTION),
+    Format("{proxy_message}"),
+    *back_main_menu_button,
+    IgnoreUpdate(),
+    state=Subscription.PROXY_SUCCESS,
+    getter=proxy_success_getter,
+)
+
 promocode = Window(
     Banner(BannerName.PROMOCODE),
     I18nFormat("msg-subscription-promocode"),
@@ -333,4 +376,6 @@ router = Dialog(
     success_payment,
     success_trial,
     failed,
+    proxy_confirm,
+    proxy_success,
 )

@@ -1074,6 +1074,15 @@ msg-subscription-change-success =
     <b>{ $plan_name }</b>
     { frg-subscription }
 
+msg-proxy-confirm =
+    <b>🚀 Личный прокси на 30 дней</b>
+
+    Своя ссылка для телефона и своя для компьютера — до 3 устройств одновременно.
+
+    Стоимость: <s>{ $original_price } ₽</s> <b>{ $price } ₽</b> — цена на ограниченное время.
+
+    После оплаты ссылки появятся здесь.
+
 msg-subscription-failed = 
     <b>❌ Произошла ошибка!</b>
 

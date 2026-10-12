@@ -29,6 +29,8 @@ class Subscription(StatesGroup):
     SUCCESS = State()
     FAILED = State()
     TRIAL = State()
+    PROXY_CONFIRM = State()
+    PROXY_SUCCESS = State()
 
 
 class Dashboard(StatesGroup):

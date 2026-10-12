@@ -1,0 +1,7 @@
+{
+  "telegram_id": 123456789,
+  "type": "redirect",
+  "redirect_to": "proxy_success",
+  "purchase_type": "NEW",
+  "expires_at": "2026-11-11T12:00:00Z"
+}

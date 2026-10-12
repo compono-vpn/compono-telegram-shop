@@ -197,6 +197,7 @@ class PlanType(UpperStrEnum):
     DEVICES = auto()
     BOTH = auto()
     UNLIMITED = auto()
+    PROXY = auto()
 
 
 class PlanAvailability(UpperStrEnum):

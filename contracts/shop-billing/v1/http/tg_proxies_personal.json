@@ -1,0 +1,22 @@
+{
+  "entitled": true,
+  "source": "vpn_plan",
+  "expires_at": "2026-11-10T12:00:00Z",
+  "proxy_plan_id": 5,
+  "price_rub": 25,
+  "proxies": [
+    {
+      "id": -1,
+      "server": "phone.compono.online",
+      "port": 443,
+      "secret": "ee00112233445566778899aabbccddeeff7777772e6d6963726f736f66742e636f6d",
+      "kind": "MTPROTO",
+      "eligible_plan_ids": [],
+      "is_active": true,
+      "is_public": false,
+      "link": "tg://proxy?server=phone.compono.online&port=443&secret=ee00112233445566778899aabbccddeeff7777772e6d6963726f736f66742e636f6d",
+      "created_at": "2026-10-01T10:00:00Z",
+      "updated_at": "2026-10-01T10:00:00Z"
+    }
+  ]
+}

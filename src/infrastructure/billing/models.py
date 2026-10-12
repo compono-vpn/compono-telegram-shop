@@ -327,3 +327,14 @@ class BillingTGProxy(BaseModel):
     kind: str = Field("MTPROTO", alias="kind")
     link: str = Field("", alias="link")
     is_public: bool = Field(True, alias="is_public")
+
+
+class BillingPersonalProxies(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    entitled: bool = False
+    source: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    proxy_plan_id: Optional[int] = None
+    price_rub: Optional[float] = None
+    proxies: list[BillingTGProxy] = Field(default_factory=list)

@@ -263,6 +263,7 @@ plan-type = { $plan_type ->
     [DEVICES] Устройства
     [BOTH] Трафик + устройства
     [UNLIMITED] Безлимитный
+    [PROXY] Прокси
     *[OTHER] { $plan_type }
 }
 

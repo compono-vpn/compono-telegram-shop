@@ -12,6 +12,11 @@ from loguru import logger
 from redis.asyncio import Redis
 
 from src.bot.keyboards import get_user_keyboard
+from src.bot.proxy_view import (
+    PROXY_DURATION_DAYS,
+    STRIKETHROUGH_PRICE_RUB,
+    load_proxy_view,
+)
 from src.bot.states import Subscription
 from src.core.constants import PURCHASE_PREFIX, USER_KEY
 from src.core.crypto_assets import get_crypto_asset
@@ -201,6 +206,69 @@ async def _create_payment_and_get_data(
             payload=MessagePayload(i18n_key="ntf-subscription-payment-creation-failed"),
         )
         return None
+
+
+@inject
+async def on_buy_proxy(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    billing: FromDishka[BillingClient],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    gateway_type = PaymentGatewayType.PLATEGA.value
+
+    try:
+        view = await load_proxy_view(billing, user)
+        if not view.personal_loaded or view.proxy_plan_id <= 0:
+            raise ValueError("Proxy plan is not available")
+        if view.entitled and not view.can_renew:
+            logger.info(f"{log(user)} Already has personal proxy for free, skipping purchase")
+            return
+        if view.vpn_blocked or not view.has_price:
+            raise ValueError("Proxy purchase is not available")
+        billing_gateway = await billing.get_gateway_by_type(gateway_type)
+        if not billing_gateway:
+            raise ValueError(f"Gateway '{gateway_type}' not found")
+        purchase_type = PurchaseType.RENEW if view.can_renew else PurchaseType.NEW
+        result = await billing.create_payment(
+            telegram_id=user.telegram_id,
+            plan_id=view.proxy_plan_id,
+            duration_days=PROXY_DURATION_DAYS,
+            currency=billing_gateway.Currency,
+            gateway_type=gateway_type,
+            purchase_type=purchase_type.value,
+            is_test=user.is_dev,
+        )
+        if not result.URL:
+            raise ValueError("Payment link is empty")
+    except BillingClientError as exception:
+        logger.warning(f"{log(user)} Billing rejected proxy payment: {exception}")
+        key = (
+            "ntf-proxy-already-included"
+            if exception.status_code in (400, 422)
+            else "ntf-subscription-payment-creation-failed"
+        )
+        await notification_service.notify_user(user=user, payload=MessagePayload(i18n_key=key))
+        return
+    except Exception as exception:
+        logger.opt(exception=True).error(f"{log(user)} Failed to create proxy payment: {exception}")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-subscription-payment-creation-failed"),
+        )
+        return
+
+    logger.info(f"{log(user)} Created proxy payment '{result.ID}'")
+    await dialog_manager.start(
+        Subscription.PROXY_CONFIRM,
+        data={
+            "payment_url": result.URL,
+            "price": view.price_text,
+            "original_price": STRIKETHROUGH_PRICE_RUB,
+        },
+    )
 
 
 @inject

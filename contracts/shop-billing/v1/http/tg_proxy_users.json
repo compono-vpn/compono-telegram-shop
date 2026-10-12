@@ -1,0 +1,10 @@
+{
+  "users": [
+    {
+      "name": "u17",
+      "phone_secret": "00112233445566778899aabbccddeeff",
+      "web_secret": "ffeeddccbbaa99887766554433221100",
+      "expires_at": "2026-11-10T12:00:00Z"
+    }
+  ]
+}

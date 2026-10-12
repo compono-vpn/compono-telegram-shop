@@ -14,6 +14,7 @@ from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
 from src.bot.routers.dashboard.users.handlers import on_user_search
+from src.bot.routers.subscription.handlers import on_buy_proxy
 from src.bot.states import Dashboard, MainMenu, Subscription
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import MIDDLEWARE_DATA_KEY, PURCHASE_PREFIX, USER_KEY
@@ -272,6 +273,20 @@ info = Window(
 tg_proxy = Window(
     Banner(BannerName.MENU),
     Format("{proxy_message}"),
+    Row(
+        Button(
+            text=I18nFormat("btn-menu-proxy-buy"),
+            id="proxy_buy",
+            on_click=on_buy_proxy,
+            when=F["can_buy_proxy"],
+        ),
+        Button(
+            text=I18nFormat("btn-menu-proxy-renew"),
+            id="proxy_renew",
+            on_click=on_buy_proxy,
+            when=F["can_renew_proxy"],
+        ),
+    ),
     Row(
         Start(
             text=I18nFormat("btn-menu-proxy-plans"),
