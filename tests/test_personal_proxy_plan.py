@@ -150,7 +150,7 @@ class TestProxyScreenStates:
 
         assert PUBLIC_WEB in msg
         assert "<s>49 ₽</s> <b>25 ₽</b> в месяц" in msg
-        assert "на ограниченное время" in msg
+        assert "только до 31 октября" in msg
         assert "до 3 устройств" in msg
         assert "🎁 Подписчикам Compono VPN — бесплатно." in msg
         assert "платном тарифе" not in msg
