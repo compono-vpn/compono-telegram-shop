@@ -151,11 +151,17 @@ def format_date(value: datetime | None) -> str:
     return value.astimezone(MSK).strftime("%d.%m.%Y")
 
 
+PHONE_LINKS_ENABLED = False
+UPDATE_HINT = "📲 Не подключается? Обновите Telegram до последней версии."
+
+
 def _is_web(p: dict[str, Any]) -> bool:
     return p["kind"] == "WEB"
 
 
 def primary_phone_url(view: ProxyView) -> str:
+    if not PHONE_LINKS_ENABLED:
+        return ""
     for p in view.proxies:
         if not p["is_public"] and not _is_web(p):
             return p["url"]
@@ -220,7 +226,7 @@ def _entitled_message(view: ProxyView) -> str:
         second = "Стабильное подключение."
     if status:
         second = f"{second} {status}"
-    return f"{title}\n{second}\n\n{VPN_OFF}"
+    return f"{title}\n{second}\n\n{VPN_OFF}\n{UPDATE_HINT}"
 
 
 def _offer_message(view: ProxyView) -> str:
@@ -257,4 +263,4 @@ def build_success_message(view: ProxyView) -> str:
     if personal:
         parts.append(DEVICES_SENTENCE)
     body = f"\n{' '.join(parts)}" if parts else ""
-    return f"{title}{body}\n\n{VPN_OFF}"
+    return f"{title}{body}\n\n{VPN_OFF}\n{UPDATE_HINT}"
