@@ -5,9 +5,9 @@ Verifies button ordering and i18n key usage in the main menu.
 
 from __future__ import annotations
 
-from aiogram_dialog.widgets.kbd import Button, CopyText, ListGroup, Row, SwitchTo, Url
+from aiogram_dialog.widgets.kbd import Button, Row, SwitchTo, Url
 
-from src.bot.routers.menu.dialog import connect, menu, tg_proxy
+from src.bot.routers.menu.dialog import connect, menu
 from src.bot.states import MainMenu
 
 
@@ -61,31 +61,6 @@ class TestMenuButtonOrder:
         assert proxy_row_idx < trial_row_idx, (
             f"TG proxy (index {proxy_row_idx}) should be before trial (index {trial_row_idx})"
         )
-
-class TestTGProxyWindow:
-    """The TG proxy window must not use Url or CopyText buttons (tg:// is rejected by Telegram)."""
-
-    def test_no_inline_buttons_with_tg_links(self):
-        """tg:// links are rejected in Url buttons AND CopyText — only message text works."""
-        forbidden = (Url, CopyText)
-        for widget in tg_proxy.keyboard.buttons:
-            if isinstance(widget, ListGroup):
-                for row in widget.buttons:
-                    if isinstance(row, Row):
-                        for btn in row.buttons:
-                            assert not isinstance(btn, forbidden), (
-                                f"TG proxy window must not use {type(btn).__name__} buttons — "
-                                "tg:// scheme is rejected by Telegram inline keyboards"
-                            )
-
-    def test_no_list_group_in_proxy_window(self):
-        """Proxy links should be in message text, not in keyboard buttons."""
-        for widget in tg_proxy.keyboard.buttons:
-            assert not isinstance(widget, ListGroup), (
-                "TG proxy window should not use ListGroup — "
-                "proxy links belong in message text, not inline buttons"
-            )
-
 
 class TestMenuI18nKeys:
     """Button text must use proper i18n keys (not hardcoded strings)."""

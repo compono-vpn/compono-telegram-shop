@@ -6,7 +6,15 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 from loguru import logger
 
-from src.bot.proxy_view import build_proxy_message, load_proxy_view
+from src.bot.proxy_view import (
+    backup_buttons,
+    build_backup_message,
+    build_proxy_message,
+    fallback_buttons,
+    load_proxy_view,
+    primary_desktop_url,
+    primary_phone_url,
+)
 from src.core.config import AppConfig
 from src.core.enums import ReferralLevel
 from src.core.exceptions import MenuRenderingError
@@ -235,17 +243,40 @@ async def tg_proxy_getter(
     **kwargs: Any,
 ) -> dict[str, Any]:
     view = await load_proxy_view(billing, user)
-    show_plans_offer = (not view.entitled) if view.personal_loaded else not view.legacy_paid
+    phone_url = primary_phone_url(view) if view.entitled else ""
+    desktop_url = primary_desktop_url(view) if view.entitled else ""
+    backups = backup_buttons(view)
 
     return {
         "proxies": view.proxies,
         "proxy_message": build_proxy_message(view),
         "has_proxies": len(view.proxies) > 0,
-        "show_plans_offer": show_plans_offer,
-        "show_vpn_offer": not user.current_subscription or not user.current_subscription.is_active,
+        "is_entitled": view.entitled,
+        "is_fallback": not view.personal_loaded,
+        "phone_url": phone_url,
+        "desktop_url": desktop_url,
+        "has_phone": bool(phone_url),
+        "has_desktop": bool(desktop_url),
+        "has_backups": bool(backups) and view.personal_loaded,
+        "fallback_buttons": fallback_buttons(view) if not view.personal_loaded else [],
+        "show_plans_offer": view.personal_loaded and not view.entitled,
         "can_buy_proxy": view.can_buy,
         "can_renew_proxy": view.can_renew,
         "proxy_price": view.price_text,
+    }
+
+
+@inject
+async def tg_proxy_backup_getter(
+    dialog_manager: DialogManager,
+    user: UserDto,
+    billing: FromDishka[BillingClient],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    view = await load_proxy_view(billing, user)
+    return {
+        "backup_message": build_backup_message(view),
+        "backups": backup_buttons(view),
     }
 
 

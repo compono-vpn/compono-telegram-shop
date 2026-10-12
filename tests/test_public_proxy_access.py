@@ -67,7 +67,6 @@ async def test_active_paid_plan_is_preserved_in_both_proxy_entry_points():
         dialog_manager=make_dialog_manager(), user=user, billing=billing
     )
     billing.get_tg_proxies.assert_awaited_once_with(3)
-    assert not result["show_vpn_offer"]
 
 
 async def test_expired_timestamp_overrides_stale_active_status():
@@ -79,4 +78,4 @@ async def test_expired_timestamp_overrides_stale_active_status():
         dialog_manager=make_dialog_manager(), user=user, billing=billing
     )
     billing.get_tg_proxies.assert_awaited_once_with(0)
-    assert result["show_vpn_offer"]
+    assert result["is_fallback"] is True

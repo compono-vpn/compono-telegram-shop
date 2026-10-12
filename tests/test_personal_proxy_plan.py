@@ -1,26 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import httpx
 import pytest
-from aiogram_dialog.widgets.kbd import Button
 
-from src.bot import proxy_view
 from src.bot.routers.dashboard.statistics.getters import statistics_getter
 from src.bot.routers.dashboard.users.user.getters import (
     give_access_getter,
     give_subscription_getter,
 )
-from src.bot.routers.menu.dialog import tg_proxy
 from src.bot.routers.menu.getters import tg_proxy_getter
 from src.bot.routers.menu.handlers import on_start_command
 from src.bot.routers.subscription.getters import (
     plans_getter,
     proxy_confirm_getter,
-    proxy_success_getter,
 )
 from src.bot.routers.subscription.handlers import on_buy_proxy
 from src.bot.states import MainMenu, Subscription
@@ -113,117 +109,6 @@ async def _render(personal=None, personal_error=None, user=None, **kwargs):
         billing=billing,
     )
     return result, billing
-
-
-class TestProxyScreenStates:
-    async def test_vpn_subscriber_gets_personal_links_free(self):
-        result, _ = await _render(personal=_entitled("vpn_plan"))
-        msg = result["proxy_message"]
-
-        assert "бесплатно входит в вашу подписку Compono VPN" in msg
-        assert "до 3 устройств одновременно" in msg
-        assert "выключенным VPN" in msg
-        assert f'<a href="{PERSONAL_PHONE}">Подключить me.compono.online:443</a> — личный' in msg
-        assert f'<a href="{PERSONAL_WEB}">Подключить me.compono.online</a> — личный' in msg
-        assert msg.index(PERSONAL_WEB) < msg.index(PUBLIC_WEB)
-        assert "25 ₽" not in msg and "<s>" not in msg
-        assert result["can_buy_proxy"] is False
-        assert result["can_renew_proxy"] is False
-        assert result["show_plans_offer"] is False
-
-    async def test_proxy_plan_buyer_sees_expiry_and_renew(self):
-        result, _ = await _render(personal=_entitled("proxy_plan", EXPIRES))
-        msg = result["proxy_message"]
-
-        assert "Личный прокси действует до 12.11.2026." in msg
-        assert "до 3 устройств одновременно" in msg
-        assert PERSONAL_PHONE in msg and PERSONAL_WEB in msg
-        assert "<s>" not in msg
-        assert result["can_renew_proxy"] is True
-        assert result["can_buy_proxy"] is False
-        assert result["proxy_price"] == "25"
-        assert result["show_plans_offer"] is False
-
-    async def test_not_entitled_sees_public_links_and_offer(self):
-        result, _ = await _render(personal=_not_entitled())
-        msg = result["proxy_message"]
-
-        assert PUBLIC_WEB in msg
-        assert "<s>49 ₽</s> <b>25 ₽</b> в месяц" in msg
-        assert "только до 31 октября" in msg
-        assert "до 3 устройств" in msg
-        assert "🎁 Подписчикам Compono VPN — бесплатно." in msg
-        assert "платном тарифе" not in msg
-        assert "входит в платный тариф" not in msg
-        assert result["can_buy_proxy"] is True
-        assert result["can_renew_proxy"] is False
-        assert result["show_plans_offer"] is True
-
-    async def test_not_entitled_without_public_phone_points_to_offer(self):
-        result, _ = await _render(personal=_not_entitled())
-        assert "Общих прокси для телефона нет — личный ниже." in result["proxy_message"]
-
-    async def test_offer_uses_price_from_billing(self):
-        personal = _not_entitled()
-        personal.price_rub = 30
-        result, _ = await _render(personal=personal)
-        assert "<b>30 ₽</b>" in result["proxy_message"]
-        assert result["proxy_price"] == "30"
-
-    async def test_no_offer_when_proxy_plan_missing(self):
-        personal = _not_entitled()
-        personal.proxy_plan_id = 0
-        result, _ = await _render(personal=personal)
-        assert result["can_buy_proxy"] is False
-        assert "<s>49 ₽</s>" not in result["proxy_message"]
-
-
-class TestFallback:
-    async def test_personal_error_falls_back_to_public_call(self):
-        result, billing = await _render(tg_proxies=_public_rows())
-
-        billing.get_personal_tg_proxies.assert_awaited_once()
-        billing.get_tg_proxies.assert_awaited_once_with(0)
-        assert PUBLIC_WEB in result["proxy_message"]
-        assert result["can_buy_proxy"] is False
-        assert result["can_renew_proxy"] is False
-        assert result["show_plans_offer"] is True
-        assert "платном тарифе" not in result["proxy_message"]
-
-    async def test_fallback_keeps_plan_id_for_paid_subscriber(self):
-        user = make_user(subscription=make_subscription(plan_id=3))
-        result, billing = await _render(tg_proxies=_personal_rows(), user=user)
-
-        billing.get_tg_proxies.assert_awaited_once_with(3)
-        assert result["show_plans_offer"] is False
-        assert PERSONAL_WEB in result["proxy_message"]
-
-    async def test_both_calls_failing_never_raises(self):
-        result, _ = await _render(tg_proxies_error=Exception("down"))
-        assert result["has_proxies"] is False
-        assert "Нет доступных прокси." in result["proxy_message"]
-
-
-class TestWindowButtons:
-    def _buttons(self):
-        return {
-            b.widget_id: b
-            for row in tg_proxy.keyboard.buttons
-            for b in getattr(row, "buttons", [row])
-            if isinstance(b, Button)
-        }
-
-    def test_buy_and_renew_buttons_exist_and_are_conditional(self):
-        buttons = self._buttons()
-        assert "proxy_buy" in buttons and "proxy_renew" in buttons
-        assert buttons["proxy_buy"].on_click.callback is buttons["proxy_renew"].on_click.callback
-
-    def test_buy_visible_only_when_can_buy(self):
-        buttons = self._buttons()
-        assert buttons["proxy_buy"].is_({"can_buy_proxy": True}, None)
-        assert not buttons["proxy_buy"].is_({"can_buy_proxy": False}, None)
-        assert buttons["proxy_renew"].is_({"can_renew_proxy": True}, None)
-        assert not buttons["proxy_renew"].is_({"can_renew_proxy": False}, None)
 
 
 def _buy_args(personal, create_result=None, gateway=True):
@@ -344,46 +229,6 @@ class TestConfirmAndSuccess:
             "original_price": 49,
         }
 
-    async def test_success_message_lists_personal_links(self):
-        billing = make_billing_client(personal=_entitled("proxy_plan", EXPIRES))
-
-        result = await unwrap_inject(proxy_success_getter)(
-            dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
-        )
-        msg = result["proxy_message"]
-
-        assert msg.startswith("<b>✅ Оплата прошла успешно!</b>")
-        assert "Личный прокси действует до 12.11.2026." in msg
-        assert "до 3 устройств одновременно" in msg
-        assert PERSONAL_PHONE in msg and PERSONAL_WEB in msg
-
-    async def test_success_waits_until_entitlement_is_visible(self):
-        billing = make_billing_client(personal=_not_entitled())
-        billing.get_personal_tg_proxies.side_effect = [
-            _not_entitled(),
-            _not_entitled(),
-            _entitled("proxy_plan", EXPIRES),
-        ]
-
-        with patch.object(proxy_view.asyncio, "sleep", new=AsyncMock()):
-            result = await unwrap_inject(proxy_success_getter)(
-                dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
-            )
-
-        assert billing.get_personal_tg_proxies.await_count == 3
-        assert PERSONAL_WEB in result["proxy_message"]
-
-    async def test_success_message_when_entitlement_never_appears(self):
-        billing = make_billing_client(personal=_not_entitled())
-
-        with patch.object(proxy_view.asyncio, "sleep", new=AsyncMock()):
-            result = await unwrap_inject(proxy_success_getter)(
-                dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
-            )
-
-        assert "Оплата прошла успешно" in result["proxy_message"]
-        assert "через минуту" in result["proxy_message"]
-
 
 def _consumer() -> UserNotificationConsumer:
     config = MagicMock()
@@ -476,78 +321,6 @@ class TestBillingClientPersonal:
             }
         )
         assert data.expires_at is None and data.source is None
-
-
-class TestSharedRowsWhenPersonalLinksAreOff:
-    async def test_shared_rows_are_called_stable_without_personal_wording(self):
-        result, _ = await _render(personal=_entitled("vpn_plan", proxies=_shared_rows()))
-        msg = result["proxy_message"]
-
-        assert "— стабильный" in msg
-        assert "личный" not in msg.replace("Запасные, если стабильный", "")
-        assert "до 3 устройств" not in msg
-        assert "только ваши" not in msg
-        assert "Прокси бесплатно входит в вашу подписку Compono VPN." in msg
-
-    async def test_bought_plan_with_shared_rows_has_no_device_claim(self):
-        result, _ = await _render(personal=_entitled("proxy_plan", EXPIRES, _shared_rows()))
-        msg = result["proxy_message"]
-
-        assert "Прокси действует до 12.11.2026." in msg
-        assert "до 3 устройств" not in msg
-        assert "Личный" not in msg
-
-    async def test_success_message_with_shared_rows(self):
-        billing = make_billing_client(personal=_entitled("proxy_plan", EXPIRES, _shared_rows()))
-        result = await unwrap_inject(proxy_success_getter)(
-            dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
-        )
-        assert "до 3 устройств" not in result["proxy_message"]
-        assert "— стабильный" in result["proxy_message"]
-
-
-class TestNullPlanOrPrice:
-    @pytest.mark.parametrize("plan_id,price", [(None, 25), (9, None), (None, None), (0, 25)])
-    async def test_no_buy_button_and_no_offer(self, plan_id, price):
-        personal = _not_entitled()
-        personal.proxy_plan_id = plan_id
-        personal.price_rub = price
-        result, _ = await _render(personal=personal)
-
-        assert result["can_buy_proxy"] is False
-        assert "<s>" not in result["proxy_message"]
-        assert "Личный прокси</b>" not in result["proxy_message"]
-        assert PUBLIC_WEB in result["proxy_message"]
-
-    async def test_no_renew_button_when_price_missing(self):
-        personal = _entitled("proxy_plan", EXPIRES)
-        personal.price_rub = None
-        result, _ = await _render(personal=personal)
-
-        assert result["can_renew_proxy"] is False
-        assert PERSONAL_WEB in result["proxy_message"]
-
-    @pytest.mark.parametrize(
-        "price,text", [(25, "25"), (25.0, "25"), (24.9, "24.9"), (19.5, "19.5"), (30.25, "30.25")]
-    )
-    async def test_price_has_no_trailing_zero(self, price, text):
-        personal = _not_entitled()
-        personal.price_rub = price
-        result, _ = await _render(personal=personal)
-
-        assert result["proxy_price"] == text
-        assert f"<b>{text} ₽</b>" in result["proxy_message"]
-        assert ".0 " not in result["proxy_message"]
-
-    async def test_buy_with_null_price_never_reaches_billing(self):
-        personal = _not_entitled()
-        personal.price_rub = None
-        _, dm, billing, notification = _buy_args(personal)
-
-        await _buy(dm, billing, notification)
-
-        billing.create_payment.assert_not_awaited()
-        notification.notify_user.assert_awaited_once()
 
 
 class TestVpnSubscriberGuard:

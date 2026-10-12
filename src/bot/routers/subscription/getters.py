@@ -7,7 +7,12 @@ from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 
-from src.bot.proxy_view import await_entitlement, build_success_message
+from src.bot.proxy_view import (
+    await_entitlement,
+    build_success_message,
+    primary_desktop_url,
+    primary_phone_url,
+)
 from src.core.config import AppConfig
 from src.core.crypto_assets import CRYPTO_ASSETS, CRYPTO_ASSETS_BY_ID
 from src.core.enums import PaymentGatewayType, PromocodeRewardType, PurchaseType
@@ -443,4 +448,12 @@ async def proxy_success_getter(
     **kwargs: Any,
 ) -> dict[str, Any]:
     view = await await_entitlement(billing, user)
-    return {"proxy_message": build_success_message(view)}
+    phone_url = primary_phone_url(view) if view.entitled else ""
+    desktop_url = primary_desktop_url(view) if view.entitled else ""
+    return {
+        "proxy_message": build_success_message(view),
+        "phone_url": phone_url,
+        "desktop_url": desktop_url,
+        "has_phone": bool(phone_url),
+        "has_desktop": bool(desktop_url),
+    }

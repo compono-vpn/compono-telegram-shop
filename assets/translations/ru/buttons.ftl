@@ -470,6 +470,12 @@ btn-menu-vpn-offer = 🌐 VPN для всего интернета
 
 btn-setup-checkin-yes = ✅ Да, работает
 btn-setup-checkin-no = ❌ Нет, не получилось
-btn-menu-proxy-plans = 💳 Тарифы
+btn-menu-proxy-plans = 💳 Тарифы VPN
 btn-menu-proxy-buy = 🚀 Личный прокси за { $proxy_price } ₽
-btn-menu-proxy-renew = 🔄 Продлить прокси за { $proxy_price } ₽
+btn-menu-proxy-renew = 🔄 Продлить за { $proxy_price } ₽
+btn-proxy-phone = 📱 Подключить на телефоне
+btn-proxy-desktop = 💻 Подключить на компьютере
+btn-proxy-backups = 🛟 Запасные прокси
+btn-proxy-free = 🆓 Бесплатный прокси
+btn-proxy-pay = 💳 Оплатить { $price } ₽
+btn-proxy-to-menu = ⬅️ В меню
