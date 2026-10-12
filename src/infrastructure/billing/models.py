@@ -335,6 +335,6 @@ class BillingPersonalProxies(BaseModel):
     entitled: bool = False
     source: Optional[str] = None
     expires_at: Optional[datetime] = None
-    proxy_plan_id: int = 0
-    price_rub: int = 0
+    proxy_plan_id: Optional[int] = None
+    price_rub: Optional[float] = None
     proxies: list[BillingTGProxy] = Field(default_factory=list)

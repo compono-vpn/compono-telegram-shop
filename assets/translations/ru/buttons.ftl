@@ -380,6 +380,7 @@ btn-plan-type-choice = { $type ->
     [DEVICES] 📱 Устройства
     [BOTH] 🔗 Трафик + устройства
     [UNLIMITED] ♾️ Безлимит
+    [PROXY] 📡 Прокси
     *[OTHER] { $type }
     }
 

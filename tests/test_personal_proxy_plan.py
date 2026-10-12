@@ -5,18 +5,41 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import httpx
+import pytest
 from aiogram_dialog.widgets.kbd import Button
 
 from src.bot import proxy_view
+from src.bot.routers.dashboard.statistics.getters import statistics_getter
+from src.bot.routers.dashboard.users.user.getters import (
+    give_access_getter,
+    give_subscription_getter,
+)
 from src.bot.routers.menu.dialog import tg_proxy
 from src.bot.routers.menu.getters import tg_proxy_getter
 from src.bot.routers.menu.handlers import on_start_command
-from src.bot.routers.subscription.getters import proxy_confirm_getter, proxy_success_getter
+from src.bot.routers.subscription.getters import (
+    plans_getter,
+    proxy_confirm_getter,
+    proxy_success_getter,
+)
 from src.bot.routers.subscription.handlers import on_buy_proxy
 from src.bot.states import MainMenu, Subscription
 from src.core.constants import USER_KEY
+from src.core.enums import PlanType
 from src.infrastructure.billing import BillingClient
-from src.infrastructure.billing.models import BillingPersonalProxies, BillingTGProxy
+from src.infrastructure.billing.client import BillingClientError
+from src.infrastructure.billing.converters import (
+    billing_plan_to_dto,
+    billing_subscription_to_dto,
+    billing_transaction_to_dto,
+)
+from src.infrastructure.billing.models import (
+    BillingPersonalProxies,
+    BillingPlan,
+    BillingSubscription,
+    BillingTGProxy,
+    BillingTransaction,
+)
 from src.infrastructure.kafka.consumer import UserNotificationConsumer
 from tests.conftest import (
     make_billing_client,
@@ -25,6 +48,7 @@ from tests.conftest import (
     make_user,
     unwrap_inject,
 )
+from tests.test_menu_getter import _call_menu_getter
 from tests.test_on_start_command import _setup
 
 PUBLIC_WEB = "https://t.me/webproxy?server=russia.compono.online&secret=aa"
@@ -47,8 +71,16 @@ def _public_rows():
 
 def _personal_rows():
     return [
-        _row(20, "MTPROTO", "me.compono.online", PERSONAL_PHONE, False),
-        _row(21, "WEB", "me.compono.online", PERSONAL_WEB, False),
+        _row(-1, "MTPROTO", "me.compono.online", PERSONAL_PHONE, False),
+        _row(-2, "WEB", "me.compono.online", PERSONAL_WEB, False),
+        *_public_rows(),
+    ]
+
+
+def _shared_rows():
+    return [
+        _row(9, "MTPROTO", "phone.compono.online", PERSONAL_PHONE, False),
+        _row(10, "WEB", "stable.compono.online", PERSONAL_WEB, False),
         *_public_rows(),
     ]
 
@@ -236,7 +268,7 @@ class TestBuyProxy:
         assert dm.start.await_args.args[0] == Subscription.PROXY_CONFIRM
         assert dm.start.await_args.kwargs["data"] == {
             "payment_url": PAY_URL,
-            "price": 25,
+            "price": "25",
             "original_price": 49,
         }
         notification.notify_user.assert_not_awaited()
@@ -444,3 +476,238 @@ class TestBillingClientPersonal:
             }
         )
         assert data.expires_at is None and data.source is None
+
+
+class TestSharedRowsWhenPersonalLinksAreOff:
+    async def test_shared_rows_are_called_stable_without_personal_wording(self):
+        result, _ = await _render(personal=_entitled("vpn_plan", proxies=_shared_rows()))
+        msg = result["proxy_message"]
+
+        assert "— стабильный" in msg
+        assert "личный" not in msg.replace("Запасные, если стабильный", "")
+        assert "до 3 устройств" not in msg
+        assert "только ваши" not in msg
+        assert "Прокси бесплатно входит в вашу подписку Compono VPN." in msg
+
+    async def test_bought_plan_with_shared_rows_has_no_device_claim(self):
+        result, _ = await _render(personal=_entitled("proxy_plan", EXPIRES, _shared_rows()))
+        msg = result["proxy_message"]
+
+        assert "Прокси действует до 12.11.2026." in msg
+        assert "до 3 устройств" not in msg
+        assert "Личный" not in msg
+
+    async def test_success_message_with_shared_rows(self):
+        billing = make_billing_client(personal=_entitled("proxy_plan", EXPIRES, _shared_rows()))
+        result = await unwrap_inject(proxy_success_getter)(
+            dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
+        )
+        assert "до 3 устройств" not in result["proxy_message"]
+        assert "— стабильный" in result["proxy_message"]
+
+
+class TestNullPlanOrPrice:
+    @pytest.mark.parametrize("plan_id,price", [(None, 25), (9, None), (None, None), (0, 25)])
+    async def test_no_buy_button_and_no_offer(self, plan_id, price):
+        personal = _not_entitled()
+        personal.proxy_plan_id = plan_id
+        personal.price_rub = price
+        result, _ = await _render(personal=personal)
+
+        assert result["can_buy_proxy"] is False
+        assert "<s>" not in result["proxy_message"]
+        assert "Личный прокси</b>" not in result["proxy_message"]
+        assert PUBLIC_WEB in result["proxy_message"]
+
+    async def test_no_renew_button_when_price_missing(self):
+        personal = _entitled("proxy_plan", EXPIRES)
+        personal.price_rub = None
+        result, _ = await _render(personal=personal)
+
+        assert result["can_renew_proxy"] is False
+        assert PERSONAL_WEB in result["proxy_message"]
+
+    @pytest.mark.parametrize(
+        "price,text", [(25, "25"), (25.0, "25"), (24.9, "24.9"), (19.5, "19.5"), (30.25, "30.25")]
+    )
+    async def test_price_has_no_trailing_zero(self, price, text):
+        personal = _not_entitled()
+        personal.price_rub = price
+        result, _ = await _render(personal=personal)
+
+        assert result["proxy_price"] == text
+        assert f"<b>{text} ₽</b>" in result["proxy_message"]
+        assert ".0 " not in result["proxy_message"]
+
+    async def test_buy_with_null_price_never_reaches_billing(self):
+        personal = _not_entitled()
+        personal.price_rub = None
+        _, dm, billing, notification = _buy_args(personal)
+
+        await _buy(dm, billing, notification)
+
+        billing.create_payment.assert_not_awaited()
+        notification.notify_user.assert_awaited_once()
+
+
+class TestVpnSubscriberGuard:
+    def _vpn_user(self):
+        return make_user(subscription=make_subscription(plan_id=2))
+
+    async def test_no_buy_button_even_if_billing_says_not_entitled(self):
+        result, _ = await _render(personal=_not_entitled(), user=self._vpn_user())
+        assert result["can_buy_proxy"] is False
+        assert "<s>" not in result["proxy_message"]
+
+    async def test_trial_user_can_still_buy(self):
+        user = make_user(subscription=make_subscription(is_trial=True))
+        result, _ = await _render(personal=_not_entitled(), user=user)
+        assert result["can_buy_proxy"] is True
+
+    async def test_buy_click_by_vpn_subscriber_does_not_create_payment(self):
+        user, dm, billing, notification = _buy_args(_not_entitled())
+        dm.middleware_data[USER_KEY] = self._vpn_user()
+
+        await _buy(dm, billing, notification)
+
+        billing.create_payment.assert_not_awaited()
+
+    @pytest.mark.parametrize("status", [400, 422])
+    async def test_billing_validation_error_gets_clear_message(self, status):
+        _, dm, billing, notification = _buy_args(_not_entitled())
+        billing.create_payment.side_effect = BillingClientError(status, "already has VPN")
+
+        await _buy(dm, billing, notification)
+
+        dm.start.assert_not_awaited()
+        payload = notification.notify_user.await_args.kwargs["payload"]
+        assert payload.i18n_key == "ntf-proxy-already-included"
+
+    async def test_billing_server_error_gets_generic_message(self):
+        _, dm, billing, notification = _buy_args(_not_entitled())
+        billing.create_payment.side_effect = BillingClientError(500, "boom")
+
+        await _buy(dm, billing, notification)
+
+        payload = notification.notify_user.await_args.kwargs["payload"]
+        assert payload.i18n_key == "ntf-subscription-payment-creation-failed"
+
+
+class TestMainMenuButton:
+    async def _available(self, **kwargs):
+        billing = make_billing_client(**kwargs)
+        return (await _call_menu_getter(billing=billing))["tg_proxy_available"]
+
+    async def test_shown_when_entitled_even_without_public_rows(self):
+        personal = _entitled("vpn_plan", proxies=[])
+        assert await self._available(personal=personal) is True
+
+    async def test_shown_when_not_entitled_but_public_rows_exist(self):
+        assert await self._available(personal=_not_entitled()) is True
+
+    async def test_hidden_when_nothing_to_show(self):
+        assert await self._available(personal=_not_entitled(proxies=[])) is False
+
+    async def test_falls_back_to_public_rows_when_personal_endpoint_fails(self):
+        assert await self._available(tg_proxies=_public_rows()) is True
+
+
+def _plan_payload(type_):
+    return {
+        "ID": 5,
+        "OrderIndex": 9,
+        "IsActive": True,
+        "Type": type_,
+        "Availability": "ALL",
+        "Name": "Прокси",
+        "TrafficLimit": 0,
+        "DeviceLimit": 0,
+        "Durations": [
+            {"ID": 1, "Days": 30, "Prices": [{"ID": 1, "Currency": "RUB", "Price": "25"}]}
+        ],
+    }
+
+
+def _snapshot_payload(type_):
+    return {
+        "id": 5,
+        "name": "Прокси",
+        "type": type_,
+        "traffic_limit": 0,
+        "device_limit": 0,
+        "duration": 30,
+    }
+
+
+class TestProxyPlanTypeParsing:
+    def test_plan_type_enum_knows_proxy(self):
+        assert PlanType("PROXY") is PlanType.PROXY
+
+    def test_plan_list_with_proxy_plan_converts(self):
+        plans = [BillingPlan.model_validate(_plan_payload(t)) for t in ("BOTH", "PROXY")]
+        dtos = [billing_plan_to_dto(p) for p in plans]
+
+        assert dtos[1].type == PlanType.PROXY
+        assert dtos[1].get_duration(30) is not None
+
+    def test_transaction_and_subscription_snapshots_with_proxy_convert(self):
+        txn = BillingTransaction.model_validate(
+            {"ID": 1, "Status": "COMPLETED", "Plan": _snapshot_payload("PROXY")}
+        )
+        sub = BillingSubscription.model_validate(
+            {"ID": 1, "ExpireAt": "2026-12-01T00:00:00Z", "Plan": _snapshot_payload("PROXY")}
+        )
+
+        assert billing_transaction_to_dto(txn).plan.type == PlanType.PROXY
+        assert billing_subscription_to_dto(sub).plan.type == PlanType.PROXY
+
+    async def test_statistics_plans_page_with_proxy_plan(self):
+        billing = AsyncMock()
+        billing.list_plans.return_value = [
+            BillingPlan.model_validate(_plan_payload(t)) for t in ("BOTH", "PROXY")
+        ]
+        widget = MagicMock()
+        widget.get_page = AsyncMock(return_value=3)
+        dm = make_dialog_manager()
+        dm.find = MagicMock(return_value=widget)
+        i18n = MagicMock()
+        i18n.get.side_effect = lambda key, **kw: kw["plans"]
+
+        result = await unwrap_inject(statistics_getter)(
+            dialog_manager=dm, i18n=i18n, billing=billing
+        )
+
+        assert "Прокси: active" in result["statistics"]
+
+    async def test_admin_plan_pickers_with_proxy_plan(self):
+        plans = [BillingPlan.model_validate(_plan_payload(t)) for t in ("BOTH", "PROXY")]
+        billing = AsyncMock()
+        billing.get_allowed_plans.return_value = plans
+        billing.get_available_plans.return_value = plans
+        user_service = AsyncMock()
+        user_service.get.return_value = make_user()
+        dm = make_dialog_manager()
+        dm.dialog_data["target_telegram_id"] = 1
+
+        access = await unwrap_inject(give_access_getter)(
+            dialog_manager=dm, user_service=user_service, billing=billing
+        )
+        grant = await unwrap_inject(give_subscription_getter)(
+            dialog_manager=dm, user_service=user_service, billing=billing
+        )
+
+        assert len(access["plans"]) == 2 and len(grant["plans"]) == 2
+
+    async def test_user_plan_list_getter_with_proxy_plan(self):
+        billing = AsyncMock()
+        billing.get_available_plans.return_value = [
+            BillingPlan.model_validate(_plan_payload(t)) for t in ("BOTH", "PROXY")
+        ]
+        i18n = MagicMock()
+        i18n.get.side_effect = lambda key, **kw: key
+
+        result = await unwrap_inject(plans_getter)(
+            dialog_manager=make_dialog_manager(), user=make_user(), i18n=i18n, billing=billing
+        )
+
+        assert len(result["plans"]) == 2

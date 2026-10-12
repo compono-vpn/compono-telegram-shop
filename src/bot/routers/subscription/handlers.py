@@ -226,6 +226,8 @@ async def on_buy_proxy(
         if view.entitled and not view.can_renew:
             logger.info(f"{log(user)} Already has personal proxy for free, skipping purchase")
             return
+        if view.vpn_blocked or not view.has_price:
+            raise ValueError("Proxy purchase is not available")
         billing_gateway = await billing.get_gateway_by_type(gateway_type)
         if not billing_gateway:
             raise ValueError(f"Gateway '{gateway_type}' not found")
@@ -241,6 +243,15 @@ async def on_buy_proxy(
         )
         if not result.URL:
             raise ValueError("Payment link is empty")
+    except BillingClientError as exception:
+        logger.warning(f"{log(user)} Billing rejected proxy payment: {exception}")
+        key = (
+            "ntf-proxy-already-included"
+            if exception.status_code in (400, 422)
+            else "ntf-subscription-payment-creation-failed"
+        )
+        await notification_service.notify_user(user=user, payload=MessagePayload(i18n_key=key))
+        return
     except Exception as exception:
         logger.opt(exception=True).error(f"{log(user)} Failed to create proxy payment: {exception}")
         await notification_service.notify_user(
@@ -254,7 +265,7 @@ async def on_buy_proxy(
         Subscription.PROXY_CONFIRM,
         data={
             "payment_url": result.URL,
-            "price": view.price_rub,
+            "price": view.price_text,
             "original_price": STRIKETHROUGH_PRICE_RUB,
         },
     )

@@ -6,7 +6,7 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 from loguru import logger
 
-from src.bot.proxy_view import build_proxy_message, legacy_proxy_plan_id, load_proxy_view
+from src.bot.proxy_view import build_proxy_message, load_proxy_view
 from src.core.config import AppConfig
 from src.core.enums import ReferralLevel
 from src.core.exceptions import MenuRenderingError
@@ -68,12 +68,8 @@ async def menu_getter(
         }
 
         subscription = user.current_subscription
-        try:
-            tg_proxies = await billing.get_tg_proxies(legacy_proxy_plan_id(user))
-        except Exception:
-            logger.opt(exception=True).warning("Failed to fetch TG proxies, hiding button")
-            tg_proxies = []
-        base_data["tg_proxy_available"] = bool(tg_proxies)
+        proxy_view = await load_proxy_view(billing, user)
+        base_data["tg_proxy_available"] = bool(proxy_view.proxies) or proxy_view.entitled
 
         if not subscription:
             base_data.update(
@@ -111,7 +107,7 @@ async def menu_getter(
                 "connectable": subscription.is_active,
                 "is_app": False,
                 "url": SubscriptionService.build_connect_url(subscription.url, config.website_url),
-                "tg_proxy_available": len(tg_proxies) > 0,
+                "tg_proxy_available": bool(proxy_view.proxies) or proxy_view.entitled,
             }
         )
 
@@ -249,7 +245,7 @@ async def tg_proxy_getter(
         "show_vpn_offer": not user.current_subscription or not user.current_subscription.is_active,
         "can_buy_proxy": view.can_buy,
         "can_renew_proxy": view.can_renew,
-        "proxy_price": str(view.price_rub),
+        "proxy_price": view.price_text,
     }
 
 

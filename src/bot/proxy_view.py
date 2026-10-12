@@ -35,13 +35,28 @@ class ProxyView:
     source: str | None = None
     expires_at: datetime | None = None
     proxy_plan_id: int = 0
-    price_rub: int = 0
+    price_rub: float | None = None
     personal_loaded: bool = False
     legacy_paid: bool = False
+    vpn_blocked: bool = False
+
+    @property
+    def has_price(self) -> bool:
+        return self.proxy_plan_id > 0 and self.price_rub is not None and self.price_rub > 0
+
+    @property
+    def has_personal(self) -> bool:
+        return any(p["is_personal"] for p in self.proxies)
 
     @property
     def can_buy(self) -> bool:
-        return self.personal_loaded and not self.entitled and self.proxy_plan_id > 0
+        return (
+            self.personal_loaded and not self.entitled and not self.vpn_blocked and self.has_price
+        )
+
+    @property
+    def price_text(self) -> str:
+        return format_price(self.price_rub)
 
     @property
     def can_renew(self) -> bool:
@@ -49,8 +64,21 @@ class ProxyView:
             self.personal_loaded
             and self.entitled
             and self.source == SOURCE_PROXY_PLAN
-            and self.proxy_plan_id > 0
+            and self.has_price
         )
+
+
+def format_price(value: float | None) -> str:
+    if value is None:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def has_active_paid_vpn(user: Any) -> bool:
+    subscription = user.current_subscription
+    return bool(subscription and subscription.is_active and not subscription.is_trial)
 
 
 def serialize_proxies(proxies: list[BillingTGProxy]) -> list[dict[str, Any]]:
@@ -62,6 +90,7 @@ def serialize_proxies(proxies: list[BillingTGProxy]) -> list[dict[str, Any]]:
             "link": p.link,
             "kind": p.kind,
             "is_public": p.is_public,
+            "is_personal": p.id < 0,
         }
         for p in proxies
     ]
@@ -88,9 +117,10 @@ async def load_proxy_view(billing: BillingClient, user: Any) -> ProxyView:
             entitled=personal.entitled,
             source=personal.source,
             expires_at=personal.expires_at,
-            proxy_plan_id=personal.proxy_plan_id,
+            proxy_plan_id=personal.proxy_plan_id or 0,
             price_rub=personal.price_rub,
             personal_loaded=True,
+            vpn_blocked=has_active_paid_vpn(user),
         )
     except Exception:
         logger.opt(exception=True).warning("Failed to fetch personal TG proxies, using public list")
@@ -128,26 +158,29 @@ def _link(p: dict[str, Any], with_port: bool) -> str:
     return f'<a href="{p["link"]}">Подключить {target}</a>'
 
 
-def _phone_lines(
-    phone: list[dict[str, Any]], label: str, show_suffix: bool, empty_text: str
-) -> list[str]:
+def _label(rows: list[dict[str, Any]]) -> str:
+    return "личный" if any(p["is_personal"] for p in rows) else "стабильный"
+
+
+def _phone_lines(phone: list[dict[str, Any]], empty_text: str) -> list[str]:
     lines = ["📱 <b>Телефон</b>"]
     if not phone:
         lines.append(empty_text)
         return lines
-    personal = [p for p in phone if not p["is_public"]]
+    label = _label(phone)
+    stable = [p for p in phone if not p["is_public"]]
     backup = [p for p in phone if p["is_public"]]
-    for p in personal:
-        suffix = f" — {label}" if show_suffix else ""
-        lines.append(f"▸ {_link(p, True)}{suffix}")
-    if personal and backup:
+    for p in stable:
+        lines.append(f"▸ {_link(p, True)} — {label}")
+    if stable and backup:
         lines.append(f"Запасные, если {label} не подключается:")
     for p in backup:
         lines.append(f"▸ {_link(p, True)}")
     return lines
 
 
-def _desktop_lines(desktop: list[dict[str, Any]], label: str) -> list[str]:
+def _desktop_lines(desktop: list[dict[str, Any]]) -> list[str]:
+    label = _label(desktop)
     stable = [p for p in desktop if not p["is_public"]]
     backup = [p for p in desktop if p["is_public"]]
     lines = ["", "💻 <b>Компьютер</b> (Telegram Desktop 7.1.1 и новее)"]
@@ -167,24 +200,22 @@ def _links_block(view: ProxyView) -> list[str]:
     desktop = [p for p in view.proxies if p["kind"] == "WEB"]
     unavailable = "▸ Прокси для телефона временно недоступны — на телефоне используйте VPN."
     if view.personal_loaded:
-        label = "личный"
         empty = "▸ Общих прокси для телефона нет — личный ниже." if view.can_buy else unavailable
     else:
-        label = "стабильный"
         empty = unavailable if view.legacy_paid else "▸ Общих прокси для телефона сейчас нет."
-    lines = _phone_lines(phone, label, view.personal_loaded, empty)
+    lines = _phone_lines(phone, empty)
     if desktop:
-        lines.extend(_desktop_lines(desktop, label))
+        lines.extend(_desktop_lines(desktop))
     return lines
 
 
-def offer_lines(price_rub: int) -> list[str]:
+def offer_lines(price_text: str) -> list[str]:
     return [
         "",
         "🚀 <b>Личный прокси</b>",
         "Быстрый прокси только для вас: своя ссылка для телефона и своя для компьютера,"
         " до 3 устройств одновременно.",
-        f"<s>{STRIKETHROUGH_PRICE_RUB} ₽</s> <b>{price_rub} ₽</b> в месяц"
+        f"<s>{STRIKETHROUGH_PRICE_RUB} ₽</s> <b>{price_text} ₽</b> в месяц"
         " — цена на ограниченное время.",
         "🎁 Подписчикам Compono VPN — бесплатно.",
     ]
@@ -193,15 +224,18 @@ def offer_lines(price_rub: int) -> list[str]:
 def status_lines(view: ProxyView) -> list[str]:
     if not view.entitled:
         return []
+    personal = view.has_personal
     if view.source == SOURCE_VPN_PLAN:
-        return [
-            "",
-            "🎁 Личный прокси бесплатно входит в вашу подписку Compono VPN.",
-            DEVICES_LINE,
-        ]
+        head = (
+            "🎁 Личный прокси бесплатно входит в вашу подписку Compono VPN."
+            if personal
+            else "🎁 Прокси бесплатно входит в вашу подписку Compono VPN."
+        )
+        return ["", head] + ([DEVICES_LINE] if personal else [])
     until = format_date(view.expires_at)
-    head = f"✅ Личный прокси действует до {until}." if until else "✅ Личный прокси подключён."
-    return ["", head, DEVICES_LINE]
+    noun = "Личный прокси" if personal else "Прокси"
+    head = f"✅ {noun} действует до {until}." if until else f"✅ {noun} подключён."
+    return ["", head] + ([DEVICES_LINE] if personal else [])
 
 
 def build_proxy_message(view: ProxyView) -> str:
@@ -216,7 +250,7 @@ def build_proxy_message(view: ProxyView) -> str:
     lines.extend(_links_block(view))
     lines.append("\n" + CLOSING)
     if view.can_buy:
-        lines.extend(offer_lines(view.price_rub))
+        lines.extend(offer_lines(view.price_text))
     return "\n".join(lines)
 
 
@@ -229,9 +263,12 @@ def build_success_message(view: ProxyView) -> str:
         )
         return "\n".join(lines)
     until = format_date(view.expires_at)
+    noun = "Личный прокси" if view.has_personal else "Прокси"
     if until:
-        lines.append(f"Личный прокси действует до {until}.")
-    lines.append(DEVICES_LINE + "\n")
+        lines.append(f"{noun} действует до {until}.")
+    if view.has_personal:
+        lines.append(DEVICES_LINE)
+    lines.append("")
     lines.append(VPN_WARNING + "\n")
     lines.extend(_links_block(view))
     lines.append("\n" + CLOSING)
