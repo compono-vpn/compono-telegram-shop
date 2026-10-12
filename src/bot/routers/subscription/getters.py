@@ -7,6 +7,7 @@ from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 
+from src.bot.proxy_view import await_entitlement, build_success_message
 from src.core.config import AppConfig
 from src.core.crypto_assets import CRYPTO_ASSETS, CRYPTO_ASSETS_BY_ID
 from src.core.enums import PaymentGatewayType, PromocodeRewardType, PurchaseType
@@ -423,3 +424,23 @@ async def success_payment_getter(
         "url": SubscriptionService.build_connect_url(subscription.url, config.website_url),
         "connectable": True,
     }
+
+
+async def proxy_confirm_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
+    start_data = cast(dict[str, Any], dialog_manager.start_data)
+    return {
+        "url": start_data["payment_url"],
+        "price": start_data["price"],
+        "original_price": start_data["original_price"],
+    }
+
+
+@inject
+async def proxy_success_getter(
+    dialog_manager: DialogManager,
+    user: UserDto,
+    billing: FromDishka[BillingClient],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    view = await await_entitlement(billing, user)
+    return {"proxy_message": build_success_message(view)}

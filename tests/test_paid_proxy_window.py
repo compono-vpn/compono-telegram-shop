@@ -88,15 +88,16 @@ def test_is_public_false_is_parsed():
         "plan-minus-1",
     ],
 )
-async def test_free_user_sees_public_proxies_and_paid_teaser(subscription):
+async def test_free_user_sees_public_proxies_without_paid_teaser(subscription):
     result = await _render(_public_rows(), subscription)
     msg = result["proxy_message"]
 
     assert PUBLIC_RU in msg and PUBLIC_EU in msg
     assert "временно недоступны" not in msg
-    assert "входит в платный тариф" in msg
-    assert "стабильный" in msg
+    assert "платном тарифе" not in msg
+    assert "входит в платный тариф" not in msg
     assert result["show_plans_offer"] is True
+    assert result["can_buy_proxy"] is False
 
 
 async def test_paid_user_gets_phone_proxy_and_stable_web_first():

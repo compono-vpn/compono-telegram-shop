@@ -46,7 +46,12 @@ for k, v in _TEST_ENV.items():
 
 # Now safe to import app modules
 from src.core.enums import PlanType, SubscriptionStatus, UserRole, Locale
-from src.infrastructure.billing.models import BillingPlan, BillingSettings, BillingTGProxy
+from src.infrastructure.billing.models import (
+    BillingPersonalProxies,
+    BillingPlan,
+    BillingSettings,
+    BillingTGProxy,
+)
 from src.models.dto.plan import PlanSnapshotDto
 from src.models.dto.subscription import BaseSubscriptionDto
 from src.models.dto.user import UserDto
@@ -127,6 +132,8 @@ def make_billing_client(
     settings: Optional[BillingSettings] = None,
     tg_proxies: Optional[list[BillingTGProxy]] = None,
     tg_proxies_error: Optional[Exception] = None,
+    personal: Optional[BillingPersonalProxies] = None,
+    personal_error: Optional[Exception] = None,
 ) -> AsyncMock:
     billing = AsyncMock()
     billing.get_trial_plan.return_value = trial_plan
@@ -137,6 +144,13 @@ def make_billing_client(
         billing.get_tg_proxies.side_effect = tg_proxies_error
     else:
         billing.get_tg_proxies.return_value = tg_proxies or []
+
+    if personal is not None:
+        billing.get_personal_tg_proxies.return_value = personal
+    else:
+        billing.get_personal_tg_proxies.side_effect = personal_error or Exception(
+            "personal endpoint unavailable"
+        )
 
     return billing
 

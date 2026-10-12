@@ -18,6 +18,7 @@ from .models import (
     BillingFunnelStats,
     BillingPaymentGateway,
     BillingPaymentResult,
+    BillingPersonalProxies,
     BillingPlan,
     BillingPriceDetails,
     BillingPromocode,
@@ -763,6 +764,10 @@ class BillingClient:
     async def get_tg_proxies(self, plan_id: int) -> list[BillingTGProxy]:
         data = await self._get("/tg-proxies", params={"plan_id": plan_id})
         return [BillingTGProxy.model_validate(p) for p in (data or [])]
+
+    async def get_personal_tg_proxies(self, telegram_id: int) -> BillingPersonalProxies:
+        data = await self._direct_request("GET", f"/tg-proxies/personal/{telegram_id}")
+        return BillingPersonalProxies.model_validate(data or {})
 
     # ------------------------------------------------------------------ #
     # User reminders (durable claims and answers)
