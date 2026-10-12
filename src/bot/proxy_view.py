@@ -15,13 +15,11 @@ SOURCE_PROXY_PLAN = "proxy_plan"
 STRIKETHROUGH_PRICE_RUB = 49
 PROXY_DURATION_DAYS = 30
 TITLE = "📡 <b>Прокси для Telegram</b>"
-PERSONAL_TITLE = "📡 <b>Ваш личный прокси</b>"
 NO_VPN = "Telegram работает без VPN."
-PRESS_BUTTON = "Нажмите кнопку — прокси подключится сам."
-DEVICES = "До 3 устройств одновременно."
 VPN_OFF = "⚠️ Перед подключением выключите VPN."
 UNAVAILABLE = "Сейчас прокси недоступны. Попробуйте позже."
-DESKTOP_ONLY = "Работают только в Telegram Desktop 7.1.1 и новее."
+FREE_LINE = "🆓 <b>Бесплатный</b> — общий, при нагрузке скорость снижается."
+DEVICES_SENTENCE = "До 3 устройств одновременно."
 
 
 @dataclass
@@ -171,25 +169,11 @@ def primary_desktop_url(view: ProxyView) -> str:
     return ""
 
 
-def _numbered(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
-    counters = {"web": 0, "phone": 0}
-    result = []
-    for p in rows:
-        kind = "web" if _is_web(p) else "phone"
-        counters[kind] += 1
-        icon = "💻" if kind == "web" else "📱"
-        result.append(
-            {
-                "id": f"{kind}{counters[kind]}",
-                "label": f"{icon} Запасной {counters[kind]}",
-                "url": p["url"],
-            }
-        )
-    return result
-
-
-def backup_buttons(view: ProxyView) -> list[dict[str, str]]:
-    return _numbered([p for p in view.proxies if p["is_public"]])
+def free_url(view: ProxyView) -> str:
+    for p in view.proxies:
+        if p["is_public"] and _is_web(p):
+            return p["url"]
+    return ""
 
 
 def fallback_buttons(view: ProxyView) -> list[dict[str, str]]:
@@ -219,60 +203,58 @@ def build_proxy_message(view: ProxyView) -> str:
     return _offer_message(view)
 
 
-def _entitled_message(view: ProxyView) -> str:
-    personal = view.has_personal
-    title = PERSONAL_TITLE if personal else TITLE
+def _status(view: ProxyView) -> str:
     if view.source == SOURCE_VPN_PLAN:
-        first = f"{NO_VPN} Входит в вашу подписку бесплатно."
+        return "Входит в подписку Compono VPN."
+    until = format_date(view.expires_at)
+    return f"Действует до {until}." if until else ""
+
+
+def _entitled_message(view: ProxyView) -> str:
+    status = _status(view)
+    if view.has_personal:
+        title = "⭐ <b>Ваш Pro-прокси</b>"
+        second = "Личный и быстрый, до 3 устройств."
     else:
-        until = format_date(view.expires_at)
-        first = f"{NO_VPN} Действует до {until}." if until else NO_VPN
-    second = f"{PRESS_BUTTON} {DEVICES}" if personal else PRESS_BUTTON
-    return f"{title}\n{first}\n\n{second}\n\n{VPN_OFF}"
+        title = "⭐ <b>Стабильный прокси</b>"
+        second = "Стабильное подключение."
+    if status:
+        second = f"{second} {status}"
+    return f"{title}\n{second}\n\n{VPN_OFF}"
 
 
 def _offer_message(view: ProxyView) -> str:
-    if not view.can_buy:
-        lines = [TITLE, NO_VPN]
-        if not backup_buttons(view):
-            lines.append(UNAVAILABLE)
-        lines.extend(["", VPN_OFF])
-        return "\n".join(lines)
-    return "\n".join(
-        [
-            TITLE,
-            NO_VPN,
-            "",
-            "🚀 <b>Личный прокси</b> — быстрый и только ваш, до 3 устройств.",
-            f"<s>{STRIKETHROUGH_PRICE_RUB} ₽</s> <b>{view.price_text} ₽ в месяц</b>"
-            " — только до 31 октября.",
-            "🎁 С подпиской Compono VPN — бесплатно.",
-            "",
-            VPN_OFF,
-        ]
-    )
-
-
-def build_backup_message(view: ProxyView) -> str:
-    backups = [p for p in view.proxies if p["is_public"]]
-    if view.entitled:
-        first = "Если личный прокси не подключается, попробуйте запасной."
+    lines = [TITLE, NO_VPN, ""]
+    if view.can_buy:
+        lines.extend(
+            [
+                FREE_LINE,
+                f"⭐ <b>Pro</b> — личный и быстрый, до 3 устройств."
+                f" <s>{STRIKETHROUGH_PRICE_RUB} ₽</s> <b>{view.price_text} ₽/мес</b>"
+                " до 31 октября.",
+                "🎁 С подпиской Compono VPN — Pro бесплатно.",
+            ]
+        )
+    elif free_url(view):
+        lines.append(FREE_LINE)
     else:
-        first = "Бесплатные прокси — без оплаты и подписки."
-    lines = [first]
-    if any(_is_web(p) for p in backups):
-        lines.append(DESKTOP_ONLY)
+        lines.append(UNAVAILABLE)
+    lines.extend(["", VPN_OFF])
     return "\n".join(lines)
 
 
 def build_success_message(view: ProxyView) -> str:
     if not view.entitled:
         return (
-            "✅ <b>Оплата прошла</b>\n"
-            "Прокси скоро появится — откройте «Прокси» в меню через минуту."
+            "✅ <b>Оплата прошла</b>\nPro скоро появится — откройте «Прокси» в меню через минуту."
         )
     until = format_date(view.expires_at)
-    noun = "Личный прокси" if view.has_personal else "Прокси"
-    first = f"{noun} действует до {until}." if until else f"{noun} подключён."
-    second = f"{PRESS_BUTTON} {DEVICES}" if view.has_personal else PRESS_BUTTON
-    return f"✅ <b>Оплата прошла</b>\n{first}\n\n{second}\n\n{VPN_OFF}"
+    personal = view.has_personal
+    title = "✅ <b>Pro подключён</b>" if personal else "✅ <b>Стабильный прокси подключён</b>"
+    parts = []
+    if until:
+        parts.append(f"Действует до {until}.")
+    if personal:
+        parts.append(DEVICES_SENTENCE)
+    body = f"\n{' '.join(parts)}" if parts else ""
+    return f"{title}{body}\n\n{VPN_OFF}"

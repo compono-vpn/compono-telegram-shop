@@ -456,4 +456,5 @@ async def proxy_success_getter(
         "desktop_url": desktop_url,
         "has_phone": bool(phone_url),
         "has_desktop": bool(desktop_url),
+        "has_personal": view.has_personal,
     }

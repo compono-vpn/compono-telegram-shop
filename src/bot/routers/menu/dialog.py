@@ -29,7 +29,6 @@ from .getters import (
     invite_about_getter,
     invite_getter,
     menu_getter,
-    tg_proxy_backup_getter,
     tg_proxy_getter,
 )
 from .handlers import (
@@ -280,18 +279,36 @@ tg_proxy = Window(
     Banner(BannerName.MENU),
     Format("{proxy_message}"),
     Url(
+        text=I18nFormat("btn-proxy-free-connect"),
+        url=Format("{free_url}"),
+        id="proxy_free_connect",
+        when=F["has_free"] & ~F["is_entitled"],
+    ),
+    Url(
+        text=I18nFormat("btn-proxy-pro"),
+        url=Format("{desktop_url}"),
+        id="proxy_pro",
+        style=CONNECT_STYLE,
+        when=F["has_desktop"] & F["has_personal"],
+    ),
+    Url(
+        text=I18nFormat("btn-proxy-stable"),
+        url=Format("{desktop_url}"),
+        id="proxy_stable",
+        style=CONNECT_STYLE,
+        when=F["has_desktop"] & ~F["has_personal"],
+    ),
+    Url(
         text=I18nFormat("btn-proxy-phone"),
         url=Format("{phone_url}"),
         id="proxy_phone",
-        style=CONNECT_STYLE,
         when=F["has_phone"],
     ),
     Url(
-        text=I18nFormat("btn-proxy-desktop"),
-        url=Format("{desktop_url}"),
-        id="proxy_desktop",
-        style=CONNECT_STYLE,
-        when=F["has_desktop"],
+        text=I18nFormat("btn-proxy-free-backup"),
+        url=Format("{free_url}"),
+        id="proxy_free_backup",
+        when=F["has_free"] & F["is_entitled"],
     ),
     Button(
         text=I18nFormat("btn-menu-proxy-buy"),
@@ -299,18 +316,6 @@ tg_proxy = Window(
         on_click=on_buy_proxy,
         style=ACTION_STYLE,
         when=F["can_buy_proxy"],
-    ),
-    SwitchTo(
-        text=I18nFormat("btn-proxy-free"),
-        id="proxy_free",
-        state=MainMenu.TG_PROXY_BACKUP,
-        when=F["has_backups"] & ~F["is_entitled"],
-    ),
-    SwitchTo(
-        text=I18nFormat("btn-proxy-backups"),
-        id="proxy_backups",
-        state=MainMenu.TG_PROXY_BACKUP,
-        when=F["has_backups"] & F["is_entitled"],
     ),
     Button(
         text=I18nFormat("btn-menu-proxy-renew"),
@@ -344,29 +349,6 @@ tg_proxy = Window(
     IgnoreUpdate(),
     state=MainMenu.TG_PROXY,
     getter=tg_proxy_getter,
-)
-
-tg_proxy_backup = Window(
-    Banner(BannerName.MENU),
-    Format("{backup_message}"),
-    ListGroup(
-        Url(
-            text=Format("{item[label]}"),
-            url=Format("{item[url]}"),
-            style=CONNECT_STYLE,
-        ),
-        id="proxy_backup_list",
-        item_id_getter=lambda item: item["id"],
-        items="backups",
-    ),
-    SwitchTo(
-        text=I18nFormat("btn-back"),
-        id="back_to_proxy",
-        state=MainMenu.TG_PROXY,
-    ),
-    IgnoreUpdate(),
-    state=MainMenu.TG_PROXY_BACKUP,
-    getter=tg_proxy_backup_getter,
 )
 
 connect = Window(
@@ -405,6 +387,5 @@ router = Dialog(
     invite_about,
     info,
     tg_proxy,
-    tg_proxy_backup,
     connect,
 )

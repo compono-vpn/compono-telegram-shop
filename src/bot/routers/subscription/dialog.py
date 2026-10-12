@@ -330,18 +330,24 @@ proxy_success = Window(
     Banner(BannerName.SUBSCRIPTION),
     Format("{proxy_message}"),
     Url(
+        text=I18nFormat("btn-proxy-pro"),
+        url=Format("{desktop_url}"),
+        id="proxy_success_pro",
+        style=PROXY_CONNECT_STYLE,
+        when=F["has_desktop"] & F["has_personal"],
+    ),
+    Url(
+        text=I18nFormat("btn-proxy-stable"),
+        url=Format("{desktop_url}"),
+        id="proxy_success_stable",
+        style=PROXY_CONNECT_STYLE,
+        when=F["has_desktop"] & ~F["has_personal"],
+    ),
+    Url(
         text=I18nFormat("btn-proxy-phone"),
         url=Format("{phone_url}"),
         id="proxy_success_phone",
-        style=PROXY_CONNECT_STYLE,
         when=F["has_phone"],
-    ),
-    Url(
-        text=I18nFormat("btn-proxy-desktop"),
-        url=Format("{desktop_url}"),
-        id="proxy_success_desktop",
-        style=PROXY_CONNECT_STYLE,
-        when=F["has_desktop"],
     ),
     Start(
         text=I18nFormat("btn-proxy-to-menu"),

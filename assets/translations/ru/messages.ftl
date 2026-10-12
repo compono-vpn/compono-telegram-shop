@@ -1075,10 +1075,10 @@ msg-subscription-change-success =
     { frg-subscription }
 
 msg-proxy-confirm =
-    <b>🚀 Личный прокси на 30 дней</b>
-    <s>{ $original_price } ₽</s> <b>{ $price } ₽</b> — только до 31 октября.
+    <b>⭐ Pro-прокси на 30 дней</b>
+    <s>{ $original_price } ₽</s> <b>{ $price } ₽</b> — до 31 октября.
 
-    После оплаты кнопки подключения появятся здесь.
+    После оплаты кнопка подключения появится здесь.
 
 msg-subscription-failed = 
     <b>❌ Произошла ошибка!</b>
