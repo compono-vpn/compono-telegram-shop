@@ -7,8 +7,8 @@ from aiogram.types import InlineKeyboardMarkup
 
 from src.bot import proxy_view
 from src.bot.proxy_view import to_https_link
-from src.bot.routers.menu.dialog import tg_proxy, tg_proxy_backup
-from src.bot.routers.menu.getters import tg_proxy_backup_getter, tg_proxy_getter
+from src.bot.routers.menu.dialog import tg_proxy
+from src.bot.routers.menu.getters import tg_proxy_getter
 from src.bot.routers.subscription.dialog import proxy_confirm, proxy_success
 from src.bot.routers.subscription.getters import proxy_confirm_getter, proxy_success_getter
 from src.core.constants import CONTAINER_KEY
@@ -48,13 +48,6 @@ async def _render(personal=None, personal_error=None, user=None, **kwargs):
     return result, billing
 
 
-async def _backup(personal=None, **kwargs):
-    billing = make_billing_client(personal=personal, **kwargs)
-    return await unwrap_inject(tg_proxy_backup_getter)(
-        dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
-    )
-
-
 async def _keyboard(window, data):
     manager = make_dialog_manager()
     container = AsyncMock()
@@ -79,48 +72,38 @@ class TestLinkConversion:
         assert to_https_link(PUBLIC_WEB) == PUBLIC_WEB
 
 
-class TestEntitledViaVpn:
+class TestProDefaultVpn:
     async def test_text(self):
         result, _ = await _render(personal=_entitled("vpn_plan"))
 
         assert result["proxy_message"] == (
-            "📡 <b>Ваш личный прокси</b>\n"
-            "Telegram работает без VPN. Входит в вашу подписку бесплатно.\n\n"
-            "Нажмите кнопку — прокси подключится сам. До 3 устройств одновременно.\n\n"
+            "⭐ <b>Ваш Pro-прокси</b>\n"
+            "Личный и быстрый, до 3 устройств. Входит в подписку Compono VPN.\n\n"
             f"{VPN_OFF}"
         )
 
-    async def test_connect_urls_are_https_buttons_and_text_has_no_links(self):
+    async def test_urls_flags_and_clean_text(self):
         result, _ = await _render(personal=_entitled("vpn_plan"))
 
-        assert result["phone_url"] == PHONE_HTTPS
         assert result["desktop_url"] == PERSONAL_WEB
-        assert result["has_phone"] and result["has_desktop"]
-        assert result["has_backups"] is True
+        assert result["phone_url"] == PHONE_HTTPS
+        assert result["free_url"] == PUBLIC_WEB
+        assert result["has_personal"] is True
+        assert result["has_desktop"] and result["has_phone"] and result["has_free"]
         assert result["show_plans_offer"] is False
         assert result["can_buy_proxy"] is False and result["can_renew_proxy"] is False
         message = result["proxy_message"]
         assert "http" not in message and "tg://" not in message
         assert not any(h in message for h in HOSTS)
 
-    async def test_backup_window_lists_public_rows(self):
-        data = await _backup(personal=_entitled("vpn_plan"))
 
-        assert data["backup_message"] == (
-            "Если личный прокси не подключается, попробуйте запасной.\n"
-            "Работают только в Telegram Desktop 7.1.1 и новее."
-        )
-        assert data["backups"] == [{"id": "web1", "label": "💻 Запасной 1", "url": PUBLIC_WEB}]
-
-
-class TestEntitledViaProxyPlan:
+class TestProViaProxyPlan:
     async def test_text_and_renew(self):
         result, _ = await _render(personal=_entitled("proxy_plan", EXPIRES))
 
         assert result["proxy_message"] == (
-            "📡 <b>Ваш личный прокси</b>\n"
-            "Telegram работает без VPN. Действует до 12.11.2026.\n\n"
-            "Нажмите кнопку — прокси подключится сам. До 3 устройств одновременно.\n\n"
+            "⭐ <b>Ваш Pro-прокси</b>\n"
+            "Личный и быстрый, до 3 устройств. Действует до 12.11.2026.\n\n"
             f"{VPN_OFF}"
         )
         assert result["can_renew_proxy"] is True
@@ -132,7 +115,7 @@ class TestEntitledViaProxyPlan:
         personal.price_rub = None
         result, _ = await _render(personal=personal)
         assert result["can_renew_proxy"] is False
-        assert result["phone_url"] == PHONE_HTTPS
+        assert result["desktop_url"] == PERSONAL_WEB
 
     async def test_no_renew_without_plan(self):
         personal = _entitled("proxy_plan", EXPIRES)
@@ -148,32 +131,26 @@ class TestNotEntitled:
         assert result["proxy_message"] == (
             "📡 <b>Прокси для Telegram</b>\n"
             "Telegram работает без VPN.\n\n"
-            "🚀 <b>Личный прокси</b> — быстрый и только ваш, до 3 устройств.\n"
-            "<s>49 ₽</s> <b>25 ₽ в месяц</b> — только до 31 октября.\n"
-            "🎁 С подпиской Compono VPN — бесплатно.\n\n"
+            "🆓 <b>Бесплатный</b> — общий, при нагрузке скорость снижается.\n"
+            "⭐ <b>Pro</b> — личный и быстрый, до 3 устройств."
+            " <s>49 ₽</s> <b>25 ₽/мес</b> до 31 октября.\n"
+            "🎁 С подпиской Compono VPN — Pro бесплатно.\n\n"
             f"{VPN_OFF}"
         )
 
-    async def test_buttons_flags(self):
+    async def test_flags(self):
         result, _ = await _render(personal=_not_entitled())
 
         assert result["can_buy_proxy"] is True
-        assert result["has_backups"] is True
+        assert result["free_url"] == PUBLIC_WEB
+        assert result["has_free"] is True
         assert result["is_entitled"] is False
         assert result["show_plans_offer"] is True
         assert result["has_phone"] is False and result["has_desktop"] is False
         assert "http" not in result["proxy_message"]
 
-    async def test_free_proxy_window_text(self):
-        data = await _backup(personal=_not_entitled())
-        assert data["backup_message"] == (
-            "Бесплатные прокси — без оплаты и подписки.\n"
-            "Работают только в Telegram Desktop 7.1.1 и новее."
-        )
-        assert data["backups"][0]["url"] == PUBLIC_WEB
-
     @pytest.mark.parametrize("plan_id,price", [(None, 25), (9, None), (None, None), (0, 25)])
-    async def test_no_offer_when_plan_or_price_missing(self, plan_id, price):
+    async def test_no_pro_offer_when_plan_or_price_missing(self, plan_id, price):
         personal = _not_entitled()
         personal.proxy_plan_id = plan_id
         personal.price_rub = price
@@ -181,15 +158,19 @@ class TestNotEntitled:
 
         assert result["can_buy_proxy"] is False
         assert result["proxy_message"] == (
-            f"📡 <b>Прокси для Telegram</b>\nTelegram работает без VPN.\n\n{VPN_OFF}"
+            "📡 <b>Прокси для Telegram</b>\n"
+            "Telegram работает без VPN.\n\n"
+            "🆓 <b>Бесплатный</b> — общий, при нагрузке скорость снижается.\n\n"
+            f"{VPN_OFF}"
         )
-        assert result["has_backups"] is True
+        assert result["has_free"] is True
 
     async def test_no_offer_for_active_vpn_subscriber(self):
         user = make_user(subscription=make_subscription(plan_id=2))
         result, _ = await _render(personal=_not_entitled(), user=user)
         assert result["can_buy_proxy"] is False
         assert "<s>" not in result["proxy_message"]
+        assert "Pro" not in result["proxy_message"]
 
     async def test_trial_user_can_buy(self):
         user = make_user(subscription=make_subscription(is_trial=True))
@@ -201,7 +182,7 @@ class TestNotEntitled:
         personal.proxy_plan_id = None
         result, _ = await _render(personal=personal)
         assert "Сейчас прокси недоступны. Попробуйте позже." in result["proxy_message"]
-        assert result["has_backups"] is False
+        assert result["has_free"] is False
 
     @pytest.mark.parametrize(
         "price,text", [(25, "25"), (25.0, "25"), (24.9, "24.9"), (30.25, "30.25")]
@@ -210,7 +191,7 @@ class TestNotEntitled:
         personal = _not_entitled()
         personal.price_rub = price
         result, _ = await _render(personal=personal)
-        assert f"<b>{text} ₽ в месяц</b>" in result["proxy_message"]
+        assert f"<b>{text} ₽/мес</b>" in result["proxy_message"]
         assert result["proxy_price"] == text
 
 
@@ -219,13 +200,13 @@ class TestSharedRows:
         result, _ = await _render(personal=_entitled("vpn_plan", proxies=_shared_rows()))
 
         assert result["proxy_message"] == (
-            "📡 <b>Прокси для Telegram</b>\n"
-            "Telegram работает без VPN. Входит в вашу подписку бесплатно.\n\n"
-            "Нажмите кнопку — прокси подключится сам.\n\n"
+            "⭐ <b>Стабильный прокси</b>\n"
+            "Стабильное подключение. Входит в подписку Compono VPN.\n\n"
             f"{VPN_OFF}"
         )
-        assert result["phone_url"] == SHARED_PHONE_HTTPS
+        assert result["phone_url"] == PHONE_HTTPS
         assert result["desktop_url"] == PERSONAL_WEB
+        assert result["has_personal"] is False
 
     async def test_proxy_plan_text_has_no_device_claim(self):
         result, _ = await _render(personal=_entitled("proxy_plan", EXPIRES, _shared_rows()))
@@ -284,18 +265,18 @@ class TestSuccessScreen:
         result = await self._success(_entitled("proxy_plan", EXPIRES))
 
         assert result["proxy_message"] == (
-            "✅ <b>Оплата прошла</b>\n"
-            "Личный прокси действует до 12.11.2026.\n\n"
-            "Нажмите кнопку — прокси подключится сам. До 3 устройств одновременно.\n\n"
+            "✅ <b>Pro подключён</b>\n"
+            "Действует до 12.11.2026. До 3 устройств одновременно.\n\n"
             f"{VPN_OFF}"
         )
-        assert result["phone_url"] == PHONE_HTTPS
         assert result["desktop_url"] == PERSONAL_WEB
+        assert result["phone_url"] == PHONE_HTTPS
         assert "http" not in result["proxy_message"]
 
     async def test_shared_rows_have_no_device_claim(self):
         result = await self._success(_entitled("proxy_plan", EXPIRES, _shared_rows()))
         assert "3 устройств" not in result["proxy_message"]
+        assert "Pro" not in result["proxy_message"]
 
     async def test_not_visible_yet(self):
         billing = make_billing_client(personal=_not_entitled())
@@ -304,10 +285,9 @@ class TestSuccessScreen:
                 dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
             )
         assert result["proxy_message"] == (
-            "✅ <b>Оплата прошла</b>\n"
-            "Прокси скоро появится — откройте «Прокси» в меню через минуту."
+            "✅ <b>Оплата прошла</b>\nPro скоро появится — откройте «Прокси» в меню через минуту."
         )
-        assert result["has_phone"] is False
+        assert result["has_desktop"] is False
 
     async def test_waits_until_entitlement_is_visible(self):
         billing = make_billing_client(personal=_not_entitled())
@@ -319,7 +299,7 @@ class TestSuccessScreen:
             result = await unwrap_inject(proxy_success_getter)(
                 dialog_manager=make_dialog_manager(), user=make_user(), billing=billing
             )
-        assert result["phone_url"] == PHONE_HTTPS
+        assert result["desktop_url"] == PERSONAL_WEB
 
 
 class TestConfirmScreen:
@@ -342,44 +322,53 @@ class TestConfirmScreen:
         assert dm.start.await_args.kwargs["data"]["price"] == "25"
 
 
-def _styles(rows):
-    return {b.text: b.style for b in _flat(rows)}
-
-
 class TestButtonColors:
-    async def test_entitled_main_window_keyboard(self):
+    async def test_pro_keyboard(self):
         result, _ = await _render(personal=_entitled("proxy_plan", EXPIRES))
         buttons = _flat(await _keyboard(tg_proxy, result))
 
-        by_text = {b.text: b for b in buttons}
-        assert by_text["[btn-proxy-phone]"].style == "success"
-        assert by_text["[btn-proxy-phone]"].url == PHONE_HTTPS
-        assert by_text["[btn-proxy-desktop]"].style == "success"
-        assert by_text["[btn-proxy-desktop]"].url == PERSONAL_WEB
-        assert by_text["[btn-menu-proxy-renew]"].style == "primary"
-        assert by_text["[btn-proxy-backups]"].style is None
-        assert by_text["[btn-back]"].style is None
-        assert "[btn-menu-proxy-plans]" not in by_text
         assert [b.text for b in buttons] == [
+            "[btn-proxy-pro]",
             "[btn-proxy-phone]",
-            "[btn-proxy-desktop]",
-            "[btn-proxy-backups]",
+            "[btn-proxy-free-backup]",
             "[btn-menu-proxy-renew]",
             "[btn-back]",
         ]
+        assert [b.style for b in buttons] == ["success", None, None, "primary", None]
+        assert buttons[0].url == PERSONAL_WEB
+        assert buttons[1].url == PHONE_HTTPS
+        assert buttons[2].url == PUBLIC_WEB
 
-    async def test_offer_main_window_keyboard(self):
+    async def test_vpn_pro_keyboard_has_no_renew(self):
+        result, _ = await _render(personal=_entitled("vpn_plan"))
+        buttons = _flat(await _keyboard(tg_proxy, result))
+        assert "[btn-menu-proxy-renew]" not in [b.text for b in buttons]
+        assert "[btn-menu-proxy-plans]" not in [b.text for b in buttons]
+
+    async def test_shared_keyboard_uses_stable_label(self):
+        result, _ = await _render(personal=_entitled("vpn_plan", proxies=_shared_rows()))
+        buttons = _flat(await _keyboard(tg_proxy, result))
+        assert buttons[0].text == "[btn-proxy-stable]"
+        assert buttons[0].style == "success"
+
+    async def test_free_keyboard(self):
         result, _ = await _render(personal=_not_entitled())
         buttons = _flat(await _keyboard(tg_proxy, result))
 
         assert [b.text for b in buttons] == [
+            "[btn-proxy-free-connect]",
             "[btn-menu-proxy-buy]",
-            "[btn-proxy-free]",
             "[btn-menu-proxy-plans]",
             "[btn-back]",
         ]
-        assert buttons[0].style == "primary"
-        assert all(b.style is None for b in buttons[1:])
+        assert [b.style for b in buttons] == [None, "primary", None, None]
+        assert buttons[0].url == PUBLIC_WEB
+
+    async def test_free_keyboard_without_offer_drops_buy(self):
+        user = make_user(subscription=make_subscription(plan_id=2))
+        result, _ = await _render(personal=_not_entitled(), user=user)
+        buttons = _flat(await _keyboard(tg_proxy, result))
+        assert "[btn-menu-proxy-buy]" not in [b.text for b in buttons]
 
     async def test_fallback_keyboard_has_green_url_buttons(self):
         result, _ = await _render(tg_proxies=_public_rows())
@@ -389,16 +378,6 @@ class TestButtonColors:
         assert buttons[0].style == "success"
         assert buttons[-1].text == "[btn-back]"
 
-    async def test_backup_window_keyboard(self):
-        data = await _backup(personal=_entitled("vpn_plan"))
-        buttons = _flat(await _keyboard(tg_proxy_backup, data))
-
-        assert buttons[0].text == "💻 Запасной 1"
-        assert buttons[0].url == PUBLIC_WEB
-        assert buttons[0].style == "success"
-        assert buttons[-1].text == "[btn-back]"
-        assert buttons[-1].style is None
-
     async def test_success_window_keyboard(self):
         billing = make_billing_client(personal=_entitled("proxy_plan", EXPIRES))
         data = await unwrap_inject(proxy_success_getter)(
@@ -407,11 +386,11 @@ class TestButtonColors:
         buttons = _flat(await _keyboard(proxy_success, data))
 
         assert [b.text for b in buttons] == [
+            "[btn-proxy-pro]",
             "[btn-proxy-phone]",
-            "[btn-proxy-desktop]",
             "[btn-proxy-to-menu]",
         ]
-        assert buttons[0].style == "success" and buttons[1].style == "success"
+        assert [b.style for b in buttons] == ["success", None, None]
 
     async def test_confirm_window_keyboard(self):
         data = {"url": "https://pay.example.invalid/x", "price": "25", "original_price": 49}
@@ -427,7 +406,6 @@ class TestButtonColors:
         rows = await _keyboard(tg_proxy, result)
         markup = InlineKeyboardMarkup(inline_keyboard=rows)
 
-        payload = markup.model_dump(exclude_none=True)
-        flat = [b for row in payload["inline_keyboard"] for b in row]
-        assert flat[0]["style"] == "primary"
+        flat = [b for row in markup.model_dump(exclude_none=True)["inline_keyboard"] for b in row]
+        assert flat[1]["style"] == "primary"
         assert '"style":"primary"' in markup.model_dump_json(exclude_none=True)

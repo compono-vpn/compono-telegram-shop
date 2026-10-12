@@ -10,7 +10,6 @@ class MainMenu(StatesGroup):
     INVITE_ABOUT = State()
     INFO = State()
     TG_PROXY = State()
-    TG_PROXY_BACKUP = State()
     CONNECT = State()
 
 
