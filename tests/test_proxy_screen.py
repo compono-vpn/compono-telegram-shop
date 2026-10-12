@@ -38,6 +38,7 @@ PHONE_HTTPS = "https://t.me/proxy?server=me.compono.online&port=443&secret=cc"
 SHARED_PHONE_HTTPS = PHONE_HTTPS
 HOSTS = ("compono.online", "me.compono", "stable.", "pub.")
 VPN_OFF = "⚠️ Перед подключением выключите VPN."
+UPDATE_HINT = "📲 Не подключается? Обновите Telegram до последней версии."
 
 
 async def _render(personal=None, personal_error=None, user=None, **kwargs):
@@ -80,16 +81,17 @@ class TestProDefaultVpn:
             "⭐ <b>Ваш Pro-прокси</b>\n"
             "Личный и быстрый, до 3 устройств. Входит в подписку Compono VPN.\n\n"
             f"{VPN_OFF}"
+            f"\n{UPDATE_HINT}"
         )
 
     async def test_urls_flags_and_clean_text(self):
         result, _ = await _render(personal=_entitled("vpn_plan"))
 
         assert result["desktop_url"] == PERSONAL_WEB
-        assert result["phone_url"] == PHONE_HTTPS
+        assert result["phone_url"] == ""
         assert result["free_url"] == PUBLIC_WEB
         assert result["has_personal"] is True
-        assert result["has_desktop"] and result["has_phone"] and result["has_free"]
+        assert result["has_desktop"] and not result["has_phone"] and result["has_free"]
         assert result["show_plans_offer"] is False
         assert result["can_buy_proxy"] is False and result["can_renew_proxy"] is False
         message = result["proxy_message"]
@@ -105,6 +107,7 @@ class TestProViaProxyPlan:
             "⭐ <b>Ваш Pro-прокси</b>\n"
             "Личный и быстрый, до 3 устройств. Действует до 12.11.2026.\n\n"
             f"{VPN_OFF}"
+            f"\n{UPDATE_HINT}"
         )
         assert result["can_renew_proxy"] is True
         assert result["can_buy_proxy"] is False
@@ -203,8 +206,9 @@ class TestSharedRows:
             "⭐ <b>Стабильный прокси</b>\n"
             "Стабильное подключение. Входит в подписку Compono VPN.\n\n"
             f"{VPN_OFF}"
+            f"\n{UPDATE_HINT}"
         )
-        assert result["phone_url"] == PHONE_HTTPS
+        assert result["phone_url"] == ""
         assert result["desktop_url"] == PERSONAL_WEB
         assert result["has_personal"] is False
 
@@ -268,9 +272,10 @@ class TestSuccessScreen:
             "✅ <b>Pro подключён</b>\n"
             "Действует до 12.11.2026. До 3 устройств одновременно.\n\n"
             f"{VPN_OFF}"
+            f"\n{UPDATE_HINT}"
         )
         assert result["desktop_url"] == PERSONAL_WEB
-        assert result["phone_url"] == PHONE_HTTPS
+        assert result["phone_url"] == ""
         assert "http" not in result["proxy_message"]
 
     async def test_shared_rows_have_no_device_claim(self):
@@ -329,15 +334,13 @@ class TestButtonColors:
 
         assert [b.text for b in buttons] == [
             "[btn-proxy-pro]",
-            "[btn-proxy-phone]",
             "[btn-proxy-free-backup]",
             "[btn-menu-proxy-renew]",
             "[btn-back]",
         ]
-        assert [b.style for b in buttons] == ["success", None, None, "primary", None]
+        assert [b.style for b in buttons] == ["success", None, "primary", None]
         assert buttons[0].url == PERSONAL_WEB
-        assert buttons[1].url == PHONE_HTTPS
-        assert buttons[2].url == PUBLIC_WEB
+        assert buttons[1].url == PUBLIC_WEB
 
     async def test_vpn_pro_keyboard_has_no_renew(self):
         result, _ = await _render(personal=_entitled("vpn_plan"))
@@ -387,10 +390,9 @@ class TestButtonColors:
 
         assert [b.text for b in buttons] == [
             "[btn-proxy-pro]",
-            "[btn-proxy-phone]",
             "[btn-proxy-to-menu]",
         ]
-        assert [b.style for b in buttons] == ["success", None, None]
+        assert [b.style for b in buttons] == ["success", None]
 
     async def test_confirm_window_keyboard(self):
         data = {"url": "https://pay.example.invalid/x", "price": "25", "original_price": 49}
