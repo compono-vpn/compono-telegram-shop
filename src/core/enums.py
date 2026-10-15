@@ -226,6 +226,7 @@ class PaymentGatewayType(UpperStrEnum):
     CRYPTOPAY = auto()
     ROBOKASSA = auto()
     PLATEGA = auto()
+    PLATEGA_CRYPTO = auto()
     PLAIDLY = auto()
     MANUAL_GRANT = auto()
 
@@ -265,6 +266,7 @@ class Currency(UpperStrEnum):
             PaymentGatewayType.HELEKET: cls.USD,
             PaymentGatewayType.CRYPTOPAY: cls.USD,
             PaymentGatewayType.PLATEGA: cls.RUB,
+            PaymentGatewayType.PLATEGA_CRYPTO: cls.RUB,
             PaymentGatewayType.PLAIDLY: cls.USD,
             PaymentGatewayType.MANUAL_GRANT: cls.RUB,
         }
