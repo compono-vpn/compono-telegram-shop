@@ -295,6 +295,7 @@ gateway-type = { $gateway_type ->
     [HELEKET] Heleket
     [URLPAY] UrlPay
     [PLATEGA] Platega
+    [PLATEGA_CRYPTO] 🪙 Криптовалюта
     [PLAIDLY] 🪙 Криптовалюта
     [MANUAL_GRANT] 🎁 Подарок от Compono
     *[OTHER] { $gateway_type }
