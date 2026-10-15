@@ -22,10 +22,6 @@ def test_billing_platega_crypto_gateway_converts() -> None:
     assert dto.currency == Currency.RUB
 
 
-def test_platega_crypto_currency_is_rub() -> None:
-    assert Currency.from_gateway_type(PaymentGatewayType.PLATEGA_CRYPTO) == Currency.RUB
-
-
 def test_platega_crypto_has_russian_label() -> None:
     storage = FileStorage(path=Path("assets/translations") / "{locale}")
     hub = TranslatorHub({"ru": ("ru",)}, root_locale="ru", storage=storage)

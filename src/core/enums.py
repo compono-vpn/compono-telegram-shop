@@ -241,6 +241,7 @@ class Currency(UpperStrEnum):
     USD = auto()
     XTR = auto()
     RUB = auto()
+    USDT = auto()
 
     @property
     def symbol(self) -> str:
@@ -248,6 +249,7 @@ class Currency(UpperStrEnum):
             "USD": "$",
             "XTR": "★",
             "RUB": "₽",
+            "USDT": "USDT",
         }
         return symbols[self.value]
 
@@ -266,7 +268,7 @@ class Currency(UpperStrEnum):
             PaymentGatewayType.HELEKET: cls.USD,
             PaymentGatewayType.CRYPTOPAY: cls.USD,
             PaymentGatewayType.PLATEGA: cls.RUB,
-            PaymentGatewayType.PLATEGA_CRYPTO: cls.RUB,
+            PaymentGatewayType.PLATEGA_CRYPTO: cls.USDT,
             PaymentGatewayType.PLAIDLY: cls.USD,
             PaymentGatewayType.MANUAL_GRANT: cls.RUB,
         }
