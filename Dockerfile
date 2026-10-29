@@ -10,7 +10,9 @@ RUN uv sync --locked --no-dev --no-cache --compile-bytecode \
     && rm -rf .venv/lib/python3.12/site-packages/setuptools* \
     && rm -rf .venv/lib/python3.12/site-packages/wheel*
 
-FROM python:3.12-slim AS final
+FROM python:3.12.16-slim-trixie AS final
+
+RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/compono-shop
 
