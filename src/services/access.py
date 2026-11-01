@@ -10,6 +10,7 @@ from src.core.config import AppConfig
 from src.core.constants import PURCHASE_PREFIX
 from src.core.enums import AccessMode
 from src.core.storage.keys import AccessWaitListKey
+from src.core.utils.formatters import format_user_name
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.redis.repository import RedisRepository
 from src.infrastructure.taskiq.tasks.notifications import send_access_opened_notifications_task
@@ -74,7 +75,7 @@ class AccessService(BaseService):
 
                 temp_user = UserDto(
                     telegram_id=aiogram_user.id,
-                    name=aiogram_user.full_name,
+                    name=format_user_name(aiogram_user.full_name),
                     language=aiogram_user.language_code,
                 )
                 await self.notification_service.notify_user(

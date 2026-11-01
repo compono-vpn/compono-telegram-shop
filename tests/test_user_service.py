@@ -115,6 +115,23 @@ class TestCreate:
         assert call_data["role"] == "USER"
         assert result.telegram_id == 100
 
+    async def test_sanitizes_name_with_html_characters(self):
+        billing = AsyncMock()
+        billing.create_user.return_value = _make_billing_user(TelegramID=100)
+        svc, _, _ = _make_service(billing)
+
+        aiogram_user = MagicMock()
+        aiogram_user.id = 100
+        aiogram_user.username = "naruto"
+        aiogram_user.full_name = "Наруто (>w<)"
+        aiogram_user.language_code = "ru"
+
+        await svc.create(aiogram_user)
+
+        name = billing.create_user.call_args[0][0]["name"]
+        assert "<" not in name and ">" not in name
+        assert name == "Наруто w"
+
     async def test_dev_role_for_dev_id(self):
         billing = AsyncMock()
         billing.create_user.return_value = _make_billing_user(TelegramID=999, Role="DEV")
