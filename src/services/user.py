@@ -68,7 +68,7 @@ class UserService(BaseService):
                 "telegram_id": aiogram_user.id,
                 "username": aiogram_user.username,
                 "referral_code": referral_code,
-                "name": aiogram_user.full_name,
+                "name": format_user_name(aiogram_user.full_name),
                 "role": role.value,
                 "language": language,
                 "source": source,
