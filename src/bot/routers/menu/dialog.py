@@ -92,6 +92,13 @@ menu = Window(
         ),
     ),
     Row(
+        Url(
+            text=I18nFormat("btn-menu-ios-app"),
+            id="ios_app",
+            url=Format("{ios_app_url}"),
+        ),
+    ),
+    Row(
         Button(
             text=I18nFormat("btn-menu-invite"),
             id="invite",

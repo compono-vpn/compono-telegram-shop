@@ -5,6 +5,7 @@ Verifies button ordering and i18n key usage in the main menu.
 
 from __future__ import annotations
 
+from aiogram_dialog.widgets.common.when import true_condition
 from aiogram_dialog.widgets.kbd import Button, Row, SwitchTo, Url
 
 from src.bot.routers.menu.dialog import connect, menu
@@ -61,6 +62,33 @@ class TestMenuButtonOrder:
         assert proxy_row_idx < trial_row_idx, (
             f"TG proxy (index {proxy_row_idx}) should be before trial (index {trial_row_idx})"
         )
+
+
+class TestIosAppButton:
+    def test_ios_button_is_url(self):
+        widget = _find_widget_by_id(menu, "ios_app")
+        assert widget is not None, "iOS app button not found in menu"
+        assert isinstance(widget, Url)
+
+    def test_ios_button_right_after_devices_row(self):
+        devices_row_idx = _get_row_index(menu, "devices")
+        ios_row_idx = _get_row_index(menu, "ios_app")
+
+        assert devices_row_idx >= 0
+        assert ios_row_idx == devices_row_idx + 1
+
+    def test_ios_button_before_invite_and_support(self):
+        ios_row_idx = _get_row_index(menu, "ios_app")
+
+        assert 0 <= ios_row_idx < _get_row_index(menu, "invite")
+        assert ios_row_idx < _get_row_index(menu, "support")
+
+    def test_ios_button_is_shown_to_every_user(self):
+        row = _get_rows(menu)[_get_row_index(menu, "ios_app")]
+
+        assert row.condition is true_condition
+        assert all(w.condition is true_condition for w in row.buttons)
+
 
 class TestMenuI18nKeys:
     """Button text must use proper i18n keys (not hardcoded strings)."""

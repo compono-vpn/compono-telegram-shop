@@ -62,6 +62,7 @@ async def menu_getter(
             "loyalty_discount": user.loyalty_discount,
             "is_beta_tester": 0,
             "support": support_link,
+            "ios_app_url": SubscriptionService.build_ios_app_url(config.website_url),
             "invite": i18n.get(
                 "referral-invite-message",
                 url=ref_link,

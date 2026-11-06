@@ -255,3 +255,25 @@ class TestConnectGetter:
         )
 
         assert result["url"] == "https://componovpn.com/connect/7UK9yXmGY8d5vRss"
+
+
+class TestIosAppUrl:
+
+    @pytest.mark.asyncio
+    async def test_url_uses_website_url_without_subscription(self):
+        data = await _call_menu_getter(user=make_user())
+
+        assert data["ios_app_url"] == "https://componovpn.com/ios?utm_source=bot&utm_medium=menu"
+
+    @pytest.mark.asyncio
+    async def test_url_follows_configured_website_url(self):
+        config = make_config()
+        config.website_url = "https://stage.componovpn.com/"
+
+        data = await _call_menu_getter(
+            user=make_user(subscription=make_subscription()), config=config
+        )
+
+        assert data["ios_app_url"] == (
+            "https://stage.componovpn.com/ios?utm_source=bot&utm_medium=menu"
+        )
