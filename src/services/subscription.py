@@ -67,6 +67,10 @@ class SubscriptionService(BaseService):
         token = parsed.path.rstrip("/").split("/")[-1]
         return f"{website_url.rstrip('/')}/connect/{token}"
 
+    @staticmethod
+    def build_ios_app_url(website_url: str = "https://componovpn.com") -> str:
+        return f"{website_url.rstrip('/')}/ios?utm_source=bot&utm_medium=menu"
+
     async def create(self, user: UserDto, subscription: SubscriptionDto) -> SubscriptionDto:
         # Billing API (Go) Subscription struct has no json tags — expects PascalCase keys.
         # PlanSnapshot has snake_case json tags, so plan dict stays snake_case.

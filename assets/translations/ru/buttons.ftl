@@ -42,6 +42,7 @@ btn-menu-trial = 🎁 ПОПРОБОВАТЬ БЕСПЛАТНО
 btn-menu-devices = 📱 Мои устройства
 btn-menu-devices-empty = ⚠️ Нет привязанных устройств
 btn-menu-subscription = 💳 Подписка
+btn-menu-ios-app = 📱 Приложение для iPhone
 btn-menu-invite = 👥 Пригласить
 btn-menu-invite-about = ❓ Подробнее о награде
 btn-menu-invite-copy = 🔗 Скопировать ссылку
