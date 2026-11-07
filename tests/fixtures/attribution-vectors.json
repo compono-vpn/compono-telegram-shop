@@ -1,0 +1,282 @@
+{
+  "classifyReferrer": [
+    {
+      "referrer": "",
+      "channel": "direct"
+    },
+    {
+      "referrer": "https://www.google.com/",
+      "channel": "google",
+      "host": "google.com"
+    },
+    {
+      "referrer": "https://www.google.com.ua/search?q=x",
+      "channel": "google",
+      "host": "google.com.ua"
+    },
+    {
+      "referrer": "https://google.ru/",
+      "channel": "google",
+      "host": "google.ru"
+    },
+    {
+      "referrer": "https://yandex.ru/search/?text=vpn",
+      "channel": "yandex",
+      "host": "yandex.ru"
+    },
+    {
+      "referrer": "https://ya.ru/",
+      "channel": "yandex",
+      "host": "ya.ru"
+    },
+    {
+      "referrer": "https://yandex.com.tr/",
+      "channel": "yandex",
+      "host": "yandex.com.tr"
+    },
+    {
+      "referrer": "https://www.bing.com/",
+      "channel": "bing",
+      "host": "bing.com"
+    },
+    {
+      "referrer": "https://duckduckgo.com/",
+      "channel": "duckduckgo",
+      "host": "duckduckgo.com"
+    },
+    {
+      "referrer": "https://t.me/some_channel/12",
+      "channel": "telegram",
+      "host": "t.me"
+    },
+    {
+      "referrer": "https://web.telegram.org/k/",
+      "channel": "telegram",
+      "host": "web.telegram.org"
+    },
+    {
+      "referrer": "android-app://org.telegram.messenger/",
+      "channel": "telegram",
+      "host": "org.telegram.messenger"
+    },
+    {
+      "referrer": "https://vk.com/away.php?to=x",
+      "channel": "vk",
+      "host": "vk.com"
+    },
+    {
+      "referrer": "https://m.vk.com/",
+      "channel": "vk",
+      "host": "m.vk.com"
+    },
+    {
+      "referrer": "https://habr.com/ru/articles/1/",
+      "channel": "other",
+      "host": "habr.com"
+    },
+    {
+      "referrer": "https://notgoogle.com/",
+      "channel": "other",
+      "host": "notgoogle.com"
+    },
+    {
+      "referrer": "https://componovpn.com/faq",
+      "channel": "direct"
+    },
+    {
+      "referrer": "https://ru.componovpn.com/",
+      "channel": "direct"
+    },
+    {
+      "referrer": "not a url",
+      "channel": "direct"
+    }
+  ],
+  "classifyTouch": [
+    {
+      "input": {
+        "referrer": "https://yandex.ru/"
+      },
+      "channel": "yandex",
+      "paid": false,
+      "host": "yandex.ru"
+    },
+    {
+      "input": {
+        "referrer": "https://yandex.ru/",
+        "yclid": "123"
+      },
+      "channel": "yandex",
+      "paid": true,
+      "host": "yandex.ru"
+    },
+    {
+      "input": {
+        "referrer": "https://www.google.com/",
+        "gclid": "abc"
+      },
+      "channel": "google",
+      "paid": true,
+      "host": "google.com"
+    },
+    {
+      "input": {
+        "utmSource": "telegram",
+        "utmMedium": "paid",
+        "utmCampaign": "comp15"
+      },
+      "channel": "telegram",
+      "paid": true
+    },
+    {
+      "input": {
+        "utmSource": "chatgpt.com"
+      },
+      "channel": "other",
+      "host": "chatgpt.com",
+      "paid": false
+    },
+    {
+      "input": {
+        "gclid": "abc"
+      },
+      "channel": "google",
+      "paid": true
+    },
+    {
+      "input": {
+        "utmSource": "yandex",
+        "utmMedium": "cpc"
+      },
+      "channel": "yandex",
+      "paid": true
+    },
+    {
+      "input": {},
+      "channel": "direct",
+      "paid": false
+    }
+  ],
+  "startParam": [
+    {
+      "input": {
+        "slot": "home-hero",
+        "landingPath": "/ios",
+        "channel": "google"
+      },
+      "param": "source-a1_home-hero_lios_rg"
+    },
+    {
+      "input": {
+        "slot": "site-header",
+        "landingPath": "/",
+        "channel": "direct"
+      },
+      "param": "source-a1_site-header_lhome"
+    },
+    {
+      "input": {
+        "slot": "home-hero"
+      },
+      "param": "source-a1_home-hero"
+    },
+    {
+      "input": {
+        "slot": "home-steps",
+        "landingPath": "/vpn-dlya-rossii",
+        "channel": "yandex",
+        "paid": true,
+        "campaign": "Winter Sale",
+        "utmSource": "yandex"
+      },
+      "param": "source-a1_home-steps_lvpn-dlya-rossii_ry_mp_cwinter-sale_syandex"
+    },
+    {
+      "input": {
+        "slot": "home-hero",
+        "landingPath": "/tools/vpn-check",
+        "channel": "other",
+        "host": "habr.com"
+      },
+      "param": "source-a1_home-hero_ltools--vpn-check_rot_hhabr-com"
+    },
+    {
+      "input": {
+        "slot": "home-hero",
+        "landingPath": "/en/pricing",
+        "channel": "telegram",
+        "host": "t.me"
+      },
+      "param": "source-a1_home-hero_lpricing_rtg_ht-me"
+    }
+  ],
+  "decode": [
+    {
+      "param": "source-home-hero",
+      "version": 0,
+      "slot": "home-hero",
+      "channel": "direct",
+      "paid": false
+    },
+    {
+      "param": "source-channel_proxy",
+      "version": 0,
+      "slot": "channel_proxy",
+      "channel": "direct",
+      "paid": false
+    },
+    {
+      "param": "source-utm_telegram_paid_comp15",
+      "version": 0,
+      "slot": "utm_telegram_paid_comp15",
+      "channel": "direct",
+      "paid": false
+    },
+    {
+      "param": "source-a1_home-hero_lios_rg",
+      "version": 1,
+      "slot": "home-hero",
+      "landingPath": "/ios",
+      "channel": "google",
+      "paid": false
+    },
+    {
+      "param": "source-a1_home-steps_lvpn-dlya-rossii_ry_mp_cwinter-sale_syandex",
+      "version": 1,
+      "slot": "home-steps",
+      "landingPath": "/vpn-dlya-rossii",
+      "channel": "yandex",
+      "paid": true,
+      "campaign": "winter-sale",
+      "utmSource": "yandex"
+    },
+    {
+      "param": "source-a1_home-hero_ltools--vpn-check_rot_hhabr-com",
+      "version": 1,
+      "slot": "home-hero",
+      "landingPath": "/tools/vpn-check",
+      "channel": "other",
+      "host": "habr.com"
+    },
+    {
+      "param": "source-a1_site-header_lhome",
+      "version": 1,
+      "slot": "site-header",
+      "landingPath": "/",
+      "channel": "direct",
+      "paid": false
+    },
+    {
+      "param": "beta_testers",
+      "decoded": null
+    },
+    {
+      "param": "source-",
+      "decoded": null
+    },
+    {
+      "param": "",
+      "decoded": null
+    }
+  ]
+}

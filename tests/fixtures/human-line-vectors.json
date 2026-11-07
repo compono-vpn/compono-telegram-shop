@@ -1,0 +1,19 @@
+[
+  {"name": "google ios bot", "channel": "google", "landing_path": "/ios", "cta": "home-hero", "line": "Google → /ios → home-hero"},
+  {"name": "yandex web trial", "channel": "yandex", "landing_path": "/tarify", "cta": "форма триала", "line": "Yandex → /tarify → форма триала"},
+  {"name": "yandex paid with campaign", "channel": "yandex", "paid": true, "landing_path": "/", "cta": "home-hero", "campaign": "winter-sale", "line": "Yandex (реклама) → / → home-hero · winter-sale"},
+  {"name": "direct with landing", "channel": "direct", "landing_path": "/faq", "cta": "форма триала", "line": "Прямой заход → /faq → форма триала"},
+  {"name": "direct nothing", "channel": "direct", "line": "Прямой заход"},
+  {"name": "empty", "line": "Прямой заход"},
+  {"name": "other host", "channel": "other", "host": "habr.com", "landing_path": "/vpn-dlya-rossii", "cta": "home-steps", "line": "habr.com → /vpn-dlya-rossii → home-steps"},
+  {"name": "other without host", "channel": "other", "cta": "home-steps", "line": "Другой сайт → home-steps"},
+  {"name": "telegram", "channel": "telegram", "host": "t.me", "landing_path": "/", "cta": "home-hero", "line": "Telegram → / → home-hero"},
+  {"name": "vk", "channel": "vk", "landing_path": "/ios", "cta": "site-header", "line": "VK → /ios → site-header"},
+  {"name": "legacy channel post", "legacy_tag": "channel_proxy", "line": "Telegram → пост в канале (channel_proxy)"},
+  {"name": "legacy channel pin", "legacy_tag": "channel_pin", "line": "Telegram → пост в канале (channel_pin)"},
+  {"name": "legacy paid telegram", "legacy_tag": "utm_telegram_paid_comp15", "line": "Telegram (реклама) → utm_telegram_paid_comp15"},
+  {"name": "legacy site tag", "legacy_tag": "home-hero", "line": "Сайт → home-hero"},
+  {"name": "legacy site header", "legacy_tag": "site-header", "line": "Сайт → site-header"},
+  {"name": "legacy affiliate", "legacy_tag": "aff-123", "line": "Партнёр → aff-123"},
+  {"name": "legacy unknown", "legacy_tag": "something", "line": "Метка → something"}
+]

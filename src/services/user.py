@@ -51,7 +51,12 @@ class UserService(BaseService):
         super().__init__(config, bot, redis_client, redis_repository, translator_hub)
         self.billing = billing
 
-    async def create(self, aiogram_user: AiogramUser, source: Optional[str] = None) -> UserDto:
+    async def create(
+        self,
+        aiogram_user: AiogramUser,
+        source: Optional[str] = None,
+        attribution: Optional[dict] = None,
+    ) -> UserDto:
         role = UserRole.DEV if self.config.bot.dev_id == aiogram_user.id else UserRole.USER
         language = (
             aiogram_user.language_code
@@ -72,6 +77,7 @@ class UserService(BaseService):
                 "role": role.value,
                 "language": language,
                 "source": source,
+                "attribution": attribution,
             }
         )
 

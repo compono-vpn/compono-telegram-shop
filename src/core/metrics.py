@@ -37,6 +37,12 @@ NEW_USERS_TOTAL = Counter(
     "Total number of new user registrations",
 )
 
+NEW_USERS_BY_CHANNEL_TOTAL = Counter(
+    "bot_new_users_by_channel_total",
+    "New user registrations by first-touch acquisition channel",
+    ["channel"],
+)
+
 PAYMENT_WEBHOOK_PROCESSING_TIME = Histogram(
     "payment_webhook_processing_seconds",
     "Time spent processing payment webhooks",

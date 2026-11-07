@@ -83,7 +83,7 @@ frg-web-user =
     • <b>Email</b>: <code>{ $email }</code>
     { $source ->
     [0] { empty }
-    *[HAS] • <b>Источник</b>: <code>{ $source }</code>
+    *[HAS] • <b>Источник</b>: { $source }
     }
     </blockquote>
 
