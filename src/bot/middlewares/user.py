@@ -11,11 +11,18 @@ from src.core.config import AppConfig
 from src.core.constants import (
     CONTAINER_KEY,
     IS_SUPER_DEV_KEY,
-    SOURCE_PREFIX,
     USER_KEY,
 )
 from src.core.enums import MiddlewareEventType, SystemNotificationType
-from src.core.metrics import NEW_USERS_TOTAL
+from src.core.metrics import NEW_USERS_BY_CHANNEL_TOTAL, NEW_USERS_TOTAL
+from src.core.utils.attribution import (
+    DecodedStart,
+    attribution_from_touch,
+    decode_start_param,
+    source_line_for_start,
+    source_tag,
+    touch_from_decoded,
+)
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_subscription_to_dto
@@ -60,8 +67,14 @@ class UserMiddleware(EventTypedMiddleware):
 
         if user is None:
             NEW_USERS_TOTAL.inc()
-            source = self._parse_source(event)
-            user = await user_service.create(aiogram_user, source=source)
+            start_param = self._start_param(event)
+            decoded = decode_start_param(start_param)
+            source = source_tag(decoded)
+            attribution = attribution_from_touch(touch_from_decoded(decoded)) if decoded else None
+            NEW_USERS_BY_CHANNEL_TOTAL.labels(
+                channel=decoded.channel if decoded and decoded.version == 1 else "legacy_or_direct"
+            ).inc()
+            user = await user_service.create(aiogram_user, source=source, attribution=attribution)
 
             # Sync user to billing so pricing/promocodes work
             try:
@@ -71,6 +84,7 @@ class UserMiddleware(EventTypedMiddleware):
                         "username": user.username,
                         "name": user.name,
                         "source": source,
+                        "attribution": attribution,
                     }
                 )
             except Exception:
@@ -81,7 +95,7 @@ class UserMiddleware(EventTypedMiddleware):
                 "user_id": str(user.telegram_id),
                 "user_name": user.name,
                 "username": user.username or False,
-                "source": source or False,
+                "source": source_line_for_start(start_param),
             }
 
             if referrer:
@@ -110,6 +124,7 @@ class UserMiddleware(EventTypedMiddleware):
 
         elif not isinstance(aiogram_user, FakeUser):
             await user_service.compare_and_update(user, aiogram_user)
+            await self._record_returning_touch(billing, user.telegram_id, event)
 
         await user_service.update_recent_activity(telegram_id=user.telegram_id)
 
@@ -131,13 +146,35 @@ class UserMiddleware(EventTypedMiddleware):
         return await handler(event, data)
 
     @staticmethod
-    def _parse_source(event: TelegramObject) -> Optional[str]:
+    def _start_param(event: TelegramObject) -> Optional[str]:
         if not hasattr(event, "text") or not event.text:
             return None
         parts = event.text.split()
         if len(parts) <= 1:
             return None
-        param = parts[1]
-        if param.startswith(SOURCE_PREFIX):
-            return param[len(SOURCE_PREFIX) :]
-        return None
+        return parts[1]
+
+    @classmethod
+    def _parse_start(cls, event: TelegramObject) -> Optional[DecodedStart]:
+        return decode_start_param(cls._start_param(event))
+
+    @classmethod
+    def _parse_source(cls, event: TelegramObject) -> Optional[str]:
+        return source_tag(cls._parse_start(event))
+
+    @classmethod
+    async def _record_returning_touch(
+        cls, billing: BillingClient, telegram_id: int, event: TelegramObject
+    ) -> None:
+        text = getattr(event, "text", None)
+        if not text or not text.startswith("/start"):
+            return
+        decoded = cls._parse_start(event)
+        if decoded is None:
+            return
+        try:
+            await billing.update_user(
+                telegram_id, {"attribution_touch": touch_from_decoded(decoded)}
+            )
+        except Exception:
+            logger.opt(exception=True).warning("Failed to record returning-user touch")

@@ -82,7 +82,7 @@ ntf-event-new-user =
     { $source ->
     [0] { empty }
     *[HAS]
-    <b>📍 Источник:</b> <code>{ $source }</code>
+    <b>📍 Источник:</b> { $source }
     }
 
     { $has_referrer ->
