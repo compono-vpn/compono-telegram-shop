@@ -1,4 +1,5 @@
 # Errors
+ntf-menu-refreshed = <i>Меню обновлено</i>
 ntf-error-lost-context = <i>⚠️ Произошла ошибка. Диалог перезапущен.</i>
 ntf-error-log-not-found = <i>⚠️ Ошибка: Лог файл не найден.</i>
 
