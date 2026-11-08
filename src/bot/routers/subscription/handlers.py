@@ -38,6 +38,7 @@ from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
+from src.services.stars_invoice import create_stars_invoice_link
 from src.services.subscription import SubscriptionService
 from src.services.trial_activation import get_monthly_trial_plan
 
@@ -172,9 +173,24 @@ async def _create_payment_and_get_data(
         else:
             pricing = PriceDetailsDto()
 
+        payment_url = result.URL
+        if (
+            gt_str == PaymentGatewayType.TELEGRAM_STARS.value
+            and not payment_url
+            and not pricing.is_free
+        ):
+            payment_url = await create_stars_invoice_link(
+                dialog_manager.middleware_data["bot"],
+                payment_id=result.ID,
+                title=plan.name,
+                description=f"{plan.name} · {duration.days} дн.",
+                amount=pricing.final_amount,
+            )
+            logger.info(f"{log(user)} Created Stars invoice link for payment '{result.ID}'")
+
         return CachedPaymentData(
             payment_id=result.ID,
-            payment_url=result.URL,
+            payment_url=payment_url,
             final_pricing=pricing.model_dump_json(),
         )
 
