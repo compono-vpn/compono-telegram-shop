@@ -1,0 +1,250 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump level (when no explicit version is given): auto, patch, minor, major"
+        default: auto
+      version:
+        description: "Explicit version to release, e.g. v1.2.3 (overrides bump)"
+        default: ""
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: git.bdtfs.com
+  OWNER: compono-vpn
+
+jobs:
+  lint-and-test:
+    runs-on: docker
+    container:
+      image: python:3.12-bookworm
+    steps:
+      - name: checkout
+        run: |
+          git clone "https://${{ secrets.REGISTRY_USER }}:${{ secrets.REGISTRY_TOKEN }}@git.bdtfs.com/${GITHUB_REPOSITORY}.git" .
+          if [ -n "${GITHUB_HEAD_REF:-}" ]; then git checkout -q "origin/${GITHUB_HEAD_REF}"; else git checkout -q "$GITHUB_SHA"; fi
+      - name: install uv and dependencies
+        run: |
+          pip install -q uv
+          uv sync --dev
+      - name: lint
+        run: |
+          uv run ruff check src/
+          uv run ruff format --check src/
+      - name: tests
+        run: uv run pytest tests/ -v
+
+  version:
+    runs-on: docker
+    if: github.event_name != 'pull_request'
+    needs: [lint-and-test]
+    container:
+      image: docker:27-cli
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+      previous: ${{ steps.semver.outputs.previous }}
+      sha_short: ${{ steps.semver.outputs.sha_short }}
+      is_stage: ${{ steps.semver.outputs.is_stage }}
+    steps:
+      - name: tools
+        run: apk add --no-cache git
+
+      - name: checkout
+        run: |
+          git clone "https://${{ secrets.REGISTRY_USER }}:${{ secrets.REGISTRY_TOKEN }}@git.bdtfs.com/${GITHUB_REPOSITORY}.git" .
+          git checkout -q "$GITHUB_SHA"
+          git fetch --tags --force --quiet
+
+      - name: compute next version and tag
+        id: semver
+        env:
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+          DISPATCH_BUMP: ${{ github.event.inputs.bump }}
+        run: |
+          set -euo pipefail
+          is_stage=false
+          echo "is_stage=false" >> "$GITHUB_OUTPUT"
+          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1)
+          [ -z "$latest" ] && latest="v0.0.0"
+
+          if [ -n "${DISPATCH_VERSION:-}" ]; then
+            next="$DISPATCH_VERSION"
+            case "$next" in v*) ;; *) next="v$next";; esac
+          else
+            ver=${latest#v}
+            major=$(echo "$ver" | cut -d. -f1)
+            minor=$(echo "$ver" | cut -d. -f2)
+            patch=$(echo "$ver" | cut -d. -f3)
+
+            bump="${DISPATCH_BUMP:-auto}"
+            if [ -z "$bump" ] || [ "$bump" = "auto" ]; then
+              msg=$(git log -1 --format=%B "$GITHUB_SHA")
+              subject=$(printf '%s\n' "$msg" | head -n1)
+              if printf '%s' "$msg" | grep -qE 'BREAKING CHANGE' \
+                 || printf '%s' "$subject" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+                bump=major
+              elif printf '%s' "$subject" | grep -qE '^feat(\([^)]*\))?:'; then
+                bump=minor
+              else
+                bump=patch
+              fi
+            fi
+
+            case "$bump" in
+              major) next="v$((major + 1)).0.0" ;;
+              minor) next="v${major}.$((minor + 1)).0" ;;
+              *)     next="v${major}.${minor}.$((patch + 1))" ;;
+            esac
+            echo "Bump level: $bump"
+          fi
+
+          echo "Previous: $latest  ->  Next: $next"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "previous=$latest" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+          if [ "$is_stage" = "false" ]; then
+            git config user.name "Anton Yusupov"
+            git config user.email "82118123+bdtfs@users.noreply.github.com"
+            git tag -a "$next" -m "Release $next ($(git rev-parse --short HEAD))"
+            git push origin "$next"
+          fi
+
+  build:
+    runs-on: docker
+    needs: [version]
+    container:
+      image: docker:27-cli
+      options: --network host -v /certs/client:/certs/client
+    env:
+      DOCKER_HOST: tcp://127.0.0.1:2376
+      DOCKER_TLS_VERIFY: "1"
+      DOCKER_CERT_PATH: /certs/client
+    steps:
+      - name: tools
+        run: apk add --no-cache git socat
+
+      - name: checkout
+        run: |
+          git clone "https://${{ secrets.REGISTRY_USER }}:${{ secrets.REGISTRY_TOKEN }}@git.bdtfs.com/${GITHUB_REPOSITORY}.git" .
+          git checkout -q "$GITHUB_SHA"
+
+      - name: build and push compono-telegram-shop
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          SHA_SHORT: ${{ needs.version.outputs.sha_short }}
+          IS_STAGE: ${{ needs.version.outputs.is_stage }}
+        run: |
+          set -euo pipefail
+          built=$(git show -s --format=%cI "$GITHUB_SHA")
+          local_ref="$REGISTRY/$OWNER/compono-telegram-shop"
+          tags="${VERSION} ${SHA_SHORT}"
+          if [ "${IS_STAGE}" != "true" ]; then tags="$tags latest"; fi
+          tagflags=""
+          for t in $tags; do tagflags="$tagflags -t ${local_ref}:${t}"; done
+          docker build --platform linux/amd64 \
+            -f "Dockerfile" \
+            $tagflags \
+            "."
+
+          socat TCP-LISTEN:5000,bind=127.0.0.1,fork,reuseaddr TCP:forgejo.forgejo.svc.cluster.local:3000 &
+          sleep 2
+          echo "${{ secrets.REGISTRY_TOKEN }}" | \
+            docker login 127.0.0.1:5000 -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+          for t in $tags; do
+            docker tag "${local_ref}:${t}" "127.0.0.1:5000/$OWNER/compono-telegram-shop:${t}"
+            n=0
+            until docker push "127.0.0.1:5000/$OWNER/compono-telegram-shop:${t}"; do
+              n=$((n + 1))
+              [ "$n" -ge 4 ] && { echo "push of ${t} failed after ${n} attempts"; exit 1; }
+              echo "push failed, retry ${n}"
+              sleep $((n * 5))
+            done
+          done
+
+  release:
+    runs-on: docker
+    needs: [version, build]
+    if: needs.version.outputs.is_stage != 'true'
+    continue-on-error: true
+    container:
+      image: docker:27-cli
+    steps:
+      - name: tools
+        run: apk add --no-cache git curl jq
+
+      - name: checkout
+        run: |
+          git clone "https://${{ secrets.REGISTRY_USER }}:${{ secrets.REGISTRY_TOKEN }}@git.bdtfs.com/${GITHUB_REPOSITORY}.git" .
+          git fetch --tags --force --quiet
+
+      - name: create release
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PREVIOUS: ${{ needs.version.outputs.previous }}
+          API: http://forgejo.forgejo.svc.cluster.local:3000/api/v1
+        run: |
+          set -euo pipefail
+          {
+            echo "### Images"
+            echo
+            echo "- \`${REGISTRY}/${OWNER}/compono-telegram-shop:${VERSION}\`"
+            echo
+            echo "### Changes"
+            echo
+            if [ "$PREVIOUS" != "v0.0.0" ] && git rev-parse -q --verify "refs/tags/${PREVIOUS}" >/dev/null; then
+              git log --no-merges --format='- %s (%h)' "${PREVIOUS}..${VERSION}"
+            fi
+          } > /tmp/body.md
+          jq -n --arg tag "$VERSION" --rawfile body /tmp/body.md \
+            '{tag_name:$tag, name:$tag, body:$body}' > /tmp/release.json
+          curl -sS -f -X POST "${API}/repos/${GITHUB_REPOSITORY}/releases" \
+            -H "Authorization: token ${{ secrets.REGISTRY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/release.json
+
+  dispatch-argocd:
+    runs-on: docker
+    needs: [version, build]
+    if: github.ref == 'refs/heads/main'
+    continue-on-error: true
+    container:
+      image: docker:27-cli
+    steps:
+      - name: tools
+        run: apk add --no-cache curl
+
+      - name: dispatch image-update to argocd
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          IS_STAGE: ${{ needs.version.outputs.is_stage }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          set -eu
+          if ! curl -fsS -H "Authorization: token $GH_PAT" -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/bdfts/argocd/contents/compono-shop/prod.values.yaml?ref=master" \
+              | grep -q "git.bdtfs.com/compono-vpn/"; then
+            echo "argocd does not pull this app from Forgejo yet, skipping dispatch"
+            exit 0
+          fi
+          dispatch() {
+            body=$(printf '{"event_type":"%s","client_payload":%s}' "$1" "$(printf '%s' "$2" | sed "s/@TAG@/$VERSION/g")")
+            code=$(curl -sS -o /tmp/out -w '%{http_code}' -X POST \
+              -H "Authorization: token $GH_PAT" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/bdfts/argocd/dispatches \
+              -d "$body")
+            echo "$1 -> HTTP $code"
+            [ "$code" = "204" ]
+          }
+          dispatch image-update '{"tag":"@TAG@","path":"compono-shop"}'
+          dispatch image-update '{"tag":"@TAG@","path":"compono-shop","env":"stage"}'
