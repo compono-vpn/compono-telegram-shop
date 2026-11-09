@@ -1,3 +1,4 @@
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -68,3 +69,48 @@ async def test_reminder_checks_devices_using_current_subscription_from_billing()
     await process_pending_not_connected_reminders_task.original_func(dishka_container=container)
     remna.get_devices_user.assert_awaited_once_with(user, subscription=subscription)
     notify.notify_user.assert_not_awaited()
+
+
+async def test_reminder_is_queued_again_when_telegram_is_unreachable():
+    from aiogram.exceptions import TelegramNetworkError
+    from redis.asyncio import Redis
+    from src.infrastructure.taskiq.tasks.notifications import (
+        NOT_CONNECTED_RETRY_DELAY,
+        _PENDING_KEY,
+        process_pending_not_connected_reminders_task,
+    )
+    from src.services.subscription import SubscriptionService
+    from src.services.user import UserService
+    from tests.reminder_fakes import FakeRedis
+
+    member = '12345:https://example.invalid/connect/test'
+    other = '67890:https://example.invalid/connect/other'
+    key = _PENDING_KEY.pack()
+    redis = FakeRedis()
+    redis.zsets[key] = {member: 1.0, other: 2.0}
+    redis.exists = AsyncMock(return_value=False)
+    redis.setex = AsyncMock()
+    user = make_user()
+    subscription = make_subscription(is_trial=True)
+    remna = AsyncMock()
+    remna.get_devices_user.return_value = []
+    remna.get_user.return_value = SimpleNamespace(sub_last_opened_at=None, user_traffic=None)
+    error = TelegramNetworkError(method=SendMessage(chat_id=12345, text='test'), message='reset')
+    notify = AsyncMock()
+    notify.notify_user.side_effect = [error, Mock()]
+    deps = {
+        Redis: redis,
+        UserService: SimpleNamespace(get=AsyncMock(return_value=user)),
+        SubscriptionService: SimpleNamespace(get_current=AsyncMock(return_value=subscription)),
+        RemnawaveService: remna,
+        NotificationService: notify,
+    }
+    container = AsyncMock()
+    container.get.side_effect = lambda dependency, **kwargs: deps[dependency]
+    before = time.time()
+    await process_pending_not_connected_reminders_task.original_func(dishka_container=container)
+    pending = redis.members(key)
+    assert set(pending) == {member}
+    assert pending[member] >= before + NOT_CONNECTED_RETRY_DELAY
+    assert notify.notify_user.await_count == 2
+    redis.setex.assert_awaited_once()

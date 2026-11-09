@@ -2,6 +2,7 @@ import asyncio
 import time
 from typing import Any, Union, cast
 
+from aiogram.exceptions import TelegramNetworkError
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
 from redis.asyncio import Redis
@@ -23,6 +24,7 @@ from src.services.trial_activation import is_connected
 from src.services.user import UserService
 
 NOT_CONNECTED_REMINDER_DELAY = 2 * 60 * 60  # 2 hours
+NOT_CONNECTED_RETRY_DELAY = 5 * 60
 NOT_CONNECTED_NOTIFICATION_KEY = "not_connected_reminder"
 _PENDING_KEY = PendingNotConnectedRemindersKey()
 # Redis dedup: track sent notifications for 90 days
@@ -247,16 +249,24 @@ async def process_pending_not_connected_reminders_task(
             continue
 
         logger.info(f"Sending not-connected reminder to '{user_telegram_id}'")
-        await notification_service.notify_user(
-            user=user,
-            payload=MessagePayload(
-                i18n_key="ntf-event-user-not-connected",
-                reply_markup=get_connect_keyboard(connect_url),
-                auto_delete_after=None,
-                add_close_button=True,
-            ),
-            ntf_type=UserNotificationType.NOT_CONNECTED,
-        )
+        try:
+            await notification_service.notify_user(
+                user=user,
+                payload=MessagePayload(
+                    i18n_key="ntf-event-user-not-connected",
+                    reply_markup=get_connect_keyboard(connect_url),
+                    auto_delete_after=None,
+                    add_close_button=True,
+                ),
+                ntf_type=UserNotificationType.NOT_CONNECTED,
+            )
+        except TelegramNetworkError as error:
+            await redis_client.zadd(key, {member: time.time() + NOT_CONNECTED_RETRY_DELAY})
+            logger.warning(
+                f"Telegram unreachable, not-connected reminder for '{user_telegram_id}' "
+                f"queued again: {error.message}"
+            )
+            continue
 
         # Mark as sent in Redis with TTL
         await redis_client.setex(dedup_key, _SENT_NTF_TTL, "1")

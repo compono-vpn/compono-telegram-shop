@@ -10,6 +10,7 @@ from dishka import Provider, Scope, from_context, provide
 from loguru import logger
 
 from src.core.config import AppConfig
+from src.services.telegram_connect_retry import ConnectRetryMiddleware
 
 
 class BotProvider(Provider):
@@ -33,6 +34,7 @@ class BotProvider(Provider):
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
             session=session,
         ) as bot:
+            bot.session.middleware(ConnectRetryMiddleware())
             yield bot
 
         logger.debug("Closing Bot session")
