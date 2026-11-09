@@ -122,11 +122,11 @@ def test_card_payments_prefer_platega_and_fall_back_to_any_ruble_gateway():
         == "PLATEGA"
     )
     assert (
-        widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR"), gw("YOOKASSA", "RUB")], False).Type
+        widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR"), gw("YOOKASSA", "RUB")], "pay").Type
         == "YOOKASSA"
     )
-    assert widgets.pick_gateway([gw("PLATEGA", "RUB", active=False)], False) is None
-    assert widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR")], True).Type == "TELEGRAM_STARS"
+    assert widgets.pick_gateway([gw("PLATEGA", "RUB", active=False)], "pay") is None
+    assert widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR")], "star").Type == "TELEGRAM_STARS"
 
 
 def service(user=None, subscription=None, *, connected=False):
@@ -275,3 +275,82 @@ async def test_webhook_answers_widget_queries_without_the_dispatcher():
     assert response.status_code == 200
     widget_service.handle_query.assert_awaited_once()
     dispatcher.feed_update.assert_not_awaited()
+
+
+def test_ton_transfer_link_becomes_a_ton_connect_transaction():
+    from src.services import ton
+
+    t = ton.parse_transfer_url(
+        "ton://transfer/UQATmChrR3EtbPS1Gzbjve5rQsahMDk9W7-9-2n7D5Fi_DeR?amount=520000000&text=1b4e28ba-2fa1-11d2-883f-0016d3cca427"
+    )
+    tx = ton.transaction(t, 1794240000)
+    assert tx["valid_until"] == 1794240000
+    assert tx["messages"] == [
+        {
+            "address": "UQATmChrR3EtbPS1Gzbjve5rQsahMDk9W7-9-2n7D5Fi_DeR",
+            "amount": "520000000",
+            "payload": "te6cckEBAQEAKgAAUAAAAAAxYjRlMjhiYS0yZmExLTExZDItODgzZi0wMDE2ZDNjY2E0MjfyJx7b",
+        }
+    ]
+    assert ton.format_ton(520000000) == "0.52 TON"
+    assert ton.format_ton(2 * 10**9) == "2 TON"
+    assert ton.parse_transfer_url("https://pay.example/x") is None
+    assert ton.parse_transfer_url("ton://transfer/UQabc?amount=0&text=x") is None
+
+
+async def test_ton_pay_answers_a_transaction_for_the_wallet(monkeypatch):
+    monkeypatch.setattr(
+        widgets,
+        "billing_price_details_to_dto",
+        lambda _: SimpleNamespace(final_amount=Decimal("0.52")),
+    )
+    survey = AsyncMock()
+    monkeypatch.setattr(widgets, "schedule_cancel_survey_check", survey)
+    svc, bot, billing = service(subscription=None)
+    billing.list_active_gateways.return_value.append(gw("TON", "TON"))
+    billing.create_payment.return_value = SimpleNamespace(
+        ID="1b4e28ba-2fa1-11d2-883f-0016d3cca427",
+        URL="ton://transfer/UQATmChrR3EtbPS1Gzbjve5rQsahMDk9W7-9-2n7D5Fi_DeR?amount=520000000&text=1b4e28ba-2fa1-11d2-883f-0016d3cca427",
+    )
+    await svc.handle_query(query("ton:1:30"))
+    assert billing.create_payment.await_args.kwargs["gateway_type"] == "TON"
+    reply = answer_of(bot)
+    assert reply["id"] == "1b4e28ba-2fa1-11d2-883f-0016d3cca427" and reply["a"] == "0.52 TON"
+    assert reply["x"]["messages"][0]["amount"] == "520000000"
+    survey.assert_not_awaited()
+
+
+async def test_ton_pay_is_refused_when_the_gateway_is_off():
+    svc, bot, billing = service()
+    await svc.handle_query(query("ton:1:30"))
+    billing.create_payment.assert_not_awaited()
+    assert "недоступен" in answer_of(bot)["m"]
+
+
+async def test_sent_transaction_is_confirmed_with_billing(monkeypatch):
+    monkeypatch.setattr(widgets, "TON_CONFIRM_WAIT", 0)
+    svc, bot, billing = service()
+    billing.confirm_ton_payment.side_effect = ["pending", "completed"]
+    await svc.handle_query(
+        query(
+            "tp:1b4e28ba-2fa1-11d2-883f-0016d3cca427",
+            type={"type": "sent_transaction", "msg_hash": "h", "wallet": {"address": "UQx"}},
+        )
+    )
+    assert billing.confirm_ton_payment.await_count == 2
+    assert answer_of(bot)["ok"] == 1 and "Оплачено" in answer_of(bot)["m"]
+
+
+async def test_plan_card_offers_ton_only_when_the_gateway_is_on():
+    svc, bot, billing = service()
+    await svc.send_plans(make_user())
+    assert "w" not in json.loads(sent(bot, SendWidget)[0].chat_data)
+    billing.list_active_gateways.return_value.append(gw("TON", "TON"))
+    await svc.send_plans(make_user())
+    assert json.loads(sent(bot, SendWidget)[1].chat_data)["w"] == 1
+
+
+def test_ton_never_shows_in_the_old_payment_screens():
+    from src.bot.routers.subscription.getters import WIDGET_ONLY_GATEWAYS
+
+    assert "TON" in WIDGET_ONLY_GATEWAYS

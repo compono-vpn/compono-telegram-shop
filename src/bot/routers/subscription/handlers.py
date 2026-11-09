@@ -299,7 +299,11 @@ async def on_purchase_type_select(
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     billing_gateways = await billing.list_active_gateways()
-    gateways = [billing_gateway_to_dto(g) for g in billing_gateways if g.Channel in ("BOT", "ALL")]
+    gateways = [
+        billing_gateway_to_dto(g)
+        for g in billing_gateways
+        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
+    ]
     dialog_manager.dialog_data["purchase_type"] = purchase_type
     dialog_manager.dialog_data.pop(CURRENT_DURATION_KEY, None)
 
@@ -377,7 +381,11 @@ async def on_subscription_plans(  # noqa: C901
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     billing_gateways = await billing.list_active_gateways()
-    gateways = [billing_gateway_to_dto(g) for g in billing_gateways if g.Channel in ("BOT", "ALL")]
+    gateways = [
+        billing_gateway_to_dto(g)
+        for g in billing_gateways
+        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
+    ]
 
     if not callback.data:
         raise ValueError("Callback data is empty")
@@ -553,7 +561,11 @@ async def on_duration_select(
         raise ValueError("PlanDto not found in dialog data")
 
     billing_gateways = await billing.list_active_gateways()
-    gateways = [billing_gateway_to_dto(g) for g in billing_gateways if g.Channel in ("BOT", "ALL")]
+    gateways = [
+        billing_gateway_to_dto(g)
+        for g in billing_gateways
+        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
+    ]
     default_currency = await billing.get_default_currency()
     purchase_type: PurchaseType | None = dialog_manager.dialog_data.get("purchase_type")
     experiment_context = build_checkout_context(

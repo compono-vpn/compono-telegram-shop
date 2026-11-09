@@ -11,6 +11,7 @@ button{border:0;font:inherit;color:inherit}
 .i{color:var(--tg-theme-hint-color);font-size:.86em;margin:8px 2px 0}
 #go{display:block;width:100%;margin-top:14px;padding:12px;border-radius:11px;font-weight:600;background:var(--tg-theme-button-color);color:var(--tg-theme-button-text-color)}
 #st{display:block;width:100%;margin-top:4px;padding:9px;background:none;font-size:.92em;color:var(--tg-theme-link-color)}
+.alt{display:none;width:100%;margin-top:8px;padding:11px;border-radius:11px;font-weight:600;background:var(--tg-theme-secondary-bg-color);color:var(--tg-theme-link-color)}
 #m{font-size:.84em;color:var(--tg-theme-hint-color);text-align:center;min-height:1em}
 </style>
 <div class="t">Тарифы</div>
@@ -18,6 +19,7 @@ button{border:0;font:inherit;color:inherit}
 <div id="ds"></div>
 <div class="i" id="inf"></div>
 <button id="go"></button>
+<button id="tn" class="alt">Оплатить TON</button>
 <button id="st">Оплатить звёздами</button>
 <div id="m"></div>
 <script>
@@ -32,7 +34,7 @@ $("tabs").innerHTML=h;
 var p=cur()[0],d="";for(var k=0;k<p.d.length;k++){var o=p.d[k];d+='<button class="r'+(k==di?" a":"")+'" data-d="'+k+'"><span>'+o[2]+"</span><span>"+(o[3]?"<s>"+o[3]+" ₽</s>":"")+o[1]+" ₽</span></button>"}
 $("ds").innerHTML=d;$("inf").textContent=p.f||"";
 var o=cur()[1];$("go").textContent=link?"Перейти к оплате":o?"Оплатить "+o[1]+" ₽":"";
-$("st").style.display=link?"none":""}
+$("st").style.display=link?"none":"";$("tn").style.display=!link&&S.w&&T&&T.wallet?"block":"none"}
 function pay(kind){
 var c=cur();if(busy||!T||!c[1])return;busy=1;$("m").textContent="Создаю платёж…";
 T.request(kind+":"+c[0].i+":"+c[1][0]).then(function(a){busy=0;var r={};try{r=JSON.parse(a.result||"{}")}catch(e){}
@@ -42,5 +44,9 @@ $("tabs").onclick=function(e){var i=e.target.dataset.i;if(i!=null){pi=+i;di=0;li
 $("ds").onclick=function(e){var b=e.target.closest("[data-d]");if(b){di=+b.dataset.d;link=null;$("m").textContent="";draw()}};
 $("go").onclick=function(){if(link){if(link.t)T.openTelegramLink(link.t);else T.openLink(link.u)}else pay("pay")};
 $("st").onclick=function(){pay("star")};
+$("tn").onclick=function(){var c=cur();if(busy||!T||!T.wallet||!c[1])return;busy=1;$("m").textContent="Готовлю платёж…";
+T.request("ton:"+c[0].i+":"+c[1][0],{wallet:true}).then(function(a){var r=JSON.parse(a.result||"{}");if(!r.x)throw{m:r.m};$("m").textContent="К оплате "+r.a;
+return T.wallet.sendTransaction(r.x,"tp:"+r.id)}).then(function(a){busy=0;var r={};try{r=JSON.parse(a.result||"{}")}catch(e){}$("m").textContent=r.m||"Платёж отправлен."},
+function(e){busy=0;$("m").textContent=e&&e.m?e.m:e&&e.code=="REJECTED"?"Платёж отменён.":"Не получилось. Попробуйте ещё раз."})};
 draw();T&&T.ready&&T.ready();
 </script>
