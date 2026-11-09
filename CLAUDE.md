@@ -49,3 +49,14 @@ Bot API 10.4 message widgets (HTML cards inside a message, private chat only). B
   `lifespan.py` adds `widget_query` to `allowed_updates` when the flag is on. Limits: HTML 4 KB after zlib, state 1 KB,
   answer 1 KB, request data 64 bytes; `tests/test_widgets.py` checks them.
 - Any failure falls back to the old screens; old Telegram apps show only the caption (`msg-widget-card-caption`).
+
+### TON from the plan card (COM-183, 2026-11-09)
+
+Gateway type and currency `TON` exist in the shop (enums) but are kept out of the old dialog payment screens
+(`WIDGET_ONLY_GATEWAYS` in `subscription/getters.py`): only the widget can pay with them. The plan card shows
+"Оплатить TON" when billing has an active TON gateway and the user's Telegram has a wallet (`TelegramWidget.wallet`).
+Tap → `ton:<plan>:<days>` with the user's wallet → billing creates the payment and returns
+`ton://transfer/<address>?amount=<nanotons>&text=<payment id>` → the bot answers a TON Connect transaction (comment cell
+built in `src/services/ton.py`, byte-identical to tonsdk) → the widget calls `wallet.sendTransaction(tx, "tp:<id>")` →
+the bot gets a `sent_transaction` query and asks billing `POST /payments/ton/confirm` up to 4 times 3 s apart; billing's
+own poller finishes the payment if the chain is slower. Stage receiving wallet: Vault `kv/compono-ton-stage-wallet`.

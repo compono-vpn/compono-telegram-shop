@@ -1,3 +1,4 @@
+import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,6 +28,8 @@ from src.models.dto.user import BaseUserDto, UserDto
 from src.services.remnawave import RemnawaveService
 from src.services.stars_invoice import create_stars_invoice_link
 from src.services.subscription import SubscriptionService
+from src.services.ton import format_ton, parse_transfer_url
+from src.services.ton import transaction as ton_transaction
 from src.services.trial_activation import is_connected
 from src.services.user import UserService
 
@@ -39,6 +42,9 @@ STATE_LIMIT = 1024
 ANSWER_LIMIT = 1024
 WIDGET_QUERY_UPDATE = "widget_query"
 GIB = 1024**3
+TON_TX_TTL = 600
+TON_CONFIRM_TRIES = 4
+TON_CONFIRM_WAIT = 3.0
 
 
 class SendWidget(TelegramMethod[Message]):
@@ -77,6 +83,7 @@ class WidgetQuery:
     chat_id: Optional[int]
     message_id: Optional[int]
     data: str
+    kind: str = "data"
 
 
 def parse_widget_query(raw: Any) -> Optional[WidgetQuery]:
@@ -92,6 +99,7 @@ def parse_widget_query(raw: Any) -> Optional[WidgetQuery]:
         chat_id=chat.get("id"),
         message_id=raw.get("message_id"),
         data=str(raw.get("data") or ""),
+        kind=str((raw.get("type") or {}).get("type") or "data"),
     )
 
 
@@ -156,7 +164,9 @@ def sellable(plans: list[PlanDto]) -> list[PlanDto]:
     return sorted(keep, key=lambda p: (p.order_index, p.id or 0))
 
 
-def plans_state(plans: list[PlanDto], selected: Optional[int], currency: str = "RUB") -> dict:
+def plans_state(
+    plans: list[PlanDto], selected: Optional[int], currency: str = "RUB", ton: bool = False
+) -> dict:
     rows = []
     for plan in sellable(plans):
         durations = []
@@ -168,6 +178,8 @@ def plans_state(plans: list[PlanDto], selected: Optional[int], currency: str = "
         if durations:
             rows.append({"i": plan.id, "n": plan.name, "d": durations, "f": _limits(plan)})
     state: dict[str, Any] = {"p": rows}
+    if ton:
+        state["w"] = 1
     if selected and any(r["i"] == selected for r in rows):
         state["s"] = selected
     return state
@@ -179,16 +191,17 @@ def purchase_type(subscription: Optional[BaseSubscriptionDto], plan_id: int) -> 
     return PurchaseType.RENEW if subscription.plan.id == plan_id else PurchaseType.CHANGE
 
 
-def pick_gateway(gateways: list[Any], stars: bool) -> Optional[Any]:
-    """Stars, or the first active ruble gateway for the bot (Platega in prod, YooKassa on stage)."""
+def pick_gateway(gateways: list[Any], kind: str) -> Optional[Any]:
+    """ "star", "ton", or "pay" for the first active ruble gateway (Platega, else e.g. YooKassa)."""
     usable = [g for g in gateways if g.IsActive and g.Channel in ("BOT", "ALL")]
-    if stars:
-        return next((g for g in usable if g.Type == PaymentGatewayType.TELEGRAM_STARS.value), None)
-    rubles = [
-        g
-        for g in usable
-        if g.Currency == "RUB" and g.Type != PaymentGatewayType.TELEGRAM_STARS.value
-    ]
+    by_type = {
+        "star": PaymentGatewayType.TELEGRAM_STARS.value,
+        "ton": PaymentGatewayType.TON.value,
+    }
+    if kind in by_type:
+        return next((g for g in usable if g.Type == by_type[kind]), None)
+    special = {PaymentGatewayType.TELEGRAM_STARS.value, PaymentGatewayType.TON.value}
+    rubles = [g for g in usable if g.Currency == "RUB" and g.Type not in special]
     rubles.sort(key=lambda g: (g.Type != PaymentGatewayType.PLATEGA.value, g.OrderIndex))
     return rubles[0] if rubles else None
 
@@ -285,7 +298,8 @@ class WidgetService:
         plans = await self._plans(user.telegram_id)
         subscription = await self.subscription_service.get_current(user.telegram_id)
         selected = subscription.plan.id if subscription and not subscription.is_trial else None
-        state = plans_state(plans, selected)
+        ton = pick_gateway(await self.billing.list_active_gateways(), "ton") is not None
+        state = plans_state(plans, selected, ton=ton)
         if not state["p"]:
             logger.warning(f"No sellable plans for '{user.telegram_id}', plan card not sent")
             return None
@@ -338,13 +352,36 @@ class WidgetService:
                 Subscription.MAIN, mode=StartMode.RESET_STACK, show_mode=ShowMode.SEND
             )
             return {}
-        if action in ("pay", "star"):
+        if query.kind == "sent_transaction" and action == "tp":
+            return await self._ton_sent(rest)
+        if action in ("pay", "star", "ton"):
             plan_id, _, days = rest.partition(":")
             if not plan_id.isdigit() or not days.isdigit():
                 return {"m": "Не получилось. Попробуйте ещё раз."}
-            return await self._pay(user, subscription, int(plan_id), int(days), action == "star")
+            return await self._pay(user, subscription, int(plan_id), int(days), action)
         logger.warning(f"Unknown widget query '{query.data}' from '{query.user_id}'")
         return {}
+
+    async def _ton_sent(self, payment_id: str) -> dict[str, Any]:
+        status = "pending"
+        for attempt in range(TON_CONFIRM_TRIES):
+            try:
+                status = await self.billing.confirm_ton_payment(payment_id)
+            except Exception:
+                logger.opt(exception=True).warning(f"TON confirm call failed for '{payment_id}'")
+            if status == "completed" or status == "underpaid":
+                break
+            if attempt < TON_CONFIRM_TRIES - 1:
+                await asyncio.sleep(TON_CONFIRM_WAIT)
+        logger.info(f"TON payment '{payment_id}' after the wallet sent it: {status}")
+        if status == "completed":
+            return {"m": "Оплачено. Подписка уже обновлена.", "ok": 1}
+        if status == "underpaid":
+            return {"m": "Пришло меньше нужной суммы. Напишите в поддержку."}
+        return {
+            "m": "Платёж отправлен. Подписка включится, как только сеть его подтвердит.",
+            "ok": 1,
+        }
 
     async def _check(
         self, query: WidgetQuery, user: UserDto, subscription: Optional[BaseSubscriptionDto]
@@ -368,14 +405,14 @@ class WidgetService:
         subscription: Optional[BaseSubscriptionDto],
         plan_id: int,
         days: int,
-        stars: bool,
+        method: str,
     ) -> dict[str, Any]:
         plans = await self._plans(user.telegram_id)
         plan = next((p for p in sellable(plans) if p.id == plan_id), None)
         duration = plan.get_duration(days) if plan else None
         if not plan or not duration:
             return {"m": "Этот тариф сейчас недоступен."}
-        gateway = pick_gateway(await self.billing.list_active_gateways(), stars)
+        gateway = pick_gateway(await self.billing.list_active_gateways(), method)
         if not gateway:
             return {"m": "Этот способ оплаты сейчас недоступен."}
         gateway_type = gateway.Type
@@ -397,18 +434,30 @@ class WidgetService:
                 currency=gateway.Currency,
             )
         )
-        await schedule_cancel_survey_check(
-            redis_client=self.redis_client,
-            payment_id=result.ID,
-            telegram_id=user.telegram_id,
-            gateway_type=gateway_type,
-        )
+        if method != "ton":
+            await schedule_cancel_survey_check(
+                redis_client=self.redis_client,
+                payment_id=result.ID,
+                telegram_id=user.telegram_id,
+                gateway_type=gateway_type,
+            )
         amount = int(pricing.final_amount)
         logger.info(
             f"Widget payment '{result.ID}' for '{user.telegram_id}': plan {plan.id}, {days} days, "
             f"{gateway_type}, {kind.value}"
         )
-        if stars:
+        if method == "ton":
+            transfer = parse_transfer_url(result.URL or "")
+            if not transfer:
+                logger.error(f"TON payment '{result.ID}' came back without a ton:// transfer link")
+                return {"m": "Не получилось создать платёж. Попробуйте ещё раз."}
+            valid_until = int(datetime_now().timestamp()) + TON_TX_TTL
+            return {
+                "x": ton_transaction(transfer, valid_until),
+                "id": str(result.ID),
+                "a": format_ton(transfer.nanotons),
+            }
+        if method == "star":
             link = result.URL or await create_stars_invoice_link(
                 self.bot,
                 payment_id=UUID(str(result.ID)),

@@ -229,6 +229,7 @@ class PaymentGatewayType(UpperStrEnum):
     PLATEGA_CRYPTO = auto()
     PLAIDLY = auto()
     MANUAL_GRANT = auto()
+    TON = auto()
 
 
 class GatewayChannel(UpperStrEnum):
@@ -242,6 +243,7 @@ class Currency(UpperStrEnum):
     XTR = auto()
     RUB = auto()
     USDT = auto()
+    TON = auto()
 
     @property
     def symbol(self) -> str:
@@ -250,6 +252,7 @@ class Currency(UpperStrEnum):
             "XTR": "★",
             "RUB": "₽",
             "USDT": "USDT",
+            "TON": "TON",
         }
         return symbols[self.value]
 
@@ -271,6 +274,7 @@ class Currency(UpperStrEnum):
             PaymentGatewayType.PLATEGA_CRYPTO: cls.USDT,
             PaymentGatewayType.PLAIDLY: cls.USD,
             PaymentGatewayType.MANUAL_GRANT: cls.RUB,
+            PaymentGatewayType.TON: cls.TON,
         }
 
         try:

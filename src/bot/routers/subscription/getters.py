@@ -64,6 +64,9 @@ async def _await_billing_subscription(
     return None
 
 
+WIDGET_ONLY_GATEWAYS = {PaymentGatewayType.TON.value}
+
+
 @inject
 async def subscription_getter(
     dialog_manager: DialogManager,
@@ -202,7 +205,11 @@ async def payment_method_getter(
         raise ValueError("PlanDto not found in dialog data")
 
     billing_gateways = await billing.list_active_gateways()
-    gateways = [billing_gateway_to_dto(g) for g in billing_gateways if g.Channel in ("BOT", "ALL")]
+    gateways = [
+        billing_gateway_to_dto(g)
+        for g in billing_gateways
+        if g.Channel in ("BOT", "ALL") and g.Type not in WIDGET_ONLY_GATEWAYS
+    ]
     selected_duration = dialog_manager.dialog_data["selected_duration"]
     only_single_duration = dialog_manager.dialog_data.get("only_single_duration", False)
     duration = plan.get_duration(selected_duration)
@@ -303,7 +310,9 @@ async def confirm_getter(
 
     key, kw = i18n_format_days(duration.days)
     billing_active_gateways = [
-        g for g in await billing.list_active_gateways() if g.Channel in ("BOT", "ALL")
+        g
+        for g in await billing.list_active_gateways()
+        if g.Channel in ("BOT", "ALL") and g.Type not in WIDGET_ONLY_GATEWAYS
     ]
 
     is_plaidly = selected_payment_method == PaymentGatewayType.PLAIDLY

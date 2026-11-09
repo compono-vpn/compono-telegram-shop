@@ -355,6 +355,11 @@ class BillingClient:
     async def handle_free_payment(self, payment_id: UUID) -> None:
         await self._post("/payment/handle-free", json={"payment_id": str(payment_id)})
 
+    async def confirm_ton_payment(self, payment_id: str) -> str:
+        data = await self._post("/payments/ton/confirm", json={"payment_id": payment_id})
+        status = data.get("status") if isinstance(data, dict) else None
+        return status if isinstance(status, str) else "pending"
+
     # ------------------------------------------------------------------ #
     # Promocodes
     # ------------------------------------------------------------------ #
