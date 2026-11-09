@@ -109,12 +109,16 @@ class TestConnectButton:
         widget = _find_widget_by_id(menu, "connect")
         assert widget is not None, "Connect button not found in menu"
 
-    def test_connect_button_is_switch_to_not_url(self):
+    def test_connect_button_is_a_callback_that_opens_the_card_or_the_submenu(self):
+        from aiogram_dialog.widgets.kbd import Button
+
+        from src.bot.routers.menu.handlers import on_connect_open
+
         widget = _find_widget_by_id(menu, "connect")
-        assert isinstance(widget, SwitchTo), (
-            "Connect button must be a callback (SwitchTo) button, not a Url button"
+        assert isinstance(widget, Button) and not isinstance(widget, SwitchTo), (
+            "Connect button must be a callback button, not a Url button"
         )
-        assert widget.state == MainMenu.CONNECT
+        assert widget.on_click.callback is on_connect_open
 
     def test_not_available_button_still_present(self):
         """Users without a usable subscription keep the old 'not available' reason button."""

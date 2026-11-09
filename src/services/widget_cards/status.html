@@ -1,0 +1,44 @@
+<style>
+body{margin:0;padding:14px 14px max(14px,env(safe-area-inset-bottom));font:var(--tg-text-font-size,15px)/1.35 system-ui,sans-serif;color:var(--tg-theme-text-color)}
+.h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.t{font-weight:700;font-size:1.1em}
+.p{font-size:.8em;padding:3px 9px;border-radius:99px;background:#2fa94e;color:#fff;white-space:nowrap}
+.x .p{background:var(--tg-theme-secondary-bg-color);color:var(--tg-theme-destructive-text-color,#e53935)}
+.l{color:var(--tg-theme-hint-color);font-size:.9em;margin-top:6px}
+.bar{height:6px;border-radius:3px;background:var(--tg-theme-secondary-bg-color);margin:10px 0 4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--tg-theme-button-color);border-radius:3px}
+button{display:block;width:100%;border:0;font:inherit}
+#go{margin-top:14px;padding:12px;border-radius:11px;font-weight:600;background:var(--tg-theme-button-color);color:var(--tg-theme-button-text-color)}
+#mo{margin-top:4px;padding:9px;background:none;font-size:.92em;color:var(--tg-theme-link-color)}
+#m{font-size:.84em;color:var(--tg-theme-hint-color);text-align:center;min-height:1em}
+</style>
+<div id="w">
+<div class="h"><span class="t" id="n"></span><span class="p" id="p"></span></div>
+<div class="l" id="e"></div>
+<div id="tr"><div class="bar"><i id="b"></i></div><div class="l" id="u"></div></div>
+<button id="go">Продлить</button>
+<button id="mo">Другие действия</button>
+<div id="m"></div>
+</div>
+<script>
+var T=window.TelegramWidget,S={},busy=0,$=function(i){return document.getElementById(i)};
+function days(n){var a=n%10,b=n%100;return n+" "+(a==1&&b!=11?"день":a>=2&&a<=4&&(b<10||b>=20)?"дня":"дней")}
+function draw(s){
+if(s)S=s;else try{S=JSON.parse(T&&T.chatData||"{}")||{}}catch(e){S={}}
+var on=S.d>0;
+$("w").className=on?"":"x";
+$("n").textContent=S.n||"Подписка";
+$("p").textContent=on?"активна":"закончилась";
+$("e").textContent=S.e?(on?"До "+S.e+" · осталось "+days(S.d):"Закончилась "+S.e):"";
+$("tr").style.display=S.l?"":"none";
+if(S.l){$("b").style.width=Math.min(100,Math.round(100*(S.u||0)/S.l))+"%";$("u").textContent="Трафик: "+(S.u||0)+" из "+S.l+" ГБ"}
+$("go").textContent=on?"Продлить":"Возобновить"}
+function ask(d,tap){
+if(busy||!T)return;busy=1;if(tap)$("m").textContent="Секунду…";
+T.request(d).then(function(a){busy=0;$("m").textContent="";var r={};try{r=JSON.parse(a.result||"{}")}catch(e){}
+if(r.s)draw(r.s);if(r.m)$("m").textContent=r.m},function(){busy=0;if(tap)$("m").textContent="Не получилось. Попробуйте ещё раз."})}
+$("go").onclick=function(){ask("buy",1)};
+$("mo").onclick=function(){ask("menu",1)};
+if(T){T.onEvent("chatDataChanged",function(){draw()});T.onEvent("activated",function(){ask("st")})}
+draw();ask("st");T&&T.ready&&T.ready();
+</script>

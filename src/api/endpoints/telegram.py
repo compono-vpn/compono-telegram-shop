@@ -11,6 +11,7 @@ from fastapi import Body, FastAPI, Header, HTTPException, Response, status
 from loguru import logger
 
 from src.core.metrics import UPDATE_PROCESSING_TIME, UPDATES_TOTAL
+from src.services.widgets import WIDGET_QUERY_UPDATE, WidgetService
 
 
 class TelegramWebhookEndpoint:
@@ -51,16 +52,30 @@ class TelegramWebhookEndpoint:
         if isinstance(result, TelegramMethod):
             await self.dispatcher.silent_call_request(bot=bot, result=result)
 
+    @staticmethod
+    async def _handle_widget_query(widget_service: WidgetService, raw: Any) -> None:
+        UPDATES_TOTAL.labels(update_type=WIDGET_QUERY_UPDATE).inc()
+        try:
+            await widget_service.handle_query(raw)
+        except Exception:
+            logger.opt(exception=True).warning("Widget query was not answered")
+
     @inject
     async def _handle_request(
         self,
         update: Annotated[Update, Body()],
         x_telegram_bot_api_secret_token: Annotated[str, Header()],
         bot: FromDishka[Bot],
+        widget_service: FromDishka[WidgetService],
     ) -> Response:
         if not self._verify_secret(x_telegram_bot_api_secret_token):
             logger.warning(f"Invalid secret token for update '{update.update_id}'")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+        widget_query = (update.model_extra or {}).get(WIDGET_QUERY_UPDATE)
+        if widget_query is not None:
+            await self._handle_widget_query(widget_service, widget_query)
+            return Response(status_code=status.HTTP_200_OK)
 
         task = asyncio.create_task(self._feed_update(bot=bot, update=update))
         self._feed_update_tasks.add(task)

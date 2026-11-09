@@ -1,0 +1,37 @@
+<style>
+body{margin:0;padding:14px 14px max(14px,env(safe-area-inset-bottom));font:var(--tg-text-font-size,15px)/1.35 system-ui,sans-serif;color:var(--tg-theme-text-color)}
+.h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.t{font-weight:700;font-size:1.1em}
+.p{font-size:.8em;padding:3px 9px;border-radius:99px;background:var(--tg-theme-secondary-bg-color);color:var(--tg-theme-hint-color);white-space:nowrap}
+.on .p{background:#2fa94e;color:#fff}
+button{display:block;width:100%;border:0;font:inherit}
+#go{padding:12px;border-radius:11px;font-weight:600;background:var(--tg-theme-button-color);color:var(--tg-theme-button-text-color)}
+#cp{margin-top:4px;padding:9px;background:none;font-size:.92em;color:var(--tg-theme-link-color)}
+#e{color:var(--tg-theme-hint-color);font-size:.9em;margin-bottom:12px;display:none}
+.on #e{display:block}
+.on #go{background:var(--tg-theme-secondary-bg-color);color:var(--tg-theme-link-color)}
+</style>
+<div id="w">
+<div class="h"><span class="t">Подключение VPN</span><span class="p" id="p"></span></div>
+<div id="e"></div>
+<button id="go"></button>
+<button id="cp">Скопировать ссылку</button>
+</div>
+<script>
+var T=window.TelegramWidget,D={},seen=0,busy=0,$=function(i){return document.getElementById(i)};
+function draw(){
+try{D=JSON.parse(T&&T.chatData||"{}")||{}}catch(e){D={}}
+var on=D.c==1||seen;
+$("w").className=on?"on":"";
+$("p").textContent=on?"✓ подключено":"не подключено";
+$("e").textContent=D.e?"Подписка до "+D.e:"";
+$("go").textContent=on?"Подключить ещё устройство":"Подключить"}
+function ask(){
+if(busy||seen||D.c==1||!T)return;busy=1;
+T.request("chk").then(function(a){busy=0;var r={};try{r=JSON.parse(a.result||"{}")}catch(e){}
+if(r.c==1){seen=1;draw();T.HapticFeedback&&T.HapticFeedback.notificationOccurred("success")}},function(){busy=0})}
+$("go").onclick=function(){D.u&&T&&T.openLink(D.u)};
+$("cp").onclick=function(){D.s&&T&&T.copyText(D.s)};
+if(T){T.onEvent("chatDataChanged",draw);T.onEvent("activated",ask);setInterval(function(){T.isActive&&ask()},15000)}
+draw();ask();T&&T.ready&&T.ready();
+</script>

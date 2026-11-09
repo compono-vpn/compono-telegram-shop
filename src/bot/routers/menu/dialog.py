@@ -33,10 +33,12 @@ from .getters import (
 )
 from .handlers import (
     on_connect_give_link,
+    on_connect_open,
     on_device_delete,
     on_get_trial,
     on_invite,
     on_show_qr,
+    on_subscription_open,
     on_withdraw_points,
     show_reason,
 )
@@ -48,10 +50,10 @@ menu = Window(
     Banner(BannerName.MENU),
     I18nFormat("msg-main-menu"),
     Row(
-        SwitchTo(
+        Button(
             text=I18nFormat("btn-menu-connect"),
             id="connect",
-            state=MainMenu.CONNECT,
+            on_click=on_connect_open,
             when=F["connectable"],
         ),
         Button(
@@ -85,10 +87,10 @@ menu = Window(
             state=MainMenu.DEVICES,
             when=F["has_device_limit"],
         ),
-        Start(
+        Button(
             text=I18nFormat("btn-menu-subscription"),
             id=f"{PURCHASE_PREFIX}subscription",
-            state=Subscription.MAIN,
+            on_click=on_subscription_open,
         ),
     ),
     Row(
