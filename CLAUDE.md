@@ -30,3 +30,22 @@ the message. If the reminder send still fails with `TelegramNetworkError`, the t
 later (`NOT_CONNECTED_RETRY_DELAY`) and logs a warning instead of raising. Tests: `tests/test_telegram_connect_retry.py`,
 `tests/test_notification_delivery_failures.py`. The worker talks to `api.telegram.org` directly, not to the in-cluster
 Bot API server.
+
+## Message widgets: connect card, subscription card, plan card (COM-182, 2026-11-09)
+
+Bot API 10.4 message widgets (HTML cards inside a message, private chat only). Behind `APP_WIDGETS_ENABLED`
+(default off; on only in stage values). `src/services/widgets.py` `WidgetService` + HTML in `src/services/widget_cards/`.
+
+- "🚀 Подключиться" sends the connect card (one "Подключить" button opening `{website_url}/connect/<token>`, a copy-link
+  button, a status pill that turns "подключено" by itself: the card asks the bot `chk` every 15 s while on screen and the
+  bot edits `chat_data` once Remnawave shows a device, traffic or a subscription fetch).
+- "💳 Подписка" sends the status card (plan, days left, traffic bar; "Продлить" sends the plan card, "Другие действия"
+  opens the old Subscription dialog) to a paid subscriber, and the plan card to everyone else.
+- Plan card: plan tabs, durations with prices from billing, "Оплатить N ₽" asks the bot `pay:<plan>:<days>`; the bot
+  creates the payment (Platega, else the first active ruble BOT gateway; `star:` = Telegram Stars invoice) and answers
+  the link, then a second tap opens it (Telegram only allows opening a link on a fresh tap).
+- aiogram 3.30 knows nothing of widgets: the methods are local `TelegramMethod` classes, and `widget_query` updates are
+  taken out of `update.model_extra` in `src/api/endpoints/telegram.py` and answered before they reach the dispatcher.
+  `lifespan.py` adds `widget_query` to `allowed_updates` when the flag is on. Limits: HTML 4 KB after zlib, state 1 KB,
+  answer 1 KB, request data 64 bytes; `tests/test_widgets.py` checks them.
+- Any failure falls back to the old screens; old Telegram apps show only the caption (`msg-widget-card-caption`).

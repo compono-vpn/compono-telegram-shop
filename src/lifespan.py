@@ -20,6 +20,7 @@ from src.services.notification import NotificationService
 from src.services.remnawave import RemnawaveService
 from src.services.settings import SettingsService
 from src.services.webhook import WebhookService
+from src.services.widgets import WIDGET_QUERY_UPDATE
 
 
 @asynccontextmanager
@@ -42,6 +43,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await startup_container.close()
 
     allowed_updates = dispatcher.resolve_used_update_types()
+    if config.widgets_enabled:
+        allowed_updates.append(WIDGET_QUERY_UPDATE)
     webhook_info: WebhookInfo = await webhook_service.setup(allowed_updates)
 
     if webhook_service.has_error(webhook_info):

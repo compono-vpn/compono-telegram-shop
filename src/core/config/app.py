@@ -86,6 +86,8 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     portal_url: str = "https://componovpn.org/portal"
     website_url: str = "https://componovpn.com"
 
+    widgets_enabled: bool = False
+
     channel_incentive_enabled: bool = False
     channel_incentive_address: str = ""
     channel_incentive_url: str = ""

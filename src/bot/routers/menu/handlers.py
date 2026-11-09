@@ -23,6 +23,7 @@ from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.remnawave import BetaTesterEnrollmentResult, RemnawaveService
+from src.services.widgets import WidgetService
 
 router = Router(name=__name__)
 
@@ -336,3 +337,42 @@ async def on_invite(
         await dialog_manager.switch_to(state=MainMenu.INVITE)
     else:
         return
+
+
+@inject
+async def on_connect_open(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    widget_service: FromDishka[WidgetService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    subscription = user.current_subscription
+    if widget_service.enabled and subscription and subscription.url:
+        try:
+            await widget_service.send_connect(user, subscription)
+            dialog_manager.show_mode = ShowMode.NO_UPDATE
+            return
+        except Exception:
+            logger.opt(exception=True).warning(f"{log(user)} Connect card failed, opening the menu")
+    await dialog_manager.switch_to(MainMenu.CONNECT)
+
+
+@inject
+async def on_subscription_open(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    widget_service: FromDishka[WidgetService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    if widget_service.enabled:
+        try:
+            if await widget_service.send_subscription(user):
+                dialog_manager.show_mode = ShowMode.NO_UPDATE
+                return
+        except Exception:
+            logger.opt(exception=True).warning(
+                f"{log(user)} Subscription card failed, opening the menu"
+            )
+    await dialog_manager.start(Subscription.MAIN)

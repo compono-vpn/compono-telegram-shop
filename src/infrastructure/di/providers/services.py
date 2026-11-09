@@ -17,6 +17,7 @@ from src.services.subscription import SubscriptionService
 from src.services.transaction import TransactionService
 from src.services.user import UserService
 from src.services.webhook import WebhookService
+from src.services.widgets import WidgetService
 
 
 class ServicesProvider(Provider):
@@ -32,6 +33,7 @@ class ServicesProvider(Provider):
     notification_service = provide(source=NotificationService, scope=Scope.REQUEST)
     plan_service = provide(source=PlanService, scope=Scope.REQUEST)
     remnawave_service = provide(source=RemnawaveService, scope=Scope.REQUEST)
+    widget_service = provide(source=WidgetService, scope=Scope.REQUEST)
     subscription_service = provide(source=SubscriptionService, scope=Scope.REQUEST)
     user_service = provide(source=UserService, scope=Scope.REQUEST)
     webhook_service = provide(source=WebhookService)
