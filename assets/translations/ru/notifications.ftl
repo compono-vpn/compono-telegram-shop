@@ -99,6 +99,114 @@ ntf-event-new-user =
     </blockquote>
     }
 
+ntf-event-payment-refunded =
+    #EventPaymentRefunded
+
+    <b>💸 Событие: Возврат платежа!</b>
+
+    <blockquote>
+    • <b>Платёж</b>: <code>{ $payment_id }</code>
+    • <b>Шлюз</b>: { $gateway_type }
+    • <b>Сумма</b>: { $final_amount }{ $currency }
+    • <b>Источник</b>: { $source } ({ $event })
+    </blockquote>
+
+    <b>👤 Пользователь:</b>
+    <blockquote>
+    • <b>ID</b>: <code>{ $user_id }</code>
+    • <b>Имя</b>: <a href="tg://user?id={ $user_id }">{ $user_name }</a>
+    </blockquote>
+
+    <b>📦 Тариф:</b>
+    <blockquote>
+    • <b>Название</b>: { $plan_name }
+    • <b>Срок</b>: { $plan_duration } дн. ({ $purchase_type })
+    </blockquote>
+
+    <b>🔒 Что снято:</b>
+    <blockquote>
+    • { $revocation ->
+        [subscription_expired] Подписка закончена
+        [subscription_shortened] Подписка сокращена
+        [already_expired] Подписка уже закончилась
+        [proxy_shortened] Прокси сокращены
+        [proxy_expired] Прокси закончены
+        [not_granted] Платёж не был выдан
+        [none] Подписка не найдена
+       *[other] { $revocation }
+    }
+    • <b>Действует до</b>: { $expire_at }
+    • <b>Проверить</b>: { $flags }
+    </blockquote>
+
+ntf-event-web-payment-refunded =
+    #EventWebPaymentRefunded
+
+    <b>💸 Событие: Возврат платежа на сайте!</b>
+
+    <blockquote>
+    • <b>Платёж</b>: <code>{ $payment_id }</code>
+    • <b>Шлюз</b>: { $gateway_type }
+    • <b>Сумма</b>: { $final_amount }{ $currency }
+    • <b>Email</b>: { $email }
+    • <b>Источник</b>: { $source } ({ $event })
+    </blockquote>
+
+    <b>📦 Тариф:</b> { $plan_name }, { $plan_duration } дн.
+
+    <b>🔒 Что снято:</b>
+    <blockquote>
+    • { $revocation ->
+        [subscription_expired] Подписка закончена
+        [subscription_shortened] Подписка сокращена
+        [already_expired] Подписка уже закончилась
+        [not_granted] Платёж не был выдан
+        [manual_required] Нужно снять доступ вручную
+       *[other] { $revocation }
+    }
+    • <b>Действует до</b>: { $expire_at }
+    • <b>Проверить</b>: { $flags }
+    </blockquote>
+
+ntf-event-payment-refund-partial =
+    #EventPaymentRefundPartial
+
+    <b>💸 Событие: Частичный возврат платежа!</b>
+
+    <blockquote>
+    • <b>Платёж</b>: <code>{ $payment_id }</code>
+    • <b>Шлюз</b>: { $gateway_type }
+    • <b>Событие</b>: { $event }
+    • <b>Возвращено всего</b>: { $refunded_amount }{ $currency }
+    </blockquote>
+
+    Подписка не изменена. Решите вручную.
+
+ntf-event-payment-disputed =
+    #EventPaymentDisputed
+
+    <b>⚠️ Событие: Платёж на проверке!</b>
+
+    <blockquote>
+    • <b>Платёж</b>: <code>{ $payment_id }</code>
+    • <b>Шлюз</b>: { $gateway_type }
+    • <b>Событие</b>: { $event }
+    </blockquote>
+
+    Подписка не изменена. Если проверка закончится возвратом, доступ снимется сам.
+
+ntf-event-payment-webhook-unknown =
+    #EventPaymentWebhookUnknown
+
+    <b>⚠️ Событие: Неизвестное событие платёжного шлюза!</b>
+
+    <blockquote>
+    • <b>Шлюз</b>: { $gateway_type }
+    • <b>Деталь</b>: { $detail }
+    </blockquote>
+
+    Событие сохранено и не обработано. Проверьте документацию шлюза.
+
 ntf-event-subscription-trial =
     #EventTrialGetted
 

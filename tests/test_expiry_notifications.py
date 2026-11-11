@@ -267,7 +267,7 @@ class TestExpiredEvent:
         assert s.notifications.sent == []
 
     async def test_already_renewed_subscription_is_not_told_it_expired(self):
-        s = _services(current=_current(active=True, expires_in=timedelta(days=30)))
+        s = _services(current=_current(active=True, expires_in=timedelta(days=36500)))
         s.billing.by_id[7] = _billing_sub(trial=False)
 
         assert await _expired(s, _payload()) is False
