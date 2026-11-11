@@ -9,6 +9,11 @@ REQUIRED_SYSTEM_NOTIFICATION_KEYS = {
     "ntf-event-web-subscription-trial",
     "hdr-web-user",
     "frg-web-user",
+    "ntf-event-payment-refunded",
+    "ntf-event-web-payment-refunded",
+    "ntf-event-payment-refund-partial",
+    "ntf-event-payment-disputed",
+    "ntf-event-payment-webhook-unknown",
 }
 
 
