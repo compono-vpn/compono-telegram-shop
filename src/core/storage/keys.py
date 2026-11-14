@@ -70,6 +70,18 @@ class CancelSurveyAwaitingTextKey(StorageKey, prefix="cancel_survey_awaiting_tex
     telegram_id: int
 
 
+class SourceSurveyAnsweredKey(StorageKey, prefix="source_survey_answered"):
+    """Collapses a double tap on the source survey into one stored answer."""
+
+    telegram_id: int
+
+
+class SourceSurveyAwaitingTextKey(StorageKey, prefix="source_survey_awaiting_text"):
+    """Marks a user as mid-reply to the source survey's free-text ('Другое') prompt."""
+
+    telegram_id: int
+
+
 class CancelSurveyPendingPingKey(StorageKey, prefix="cancel_survey_pending_ping"):
     """Guards the pending checkout reminder so it is sent only once."""
 

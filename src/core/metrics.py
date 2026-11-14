@@ -142,6 +142,17 @@ CANCEL_SURVEY_ANSWERS_TOTAL = Counter(
     ["reason", "gateway"],
 )
 
+SOURCE_SURVEY_SENT_TOTAL = Counter(
+    "bot_source_survey_sent_total",
+    "'How did you find us?' prompts sent to users who arrived without a source tag",
+)
+
+SOURCE_SURVEY_ANSWERS_TOTAL = Counter(
+    "bot_source_survey_answers_total",
+    "'How did you find us?' answers, by option",
+    ["answer"],
+)
+
 
 def start_metrics_server(port: int) -> None:
     """Expose the process-local Prometheus registry over HTTP.

@@ -59,6 +59,16 @@ class CancelSurveyReason(UpperStrEnum):
     OTHER = auto()
 
 
+class SourceSurveyAnswer(UpperStrEnum):
+    TG_CHANNEL = auto()
+    FRIEND = auto()
+    SEARCH = auto()
+    SITE = auto()
+    VIDEO = auto()
+    APP_STORE = auto()
+    OTHER = auto()
+
+
 class SubscriptionStatus(UpperStrEnum):
     ACTIVE = auto()
     DISABLED = auto()

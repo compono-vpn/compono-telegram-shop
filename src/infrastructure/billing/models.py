@@ -312,6 +312,7 @@ class BillingUserReminder(BaseModel):
     dedup_key: str = ""
     sent_at: Optional[datetime] = None
     answer: Optional[str] = None
+    answer_text: Optional[str] = None
     answered_at: Optional[datetime] = None
 
 

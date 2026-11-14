@@ -202,6 +202,16 @@ btn-cancel-survey-will-think = 🤔 Решил подумать
 btn-cancel-survey-other = ✍️ Другое
 
 
+# Source survey
+btn-source-survey-tg-channel = 📣 Telegram-канал или чат
+btn-source-survey-friend = 👥 Друг или знакомый
+btn-source-survey-search = 🔎 Поиск (Google, Яндекс)
+btn-source-survey-site = 📰 Сайт или статья
+btn-source-survey-video = ▶️ YouTube или блогер
+btn-source-survey-app-store = 📱 Магазин приложений
+btn-source-survey-other = ✍️ Другое
+
+
 # Promocodes
 btn-promocodes-list = 📃 Список промокодов
 btn-promocodes-search = 🔍 Поиск промокода

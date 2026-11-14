@@ -31,6 +31,12 @@ msg-cancel-survey-thanks = 🙏 Спасибо за ответ! Учтём эт�
 msg-cancel-survey-already-answered = Вы уже ответили, спасибо!
 
 
+# Source survey
+msg-source-survey-other-prompt = ✍️ Напишите в паре слов, где вы о нас узнали.
+msg-source-survey-thanks = 🙏 Спасибо! Это помогает нам.
+msg-source-survey-already-answered = Вы уже ответили, спасибо!
+
+
 # Remnashop
 ntf-remnashop-info =
     <b>💎 Remnashop v{ $version }</b>
