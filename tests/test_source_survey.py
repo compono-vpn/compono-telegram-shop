@@ -224,7 +224,7 @@ class TestAnswerCallback:
         )
         awaiting = [c for c in redis.set.await_args_list if "awaiting" in c.args[0]]
         assert len(awaiting) == 1
-        assert awaiting[0].kwargs["ex"] == 30 * 60
+        assert awaiting[0].kwargs["ex"] == 5 * 60
 
     async def test_unknown_option_is_ignored(self):
         billing = FakeBilling()
@@ -283,15 +283,13 @@ class TestOtherText:
         billing = FakeBilling()
         billing.claims[REF] = "OTHER"
         message = _message("  друг\x00 из   чата\n\n​про vpn  ")
-        redis = _redis()
         ntf = AsyncMock()
 
         raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, ntf, redis)
+        await raw(message, _new_user(), make_i18n(), billing, ntf)
 
         assert billing.answer_texts[REF] == "друг из чата про vpn"
         message.answer.assert_awaited_once_with(text="[msg-source-survey-thanks]")
-        redis.delete.assert_awaited_once()
         kwargs = ntf.system_notify.await_args.kwargs["payload"].i18n_kwargs
         assert kwargs["answer"] == "OTHER"
         assert kwargs["text"] == "друг из чата про vpn"
@@ -303,7 +301,7 @@ class TestOtherText:
         ntf = AsyncMock()
 
         raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, ntf, _redis())
+        await raw(message, _new_user(), make_i18n(), billing, ntf)
 
         assert billing.answer_texts[REF] == "<b>x</b> & y"
         kwargs = ntf.system_notify.await_args.kwargs["payload"].i18n_kwargs
@@ -314,7 +312,7 @@ class TestOtherText:
         billing.claims[REF] = "OTHER"
 
         raw = unwrap_inject(on_source_survey_other_text)
-        await raw(_message("я" * 500), _new_user(), make_i18n(), billing, AsyncMock(), _redis())
+        await raw(_message("я" * 500), _new_user(), make_i18n(), billing, AsyncMock())
 
         assert len(billing.answer_texts[REF]) == 200
 
@@ -324,7 +322,7 @@ class TestOtherText:
         message = _message(" \x00​ \n ")
 
         raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, AsyncMock(), _redis())
+        await raw(message, _new_user(), make_i18n(), billing, AsyncMock())
 
         assert REF not in billing.answer_texts
         message.answer.assert_awaited_once_with(text="[msg-source-survey-thanks]")
@@ -335,7 +333,7 @@ class TestOtherText:
         message = _message("друг")
 
         raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, AsyncMock(), _redis())
+        await raw(message, _new_user(), make_i18n(), billing, AsyncMock())
 
         message.answer.assert_not_called()
 
@@ -370,6 +368,33 @@ class TestAwaitingFilter:
 
         assert matched is False
         redis.delete.assert_awaited_once()
+
+    async def test_a_non_text_message_falls_through_and_ends_the_wait(self):
+        redis = _redis()
+        redis.get.return_value = b"1"
+        message = self._msg(None)
+
+        matched = await AwaitingSourceSurveyText()(message, **self._data(redis))
+
+        assert matched is False
+        redis.delete.assert_awaited_once()
+
+    async def test_the_first_text_message_ends_the_wait(self):
+        redis = _redis()
+        redis.get.return_value = b"1"
+
+        matched = await AwaitingSourceSurveyText()(self._msg("друг"), **self._data(redis))
+
+        assert matched is True
+        redis.delete.assert_awaited_once()
+
+    async def test_nothing_is_consumed_when_no_reply_is_owed(self):
+        redis = _redis()
+        redis.get.return_value = None
+
+        await AwaitingSourceSurveyText()(self._msg("друг"), **self._data(redis))
+
+        redis.delete.assert_not_called()
 
 
 class TestSanitize:

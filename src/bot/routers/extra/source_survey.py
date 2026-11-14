@@ -24,7 +24,7 @@ from src.services.source_survey import DEDUP_KEY, KIND, sanitize_free_text
 router = Router(name=__name__)
 
 _ANSWERED_TTL = 90 * 24 * 60 * 60
-_AWAITING_TEXT_TTL = 30 * 60
+_AWAITING_TEXT_TTL = 5 * 60
 
 
 class AwaitingSourceSurveyText(BaseFilter):
@@ -38,11 +38,10 @@ class AwaitingSourceSurveyText(BaseFilter):
         if not await redis_client.get(key):
             return False
 
-        if (message.text or "").startswith("/"):
-            await redis_client.delete(key)
-            return False
+        await redis_client.delete(key)
 
-        return True
+        text = message.text or ""
+        return bool(text) and not text.startswith("/")
 
 
 async def _notify_admins(
@@ -130,7 +129,6 @@ async def on_source_survey_other_text(
     i18n: FromDishka[TranslatorRunner],
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
-    redis_client: FromDishka[Redis],
 ) -> None:
     if not message.text:
         return
@@ -145,7 +143,6 @@ async def on_source_survey_other_text(
         logger.opt(exception=True).warning(f"{log(user)} Could not store the source survey text")
         return
 
-    await redis_client.delete(SourceSurveyAwaitingTextKey(telegram_id=user.telegram_id).pack())
     logger.info(f"{log(user)} Added free text to the source survey answer")
 
     if text:
