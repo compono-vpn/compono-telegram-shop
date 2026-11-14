@@ -796,18 +796,22 @@ class BillingClient:
         return bool(data and data.get("released"))
 
     async def answer_user_reminder(
-        self, telegram_id: int, kind: str, dedup_key: str, answer: str
+        self,
+        telegram_id: int,
+        kind: str,
+        dedup_key: str,
+        answer: str,
+        answer_text: str = "",
     ) -> bool:
-        data = await self._direct_request(
-            "POST",
-            "/user-reminders/answer",
-            json={
-                "telegram_id": telegram_id,
-                "kind": kind,
-                "dedup_key": dedup_key,
-                "answer": answer,
-            },
-        )
+        body: dict[str, Any] = {
+            "telegram_id": telegram_id,
+            "kind": kind,
+            "dedup_key": dedup_key,
+            "answer": answer,
+        }
+        if answer_text:
+            body["answer_text"] = answer_text
+        data = await self._direct_request("POST", "/user-reminders/answer", json=body)
         return bool(data and data.get("updated"))
 
     async def list_expiring_subscriptions(

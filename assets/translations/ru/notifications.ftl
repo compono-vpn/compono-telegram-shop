@@ -312,6 +312,34 @@ ntf-event-cancel-survey-other =
     • <b>Комментарий</b>: { $text }
     </blockquote>
 
+ntf-source-survey-prompt =
+    <b>Как вы о нас узнали?</b>
+
+    Один тап — так мы поймём, где рассказывать о Compono.
+
+ntf-event-source-survey =
+    #EventSourceSurvey
+
+    <b>🔅 Событие: Источник (ответ)!</b>
+
+    { hdr-user }
+    { frg-user-info }
+
+    <b>📍 Ответ:</b> { $answer ->
+    [TG_CHANNEL] Telegram-канал или чат
+    [FRIEND] Друг или знакомый
+    [SEARCH] Поиск (Google, Яндекс)
+    [SITE] Сайт или статья
+    [VIDEO] YouTube или блогер
+    [APP_STORE] Магазин приложений
+    *[OTHER] Другое
+    }
+    { $text ->
+    [0] { empty }
+    *[HAS]
+    <b>✍️ Текст:</b> { $text }
+    }
+
 ntf-event-cancel-survey-pending =
     <b>⏱ Напоминание об оплате</b>
 

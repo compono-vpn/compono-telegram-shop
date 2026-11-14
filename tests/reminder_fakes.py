@@ -47,6 +47,7 @@ class FakeBilling:
 
     def __init__(self) -> None:
         self.claims: dict[tuple[int, str, str], Optional[str]] = {}
+        self.answer_texts: dict[tuple[int, str, str], str] = {}
         self.subscriptions: list[Any] = []
         self.by_id: dict[int, Any] = {}
         self.release_calls = 0
@@ -65,11 +66,17 @@ class FakeBilling:
         self.release_calls += 1
         return self.claims.pop((telegram_id, kind, dedup_key), "missing") != "missing"
 
-    async def answer_user_reminder(self, telegram_id, kind, dedup_key, answer) -> bool:
+    async def answer_user_reminder(
+        self, telegram_id, kind, dedup_key, answer, answer_text: str = ""
+    ) -> bool:
         ref = (telegram_id, kind, dedup_key)
         if ref not in self.claims:
             return False
         self.claims[ref] = answer
+        if answer_text:
+            self.answer_texts[ref] = answer_text
+        else:
+            self.answer_texts.pop(ref, None)
         return True
 
     async def list_user_reminders(self, telegram_id: int, kind: str = ""):

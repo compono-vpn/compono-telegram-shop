@@ -23,6 +23,7 @@ from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.remnawave import BetaTesterEnrollmentResult, RemnawaveService
+from src.services.source_survey import offer_source_survey
 from src.services.widgets import WidgetService
 
 router = Router(name=__name__)
@@ -194,6 +195,9 @@ async def on_get_trial(
             state=Subscription.TRIAL,
             mode=StartMode.RESET_STACK,
             show_mode=ShowMode.EDIT,
+        )
+        await offer_source_survey(
+            user=user, billing=billing, notification_service=notification_service
         )
     except BillingClientError as e:
         if e.status_code == 409 or "already used trial" in e.message:

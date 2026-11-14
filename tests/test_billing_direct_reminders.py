@@ -122,3 +122,20 @@ async def test_direct_failures_raise_the_billing_error():
         assert error.status_code == 0
     else:  # pragma: no cover
         raise AssertionError("expected BillingClientError")
+
+
+async def test_answer_text_is_sent_only_when_given():
+    client, _, direct_http = _client()
+    direct_http.request.return_value = _response({"updated": True})
+
+    await client.answer_user_reminder(7, "SOURCE_SURVEY", "v1", "OTHER", "от подруги")
+    assert direct_http.request.call_args[1]["json"] == {
+        "telegram_id": 7,
+        "kind": "SOURCE_SURVEY",
+        "dedup_key": "v1",
+        "answer": "OTHER",
+        "answer_text": "от подруги",
+    }
+
+    await client.answer_user_reminder(7, "SOURCE_SURVEY", "v1", "FRIEND")
+    assert "answer_text" not in direct_http.request.call_args[1]["json"]

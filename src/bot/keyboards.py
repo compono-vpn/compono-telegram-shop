@@ -16,9 +16,15 @@ from src.core.constants import (
     PURCHASE_PREFIX,
     REPOSITORY,
     SETUP_CHECKIN_PREFIX,
+    SOURCE_SURVEY_PREFIX,
     T_ME,
 )
-from src.core.enums import CancelSurveyReason, PurchaseType, SetupCheckinAnswer
+from src.core.enums import (
+    CancelSurveyReason,
+    PurchaseType,
+    SetupCheckinAnswer,
+    SourceSurveyAnswer,
+)
 from src.core.utils.formatters import format_username_to_url
 
 CALLBACK_CHANNEL_CONFIRM: Final[str] = "channel_confirm"
@@ -219,6 +225,18 @@ def get_cancel_survey_keyboard(payment_id: str) -> InlineKeyboardMarkup:
         _button("btn-cancel-survey-will-think", CancelSurveyReason.WILL_THINK),
         _button("btn-cancel-survey-other", CancelSurveyReason.OTHER),
     )
+    return builder.as_markup()
+
+
+def get_source_survey_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for answer in SourceSurveyAnswer:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"btn-source-survey-{answer.value.lower().replace('_', '-')}",
+                callback_data=f"{SOURCE_SURVEY_PREFIX}{answer.value}",
+            )
+        )
     return builder.as_markup()
 
 

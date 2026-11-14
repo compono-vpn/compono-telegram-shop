@@ -31,6 +31,7 @@ SOURCE_PREFIX: Final[str] = "source-"
 AFFILIATE_PREFIX: Final[str] = "aff-"
 CANCEL_SURVEY_PREFIX: Final[str] = "cs:"
 SETUP_CHECKIN_PREFIX: Final[str] = "sck:"
+SOURCE_SURVEY_PREFIX: Final[str] = "sq:"
 
 IMPORTED_TAG: Final[str] = "IMPORTED"
 
