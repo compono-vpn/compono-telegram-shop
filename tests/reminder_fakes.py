@@ -52,6 +52,15 @@ class FakeBilling:
         self.by_id: dict[int, Any] = {}
         self.release_calls = 0
         self.claim_error: Optional[Exception] = None
+        self.referrals: dict[int, Any] = {}
+        self.referral_error: Optional[Exception] = None
+        self.referral_lookups: list[int] = []
+
+    async def get_referral_by_referred(self, telegram_id: int):
+        self.referral_lookups.append(telegram_id)
+        if self.referral_error:
+            raise self.referral_error
+        return self.referrals.get(telegram_id)
 
     async def claim_user_reminder(self, telegram_id: int, kind: str, dedup_key: str) -> bool:
         if self.claim_error:

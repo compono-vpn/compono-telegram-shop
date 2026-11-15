@@ -51,6 +51,15 @@ async def offer_source_survey(
         return False
 
     try:
+        if await billing.get_referral_by_referred(user.telegram_id) is not None:
+            return False
+    except Exception:
+        logger.opt(exception=True).warning(
+            f"Could not check the referral of '{user.telegram_id}' for the source survey"
+        )
+        return False
+
+    try:
         if not await billing.claim_user_reminder(user.telegram_id, KIND, DEDUP_KEY):
             return False
     except Exception:
