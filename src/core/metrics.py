@@ -142,6 +142,12 @@ CANCEL_SURVEY_ANSWERS_TOTAL = Counter(
     ["reason", "gateway"],
 )
 
+PAYMENT_NUDGE_SENT_TOTAL = Counter(
+    "bot_payment_nudge_sent_total",
+    "Nudges sent about a payment still pending 5 minutes after creation, by gateway",
+    ["gateway"],
+)
+
 SOURCE_SURVEY_SENT_TOTAL = Counter(
     "bot_source_survey_sent_total",
     "'How did you find us?' prompts sent to users who arrived without a source tag",

@@ -76,7 +76,28 @@ class SourceSurveyAnsweredKey(StorageKey, prefix="source_survey_answered"):
     telegram_id: int
 
 
-class CancelSurveyPendingPingKey(StorageKey, prefix="cancel_survey_pending_ping"):
-    """Guards the pending checkout reminder so it is sent only once."""
+class PendingPaymentNudgesKey(StorageKey, prefix="pending_payment_nudge"): ...
 
-    payment_id: UUID
+
+class PaymentNudgeDataKey(StorageKey, prefix="payment_nudge_data"):
+    """What the nudge message needs: payment link, plan name, price (2 days)."""
+
+    payment_id: str
+
+
+class PaymentNudgeLatestKey(StorageKey, prefix="payment_nudge_latest"):
+    """The user's newest payment; older pending ones stay silent."""
+
+    telegram_id: int
+
+
+class PaymentNudgeSentKey(StorageKey, prefix="payment_nudge_sent"):
+    """One nudge per payment, ever (SETNX)."""
+
+    payment_id: str
+
+
+class PaymentNudgeUserKey(StorageKey, prefix="payment_nudge_user"):
+    """At most one nudge per user in a 30 minute window (SETNX)."""
+
+    telegram_id: int

@@ -202,6 +202,9 @@ btn-cancel-survey-will-think = 🤔 Решил подумать
 btn-cancel-survey-other = ✍️ Другое
 
 
+btn-payment-nudge-pay = 💳 Оплатить
+btn-payment-nudge-other = 🔄 Другой способ
+
 # Source survey
 btn-source-survey-tg-channel = 📣 Telegram-канал или чат
 btn-source-survey-friend = 👥 Друг или знакомый

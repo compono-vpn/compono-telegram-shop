@@ -13,6 +13,7 @@ from src.bot.widgets.i18n_format import I18nFormat
 from src.core.constants import (
     CANCEL_SURVEY_PREFIX,
     GOTO_PREFIX,
+    PAYMENT_NUDGE_PREFIX,
     PURCHASE_PREFIX,
     REPOSITORY,
     SETUP_CHECKIN_PREFIX,
@@ -224,6 +225,18 @@ def get_cancel_survey_keyboard(payment_id: str) -> InlineKeyboardMarkup:
     builder.row(
         _button("btn-cancel-survey-will-think", CancelSurveyReason.WILL_THINK),
         _button("btn-cancel-survey-other", CancelSurveyReason.OTHER),
+    )
+    return builder.as_markup()
+
+
+def get_payment_nudge_keyboard(payment_id: str, payment_url: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="btn-payment-nudge-pay", url=payment_url),
+        InlineKeyboardButton(
+            text="btn-payment-nudge-other",
+            callback_data=f"{PAYMENT_NUDGE_PREFIX}{payment_id}",
+        ),
     )
     return builder.as_markup()
 

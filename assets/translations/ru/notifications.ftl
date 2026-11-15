@@ -335,12 +335,6 @@ ntf-event-source-survey =
     *[OTHER] Другое
     }
 
-ntf-event-cancel-survey-pending =
-    <b>⏱ Напоминание об оплате</b>
-
-    Оплата по этой заявке еще не завершена.
-    Если вы продолжаете пытаться оплатить, просто закончите оплату в приложении банка.
-
 ntf-event-node-connection-lost =
     #EventNode
 
@@ -760,3 +754,8 @@ ntf-event-promocode-activated =
     • <b>Тип</b>: { $reward_type }
     • <b>Награда</b>: { $reward }
     </blockquote>
+
+ntf-payment-nudge =
+    <b>Оплата не завершена</b>
+
+    Заказ «{ $plan }» на { $price } ещё ждёт вас. Вернитесь к той же оплате или выберите другой способ — если страница банка зависла, обычно помогает другой.

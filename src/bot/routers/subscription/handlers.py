@@ -37,6 +37,7 @@ from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
+from src.services.payment_nudge import format_price_text, schedule_payment_nudge
 from src.services.remnawave import RemnawaveService
 from src.services.stars_invoice import create_stars_invoice_link
 from src.services.subscription import SubscriptionService
@@ -73,6 +74,29 @@ def _save_payment_data(dialog_manager: DialogManager, payment_data: CachedPaymen
     dialog_manager.dialog_data["final_pricing"] = payment_data["final_pricing"]
     pricing = PriceDetailsDto.model_validate_json(payment_data["final_pricing"])
     dialog_manager.dialog_data["is_free"] = pricing.is_free
+
+
+async def _queue_payment_nudge(
+    *,
+    redis_client: Redis,
+    payment_id: str,
+    telegram_id: int,
+    payment_url: Optional[str],
+    plan_name: str,
+    price_text: str,
+    user: UserDto,
+) -> None:
+    try:
+        await schedule_payment_nudge(
+            redis_client,
+            payment_id=payment_id,
+            telegram_id=telegram_id,
+            payment_url=payment_url or "",
+            plan_name=plan_name,
+            price_text=price_text,
+        )
+    except Exception:
+        logger.opt(exception=True).warning(f"{log(user)} Could not queue the payment nudge")
 
 
 async def _create_payment_and_get_data(
@@ -187,6 +211,17 @@ async def _create_payment_and_get_data(
                 amount=pricing.final_amount,
             )
             logger.info(f"{log(user)} Created Stars invoice link for payment '{result.ID}'")
+
+        if not pricing.is_free:
+            await _queue_payment_nudge(
+                redis_client=redis_client,
+                payment_id=result.ID,
+                telegram_id=user.telegram_id,
+                payment_url=payment_url,
+                plan_name=plan.name,
+                price_text=format_price_text(pricing.final_amount, currency),
+                user=user,
+            )
 
         return CachedPaymentData(
             payment_id=result.ID,

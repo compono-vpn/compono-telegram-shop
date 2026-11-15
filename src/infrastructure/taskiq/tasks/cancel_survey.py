@@ -9,7 +9,6 @@ from src.bot.keyboards import get_cancel_survey_keyboard
 from src.core.enums import TransactionStatus
 from src.core.metrics import CANCEL_SURVEY_SENT_TOTAL
 from src.core.storage.keys import (
-    CancelSurveyPendingPingKey,
     CancelSurveySentKey,
     PendingCancelSurveyChecksKey,
 )
@@ -20,10 +19,9 @@ from src.services.notification import NotificationService
 from src.services.user import UserService
 
 _PENDING_KEY = PendingCancelSurveyChecksKey()
-_PING_DELAY_SECONDS = 15 * 60
+_CHECK_DELAY_SECONDS = 15 * 60
 _MAX_PENDING_AGE = 48 * 60 * 60
 _SENT_TTL = 90 * 24 * 60 * 60
-_PENDING_PING_TTL = 7 * 24 * 60 * 60
 
 
 async def schedule_cancel_survey_check(
@@ -33,7 +31,7 @@ async def schedule_cancel_survey_check(
     gateway_type: str,
 ) -> None:
     created_at = time.time()
-    check_at = created_at + _PING_DELAY_SECONDS
+    check_at = created_at + _CHECK_DELAY_SECONDS
     member = f"{payment_id}:{telegram_id}:{gateway_type}:{created_at}"
     await redis_client.zadd(_PENDING_KEY.pack(), {member: check_at}, nx=True)
     logger.debug(f"Scheduled cancel-survey check for payment '{payment_id}'")
@@ -50,10 +48,7 @@ async def _handle_pending_cancel_survey_check(
     payment_id: str,
     now: float,
     created_at: float,
-    telegram_id: int,
     redis_client: Redis,
-    user_service: UserService,
-    notification_service: NotificationService,
     due_key: str,
 ) -> None:
     if now - created_at >= _MAX_PENDING_AGE:
@@ -62,22 +57,6 @@ async def _handle_pending_cancel_survey_check(
             f"still pending after '{_MAX_PENDING_AGE}' seconds"
         )
         return
-
-    ping_key = CancelSurveyPendingPingKey(payment_id=payment_id)
-    was_pinged = await redis_client.set(
-        ping_key.pack(),
-        "1",
-        nx=True,
-        ex=_PENDING_PING_TTL,
-    )
-    if was_pinged:
-        user = await user_service.get(telegram_id)
-        if user:
-            logger.info(f"Sending pending checkout reminder for '{payment_id}' to '{telegram_id}'")
-            await notification_service.notify_user(
-                user=user,
-                payload=MessagePayload(i18n_key="ntf-event-cancel-survey-pending"),
-            )
 
     await redis_client.zadd(due_key, {member: created_at}, nx=True)
 
@@ -119,10 +98,7 @@ async def _process_due_member(  # noqa: C901
             payment_id=payment_id,
             now=now,
             created_at=created_at,
-            telegram_id=telegram_id,
             redis_client=redis_client,
-            user_service=user_service,
-            notification_service=notification_service,
             due_key=key,
         )
         return

@@ -58,10 +58,13 @@ class TestCreatePaymentSchedulesCancelSurveyCheck:
         )
 
         assert result is not None
-        redis_client.zadd.assert_awaited_once()
-        key, members = redis_client.zadd.call_args[0]
-        assert key == PendingCancelSurveyChecksKey().pack()
-        (member,) = members.keys()
+        survey_calls = [
+            call
+            for call in redis_client.zadd.await_args_list
+            if call.args[0] == PendingCancelSurveyChecksKey().pack()
+        ]
+        assert len(survey_calls) == 1
+        (member,) = survey_calls[0].args[1].keys()
         assert member.startswith("3fa85f64-5717-4562-b3fc-2c963f66afa6:777:PLATEGA:")
 
     async def test_does_not_schedule_when_duration_is_missing(self):
