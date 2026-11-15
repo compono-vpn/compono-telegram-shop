@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -130,6 +131,67 @@ class TestOffer:
 
         assert sent is False
         ntf.notify_user.assert_not_called()
+        assert billing.claims == {}
+
+    async def test_referred_user_gets_nothing_and_is_not_claimed(self):
+        billing = FakeBilling()
+        billing.referrals[TG] = SimpleNamespace(ReferrerTelegramID=777, ReferredTelegramID=TG)
+        ntf = AsyncMock()
+
+        sent = await offer_source_survey(
+            user=_new_user(), billing=billing, notification_service=ntf
+        )
+
+        assert sent is False
+        ntf.notify_user.assert_not_called()
+        assert billing.claims == {}
+        assert billing.referral_lookups == [TG]
+
+    async def test_user_without_a_referral_is_asked(self):
+        billing = FakeBilling()
+        ntf = AsyncMock()
+
+        sent = await offer_source_survey(
+            user=_new_user(), billing=billing, notification_service=ntf
+        )
+
+        assert sent is True
+        assert billing.referral_lookups == [TG]
+
+    async def test_referral_of_another_user_does_not_block_this_one(self):
+        billing = FakeBilling()
+        billing.referrals[TG + 1] = SimpleNamespace(ReferrerTelegramID=777)
+        ntf = AsyncMock()
+
+        sent = await offer_source_survey(
+            user=_new_user(), billing=billing, notification_service=ntf
+        )
+
+        assert sent is True
+
+    async def test_failed_referral_lookup_skips_the_survey_without_raising(self):
+        billing = FakeBilling()
+        billing.referral_error = RuntimeError("billing down")
+        ntf = AsyncMock()
+
+        sent = await offer_source_survey(
+            user=_new_user(), billing=billing, notification_service=ntf
+        )
+
+        assert sent is False
+        ntf.notify_user.assert_not_called()
+        assert billing.claims == {}
+
+    @pytest.mark.parametrize("kwargs", [{"source": "home-hero"}, {"age_days": 30}])
+    async def test_billing_is_not_called_for_users_already_ruled_out(self, kwargs):
+        billing = FakeBilling()
+        ntf = AsyncMock()
+
+        await offer_source_survey(
+            user=_new_user(**kwargs), billing=billing, notification_service=ntf
+        )
+
+        assert billing.referral_lookups == []
         assert billing.claims == {}
 
     async def test_billing_failure_never_breaks_the_caller(self):
@@ -456,3 +518,18 @@ class TestTranslations:
         assert "#EventSourceSurvey" in card
         assert "Источник (ответ)" in card
         assert ("от подруги" in card) is (answer is SourceSurveyAnswer.OTHER)
+
+
+class TestSurveyStaysOffTheConversionPath:
+    def test_only_the_trial_handler_offers_the_survey(self):
+        src = Path(__file__).resolve().parent.parent / "src"
+        callers = sorted(
+            str(path.relative_to(src))
+            for path in src.rglob("*.py")
+            if "offer_source_survey" in path.read_text(encoding="utf-8")
+        )
+
+        assert callers == [
+            "bot/routers/menu/handlers.py",
+            "services/source_survey.py",
+        ]
