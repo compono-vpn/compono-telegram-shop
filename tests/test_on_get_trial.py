@@ -66,90 +66,19 @@ class TestOnGetTrial:
         dm.start.assert_awaited_once()
         ntf.notify_user.assert_not_called()
 
-    async def test_trial_success_then_asks_where_the_user_came_from(self):
+    async def test_trial_never_asks_where_the_user_came_from(self):
         callback, widget, dm, billing, ntf, exp = _setup(trial_plan=_make_trial_plan())
         billing.claim_user_reminder.return_value = True
         raw_fn = unwrap_inject(on_get_trial)
 
         await raw_fn(callback, widget, dm, billing, ntf, exp)
 
-        dm.start.assert_awaited_once()
-        billing.claim_user_reminder.assert_awaited_once_with(450987966, "SOURCE_SURVEY", "v1")
-        ntf.notify_user.assert_awaited_once()
-        assert ntf.notify_user.await_args.kwargs["payload"].i18n_key == "ntf-source-survey-prompt"
-
-    async def test_trial_survives_a_failing_survey(self):
-        callback, widget, dm, billing, ntf, exp = _setup(trial_plan=_make_trial_plan())
-        billing.claim_user_reminder.return_value = True
-        ntf.notify_user.side_effect = RuntimeError("telegram down")
-        raw_fn = unwrap_inject(on_get_trial)
-
-        await raw_fn(callback, widget, dm, billing, ntf, exp)
-
-        billing.create_trial_subscription.assert_called_once_with(450987966, 1)
-        dm.start.assert_awaited_once()
-
-    async def test_survey_is_not_sent_to_a_user_with_a_source_tag(self):
-        callback, widget, dm, billing, ntf, exp = _setup(trial_plan=_make_trial_plan())
-        billing.claim_user_reminder.return_value = True
-        object.__setattr__(dm.middleware_data[USER_KEY], "source", "home-hero")
-        raw_fn = unwrap_inject(on_get_trial)
-
-        await raw_fn(callback, widget, dm, billing, ntf, exp)
-
-        billing.claim_user_reminder.assert_not_called()
-        ntf.notify_user.assert_not_called()
-
-    async def test_survey_is_not_sent_to_a_referred_user(self):
-        callback, widget, dm, billing, ntf, exp = _setup(trial_plan=_make_trial_plan())
-        billing.claim_user_reminder.return_value = True
-        billing.get_referral_by_referred.return_value = MagicMock(ReferrerTelegramID=777)
-        raw_fn = unwrap_inject(on_get_trial)
-
-        await raw_fn(callback, widget, dm, billing, ntf, exp)
-
-        billing.create_trial_subscription.assert_called_once_with(450987966, 1)
         dm.start.assert_awaited_once()
         billing.claim_user_reminder.assert_not_called()
+        billing.get_referral_by_referred.assert_not_called()
         ntf.notify_user.assert_not_called()
 
-    async def test_trial_screen_is_shown_before_any_survey_call(self):
-        callback, widget, dm, billing, ntf, exp = _setup(trial_plan=_make_trial_plan())
-        billing.claim_user_reminder.return_value = True
-        order: list[str] = []
-
-        async def started(*args, **kwargs):
-            order.append("trial_screen")
-
-        async def looked_up(*args, **kwargs):
-            order.append("referral_lookup")
-
-        async def sent(*args, **kwargs):
-            order.append("survey_message")
-            return MagicMock()
-
-        dm.start = AsyncMock(side_effect=started)
-        billing.get_referral_by_referred.side_effect = looked_up
-        ntf.notify_user.side_effect = sent
-        raw_fn = unwrap_inject(on_get_trial)
-
-        await raw_fn(callback, widget, dm, billing, ntf, exp)
-
-        assert order == ["trial_screen", "referral_lookup", "survey_message"]
-
-    async def test_trial_is_activated_even_when_the_referral_lookup_fails(self):
-        callback, widget, dm, billing, ntf, exp = _setup(trial_plan=_make_trial_plan())
-        billing.get_referral_by_referred.side_effect = RuntimeError("billing down")
-        raw_fn = unwrap_inject(on_get_trial)
-
-        await raw_fn(callback, widget, dm, billing, ntf, exp)
-
-        billing.create_trial_subscription.assert_called_once_with(450987966, 1)
-        callback.answer.assert_awaited_once_with("Пробный период активирован")
-        dm.start.assert_awaited_once()
-        ntf.notify_user.assert_not_called()
-
-    async def test_survey_is_never_asked_when_the_trial_is_refused(self):
+    async def test_trial_is_refused_without_a_survey_call(self):
         callback, widget, dm, billing, ntf, exp = _setup(
             trial_plan=_make_trial_plan(),
             create_side_effect=BillingClientError(409, "user 450987966 has already used trial"),
@@ -160,7 +89,6 @@ class TestOnGetTrial:
         await raw_fn(callback, widget, dm, billing, ntf, exp)
 
         billing.claim_user_reminder.assert_not_called()
-        billing.get_referral_by_referred.assert_not_called()
         assert [c.kwargs["payload"].i18n_key for c in ntf.notify_user.await_args_list] == [
             "ntf-trial-already-used"
         ]

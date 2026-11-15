@@ -334,11 +334,6 @@ ntf-event-source-survey =
     [APP_STORE] Магазин приложений
     *[OTHER] Другое
     }
-    { $text ->
-    [0] { empty }
-    *[HAS]
-    <b>✍️ Текст:</b> { $text }
-    }
 
 ntf-event-cancel-survey-pending =
     <b>⏱ Напоминание об оплате</b>

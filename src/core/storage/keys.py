@@ -76,12 +76,6 @@ class SourceSurveyAnsweredKey(StorageKey, prefix="source_survey_answered"):
     telegram_id: int
 
 
-class SourceSurveyAwaitingTextKey(StorageKey, prefix="source_survey_awaiting_text"):
-    """Marks a user as mid-reply to the source survey's free-text ('Другое') prompt."""
-
-    telegram_id: int
-
-
 class CancelSurveyPendingPingKey(StorageKey, prefix="cancel_survey_pending_ping"):
     """Guards the pending checkout reminder so it is sent only once."""
 

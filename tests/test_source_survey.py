@@ -12,22 +12,13 @@ from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import Message
 
 from src.bot.keyboards import get_source_survey_keyboard
-from src.bot.routers.extra.source_survey import (
-    AwaitingSourceSurveyText,
-    on_source_survey_answer,
-    on_source_survey_other_text,
-)
+from src.bot.routers.extra import source_survey as source_survey_router
+from src.bot.routers.extra.source_survey import on_source_survey_answer
 from src.core.constants import SOURCE_SURVEY_PREFIX
 from src.core.enums import SourceSurveyAnswer
 from src.core.metrics import SOURCE_SURVEY_ANSWERS_TOTAL, SOURCE_SURVEY_SENT_TOTAL
 from src.core.utils.time import datetime_now
-from src.services.source_survey import (
-    DEDUP_KEY,
-    KIND,
-    is_eligible,
-    offer_source_survey,
-    sanitize_free_text,
-)
+from src.services.source_survey import DEDUP_KEY, KIND, is_eligible, offer_source_survey
 from tests.conftest import make_i18n, make_user, unwrap_inject
 from tests.reminder_fakes import FakeBilling
 
@@ -270,23 +261,23 @@ class TestAnswerCallback:
         kwargs = ntf.system_notify.await_args.kwargs["payload"].i18n_kwargs
         assert kwargs["answer"] == "FRIEND"
 
-    async def test_other_asks_for_one_short_reply_and_is_already_counted(self):
+    async def test_other_is_a_plain_one_tap_answer(self):
         billing = FakeBilling()
         billing.claims[REF] = None
         callback = _callback(f"{SOURCE_SURVEY_PREFIX}OTHER")
         redis = _redis()
+        ntf = AsyncMock()
+        before = _sent("OTHER")
 
         raw = unwrap_inject(on_source_survey_answer)
-        await raw(callback, _new_user(), make_i18n(), billing, redis, AsyncMock())
+        await raw(callback, _new_user(), make_i18n(), billing, redis, ntf)
 
         assert billing.claims[REF] == "OTHER"
-        assert (
-            callback.message.edit_text.await_args.kwargs["text"]
-            == "[msg-source-survey-other-prompt]"
-        )
-        awaiting = [c for c in redis.set.await_args_list if "awaiting" in c.args[0]]
-        assert len(awaiting) == 1
-        assert awaiting[0].kwargs["ex"] == 5 * 60
+        assert callback.message.edit_text.await_args.kwargs["text"] == "[msg-source-survey-thanks]"
+        assert callback.message.edit_text.await_args.kwargs["reply_markup"] is None
+        assert _sent("OTHER") == before + 1
+        assert [c for c in redis.set.await_args_list if "awaiting" in c.args[0]] == []
+        ntf.system_notify.assert_awaited_once()
 
     async def test_unknown_option_is_ignored(self):
         billing = FakeBilling()
@@ -340,141 +331,6 @@ class TestAnswerCallback:
         redis.delete.assert_awaited()
 
 
-class TestOtherText:
-    async def test_text_is_sanitized_stored_and_forwarded(self):
-        billing = FakeBilling()
-        billing.claims[REF] = "OTHER"
-        message = _message("  друг\x00 из   чата\n\n​про vpn  ")
-        ntf = AsyncMock()
-
-        raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, ntf)
-
-        assert billing.answer_texts[REF] == "друг из чата про vpn"
-        message.answer.assert_awaited_once_with(text="[msg-source-survey-thanks]")
-        kwargs = ntf.system_notify.await_args.kwargs["payload"].i18n_kwargs
-        assert kwargs["answer"] == "OTHER"
-        assert kwargs["text"] == "друг из чата про vpn"
-
-    async def test_text_is_escaped_for_the_admin_card(self):
-        billing = FakeBilling()
-        billing.claims[REF] = "OTHER"
-        message = _message("<b>x</b> & y")
-        ntf = AsyncMock()
-
-        raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, ntf)
-
-        assert billing.answer_texts[REF] == "<b>x</b> & y"
-        kwargs = ntf.system_notify.await_args.kwargs["payload"].i18n_kwargs
-        assert kwargs["text"] == "&lt;b&gt;x&lt;/b&gt; &amp; y"
-
-    async def test_long_text_is_capped_at_200_characters(self):
-        billing = FakeBilling()
-        billing.claims[REF] = "OTHER"
-
-        raw = unwrap_inject(on_source_survey_other_text)
-        await raw(_message("я" * 500), _new_user(), make_i18n(), billing, AsyncMock())
-
-        assert len(billing.answer_texts[REF]) == 200
-
-    async def test_text_that_sanitizes_to_nothing_stores_no_text(self):
-        billing = FakeBilling()
-        billing.claims[REF] = "OTHER"
-        message = _message(" \x00​ \n ")
-
-        raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, AsyncMock())
-
-        assert REF not in billing.answer_texts
-        message.answer.assert_awaited_once_with(text="[msg-source-survey-thanks]")
-
-    async def test_billing_error_keeps_the_conversation_alive(self):
-        billing = AsyncMock()
-        billing.answer_user_reminder.side_effect = RuntimeError("billing down")
-        message = _message("друг")
-
-        raw = unwrap_inject(on_source_survey_other_text)
-        await raw(message, _new_user(), make_i18n(), billing, AsyncMock())
-
-        message.answer.assert_not_called()
-
-
-class TestAwaitingFilter:
-    @staticmethod
-    def _data(redis):
-        container = MagicMock()
-        container.get = AsyncMock(return_value=redis)
-        return {"dishka_container": container}
-
-    @staticmethod
-    def _msg(text, user_id=TG):
-        message = MagicMock()
-        message.text = text
-        message.from_user = MagicMock(id=user_id)
-        return message
-
-    async def test_matches_only_while_the_user_owes_a_reply(self):
-        redis = _redis()
-        redis.get.return_value = b"1"
-        assert await AwaitingSourceSurveyText()(self._msg("друг"), **self._data(redis)) is True
-
-        redis.get.return_value = None
-        assert await AwaitingSourceSurveyText()(self._msg("друг"), **self._data(redis)) is False
-
-    async def test_a_command_is_not_taken_as_the_answer(self):
-        redis = _redis()
-        redis.get.return_value = b"1"
-
-        matched = await AwaitingSourceSurveyText()(self._msg("/start"), **self._data(redis))
-
-        assert matched is False
-        redis.delete.assert_awaited_once()
-
-    async def test_a_non_text_message_falls_through_and_ends_the_wait(self):
-        redis = _redis()
-        redis.get.return_value = b"1"
-        message = self._msg(None)
-
-        matched = await AwaitingSourceSurveyText()(message, **self._data(redis))
-
-        assert matched is False
-        redis.delete.assert_awaited_once()
-
-    async def test_the_first_text_message_ends_the_wait(self):
-        redis = _redis()
-        redis.get.return_value = b"1"
-
-        matched = await AwaitingSourceSurveyText()(self._msg("друг"), **self._data(redis))
-
-        assert matched is True
-        redis.delete.assert_awaited_once()
-
-    async def test_nothing_is_consumed_when_no_reply_is_owed(self):
-        redis = _redis()
-        redis.get.return_value = None
-
-        await AwaitingSourceSurveyText()(self._msg("друг"), **self._data(redis))
-
-        redis.delete.assert_not_called()
-
-
-class TestSanitize:
-    @pytest.mark.parametrize(
-        ("raw", "expected"),
-        [
-            ("  привет  ", "привет"),
-            ("a\tb\nc", "a b c"),
-            ("a\x00b\x07c", "abc"),
-            ("a​b", "ab"),
-            ("", ""),
-            ("я" * 300, "я" * 200),
-        ],
-    )
-    def test_cases(self, raw, expected):
-        assert sanitize_free_text(raw) == expected
-
-
 class TestTranslations:
     @staticmethod
     def _translator():
@@ -497,12 +353,15 @@ class TestTranslations:
     def test_prompt_and_replies_render(self):
         i18n = self._translator()
         assert "Как вы о нас узнали?" in i18n.get("ntf-source-survey-prompt")
-        for key in (
-            "msg-source-survey-thanks",
-            "msg-source-survey-other-prompt",
-            "msg-source-survey-already-answered",
-        ):
+        for key in ("msg-source-survey-thanks", "msg-source-survey-already-answered"):
             assert i18n.get(key) != key
+
+    def test_other_has_no_free_text_step(self):
+        assert not hasattr(source_survey_router, "on_source_survey_other_text")
+        assert not hasattr(source_survey_router, "AwaitingSourceSurveyText")
+        assert "msg-source-survey-other-prompt" not in (
+            Path("assets/translations/ru/messages.ftl").read_text(encoding="utf-8")
+        )
 
     @pytest.mark.parametrize("answer", list(SourceSurveyAnswer))
     def test_admin_card_names_the_answer(self, answer):
@@ -513,15 +372,13 @@ class TestTranslations:
             user_name="Анна",
             username="anna",
             answer=answer.value,
-            text="от подруги" if answer is SourceSurveyAnswer.OTHER else False,
         )
         assert "#EventSourceSurvey" in card
         assert "Источник (ответ)" in card
-        assert ("от подруги" in card) is (answer is SourceSurveyAnswer.OTHER)
 
 
-class TestSurveyStaysOffTheConversionPath:
-    def test_only_the_trial_handler_offers_the_survey(self):
+class TestSurveyIsAskedAfterPayment:
+    def test_only_the_payment_success_redirect_offers_the_survey(self):
         src = Path(__file__).resolve().parent.parent / "src"
         callers = sorted(
             str(path.relative_to(src))
@@ -530,6 +387,6 @@ class TestSurveyStaysOffTheConversionPath:
         )
 
         assert callers == [
-            "bot/routers/menu/handlers.py",
+            "infrastructure/taskiq/tasks/redirects.py",
             "services/source_survey.py",
         ]

@@ -1,7 +1,4 @@
-import re
-import unicodedata
 from datetime import timedelta
-from typing import Optional
 
 from loguru import logger
 
@@ -16,9 +13,6 @@ from src.services.notification import NotificationService
 KIND = "SOURCE_SURVEY"
 DEDUP_KEY = "v1"
 MAX_ACCOUNT_AGE = timedelta(days=7)
-MAX_TEXT_LENGTH = 200
-
-_WHITESPACE = re.compile(r"\s+")
 
 
 def is_eligible(user: UserDto) -> bool:
@@ -27,18 +21,6 @@ def is_eligible(user: UserDto) -> bool:
     if user.created_at is not None and datetime_now() - user.created_at > MAX_ACCOUNT_AGE:
         return False
     return True
-
-
-def sanitize_free_text(raw: Optional[str]) -> str:
-    if not raw:
-        return ""
-    kept = [
-        " " if char.isspace() else char
-        for char in raw
-        if char.isspace() or unicodedata.category(char) not in {"Cc", "Cf", "Cs", "Co", "Cn"}
-    ]
-    text = _WHITESPACE.sub(" ", "".join(kept)).strip()
-    return text[:MAX_TEXT_LENGTH].strip()
 
 
 async def offer_source_survey(

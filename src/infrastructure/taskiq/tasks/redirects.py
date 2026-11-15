@@ -4,8 +4,11 @@ from dishka.integrations.taskiq import FromDishka, inject
 
 from src.bot.states import MainMenu, Subscription
 from src.core.enums import PurchaseType
+from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.broker import broker
 from src.models.dto import UserDto
+from src.services.notification import NotificationService
+from src.services.source_survey import offer_source_survey
 
 
 @broker.task
@@ -53,6 +56,8 @@ async def redirect_to_successed_payment_task(
     purchase_type: PurchaseType,
     bot: FromDishka[Bot],
     bg_manager_factory: FromDishka[BgManagerFactory],
+    billing: FromDishka[BillingClient],
+    notification_service: FromDishka[NotificationService],
 ) -> None:
     bg_manager = bg_manager_factory.bg(
         bot=bot,
@@ -65,6 +70,7 @@ async def redirect_to_successed_payment_task(
         mode=StartMode.RESET_STACK,
         show_mode=ShowMode.DELETE_AND_SEND,
     )
+    await offer_source_survey(user=user, billing=billing, notification_service=notification_service)
 
 
 @broker.task
