@@ -33,6 +33,7 @@ CANCEL_SURVEY_PREFIX: Final[str] = "cs:"
 SETUP_CHECKIN_PREFIX: Final[str] = "sck:"
 SOURCE_SURVEY_PREFIX: Final[str] = "sq:"
 PAYMENT_NUDGE_PREFIX: Final[str] = "pn:"
+RECOVERY_OFFER_PREFIX: Final[str] = "ro:"
 
 IMPORTED_TAG: Final[str] = "IMPORTED"
 

@@ -6,6 +6,7 @@ from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
+from loguru import logger
 
 from src.bot.proxy_view import (
     await_entitlement,
@@ -34,6 +35,7 @@ from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.experiment import ExperimentService
+from src.services.payment_nudge import format_price_text
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 from src.services.trial_activation import get_monthly_trial_plan
@@ -86,6 +88,36 @@ async def subscription_getter(
     }
 
 
+MONTH_DAYS = 30
+
+
+def _month_duration_days(plan: PlanDto) -> int | None:
+    if plan.get_duration(MONTH_DAYS):
+        return MONTH_DAYS
+    return min((d.days for d in plan.durations), default=None)
+
+
+async def _plan_price_line(
+    billing: BillingClient, telegram_id: int, plan: PlanDto, currency: str
+) -> str:
+    days = _month_duration_days(plan)
+    if days is None or plan.id is None:
+        return ""
+    try:
+        details = await billing.calculate_price(
+            telegram_id=telegram_id, plan_id=plan.id, duration_days=days, currency=currency
+        )
+        pricing = billing_price_details_to_dto(details)
+        final = format_price_text(pricing.final_amount, currency)
+        if pricing.discount_percent > 0:
+            original = format_price_text(pricing.original_amount, currency)
+            final = f"<s>{original}</s> {final}"
+    except Exception:
+        logger.opt(exception=True).warning(f"Could not price plan '{plan.id}' for the plan screen")
+        return ""
+    return f"{final}/мес" if days == MONTH_DAYS else f"{final} / {days} дн."
+
+
 @inject
 async def plans_getter(
     dialog_manager: DialogManager,
@@ -96,6 +128,7 @@ async def plans_getter(
 ) -> dict[str, Any]:
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
+    currency = await billing.get_default_currency()
 
     formatted_plans = [
         {
@@ -105,16 +138,18 @@ async def plans_getter(
         for plan in plans
     ]
 
-    summary = "\n".join(
-        f"{plan.name} — "
-        f"{i18n.get('unit-gigabyte', value=plan.traffic_limit)}/мес, "
-        f"{i18n.get('unit-device', value=plan.device_limit)}"
-        for plan in plans
-    )
+    lines = []
+    for plan in plans:
+        price = await _plan_price_line(billing, user.telegram_id, plan, currency)
+        limits = (
+            f"{i18n.get('unit-gigabyte', value=plan.traffic_limit)}, "
+            f"{i18n.get('unit-device', value=plan.device_limit)}"
+        )
+        lines.append(f"{plan.name} — {price} · {limits}" if price else f"{plan.name} — {limits}")
 
     return {
         "plans": formatted_plans,
-        "summary": summary,
+        "summary": "\n".join(lines),
     }
 
 

@@ -204,6 +204,7 @@ btn-cancel-survey-other = ✍️ Другое
 
 btn-payment-nudge-pay = 💳 Оплатить
 btn-payment-nudge-other = 🔄 Другой способ
+btn-recovery-offer-accept = 🎁 Купить со скидкой 30%
 
 # Source survey
 btn-source-survey-tg-channel = 📣 Telegram-канал или чат
@@ -479,6 +480,7 @@ btn-promocode-max-days = 📅 Макс. дней
 btn-promocode-confirm = ✅ Подтвердить
 
 btn-trial-monthly-upgrade = Продолжить на 30 дней
+btn-trial-buy = 💳 Купить подписку
 
 btn-menu-vpn-offer = 🌐 VPN для всего интернета
 

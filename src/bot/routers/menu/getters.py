@@ -27,6 +27,7 @@ from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_settings_to_dto
 from src.models.dto import UserDto
 from src.services.experiment import ExperimentService
+from src.services.first_screen import first_screen_terms
 from src.services.referral import ReferralService
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
@@ -80,13 +81,18 @@ async def menu_getter(
         base_data["tg_proxy_available"] = bool(proxy_view.proxies) or proxy_view.entitled
 
         if not subscription:
+            trial_available = bool(not has_used_trial and trial_plan and trial_offer_enabled)
+            terms = (
+                await first_screen_terms(billing, i18n, trial_plan, user.telegram_id)
+                if trial_available
+                else {"trial_terms": False, "price_from": False}
+            )
             base_data.update(
                 {
                     "status": None,
                     "is_trial": False,
-                    "trial_available": bool(
-                        not has_used_trial and trial_plan and trial_offer_enabled
-                    ),
+                    "trial_available": trial_available,
+                    **terms,
                     "has_device_limit": False,
                     "connectable": False,
                 }

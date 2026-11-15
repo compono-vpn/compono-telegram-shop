@@ -148,6 +148,18 @@ PAYMENT_NUDGE_SENT_TOTAL = Counter(
     ["gateway"],
 )
 
+RECOVERY_OFFER_SENT_TOTAL = Counter(
+    "bot_recovery_offer_sent_total",
+    "30% first-month offers sent, by trigger (payment, trial_expired)",
+    ["source"],
+)
+
+RECOVERY_OFFER_ACCEPTED_TOTAL = Counter(
+    "bot_recovery_offer_accepted_total",
+    "30% first-month offer button taps that opened checkout, by trigger",
+    ["source"],
+)
+
 SOURCE_SURVEY_SENT_TOTAL = Counter(
     "bot_source_survey_sent_total",
     "'How did you find us?' prompts sent to users who arrived without a source tag",

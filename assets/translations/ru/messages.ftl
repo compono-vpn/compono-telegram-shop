@@ -32,6 +32,9 @@ msg-cancel-survey-already-answered = Вы уже ответили, спасиб�
 
 
 # Source survey
+msg-recovery-offer-unavailable = Предложение уже недоступно.
+msg-recovery-offer-failed = Не получилось открыть предложение. Попробуйте ещё раз.
+
 msg-source-survey-thanks = 🙏 Спасибо! Это помогает нам.
 msg-source-survey-already-answered = Вы уже ответили, спасибо!
 
@@ -89,7 +92,13 @@ msg-main-menu =
     • У вас нет оформленной подписки.
 
     <i>{ $trial_available ->
-    [1] 🎁 Для вас доступен бесплатный пробник — нажмите кнопку ниже, чтобы его получить.
+    [1] { $trial_terms ->
+        [0] 🎁 Для вас доступен бесплатный пробник — нажмите кнопку ниже, чтобы его получить.
+        *[HAS] 🎁 Бесплатный пробник: { $trial_terms }. Нажмите кнопку ниже.{ $price_from ->
+            [0] { empty }
+            *[HAS] { " " }Дальше VPN от { $price_from }.
+            }
+        }
     *[0] ↘️ Для покупки доступа перейдите в меню «Подписка».
     }</i>
     </blockquote>

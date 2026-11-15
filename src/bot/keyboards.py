@@ -15,6 +15,7 @@ from src.core.constants import (
     GOTO_PREFIX,
     PAYMENT_NUDGE_PREFIX,
     PURCHASE_PREFIX,
+    RECOVERY_OFFER_PREFIX,
     REPOSITORY,
     SETUP_CHECKIN_PREFIX,
     SOURCE_SURVEY_PREFIX,
@@ -237,6 +238,17 @@ def get_payment_nudge_keyboard(payment_id: str, payment_url: str) -> InlineKeybo
             text="btn-payment-nudge-other",
             callback_data=f"{PAYMENT_NUDGE_PREFIX}{payment_id}",
         ),
+    )
+    return builder.as_markup()
+
+
+def get_recovery_offer_keyboard(payment_id: str | None) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="btn-recovery-offer-accept",
+            callback_data=f"{RECOVERY_OFFER_PREFIX}{payment_id or '-'}",
+        )
     )
     return builder.as_markup()
 

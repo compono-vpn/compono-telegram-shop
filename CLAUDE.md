@@ -1,6 +1,6 @@
 # compono-telegram-shop
 
-Python aiogram 3 + aiogram-dialog 2.6 + dishka bot. Checks before merge (CI runs only on push to `main`):
+Python aiogram 3 + aiogram-dialog 2.6 + dishka bot. Checks before merge (CI runs on pull requests and on push to `main`):
 `ruff check src/`, `ruff format --check src/`, `pytest tests/`.
 
 ## Lost dialog context (2026-11-07)
@@ -60,3 +60,38 @@ Tap → `ton:<plan>:<days>` with the user's wallet → billing creates the payme
 built in `src/services/ton.py`, byte-identical to tonsdk) → the widget calls `wallet.sendTransaction(tx, "tp:<id>")` →
 the bot gets a `sent_transaction` query and asks billing `POST /payments/ton/confirm` up to 4 times 3 s apart; billing's
 own poller finishes the payment if the chain is slower. Stage receiving wallet: Vault `kv/compono-ton-stage-wallet`.
+
+## Payment recovery, offers, survey (COM-190, COM-192, COM-194, 2026-11-15)
+
+- **Nudge (COM-190).** Every payment link made in `_create_payment_and_get_data` is queued by
+  `src/services/payment_nudge.py` `schedule_payment_nudge` (Redis zset `pending_payment_nudge`, due +5 min; payment link,
+  plan and price in `payment_nudge_data:<id>`). Cron `* * * * *` (`tasks/payment_nudge.py`) sends one persistent message
+  «Оплата не завершена» with «Оплатить» (the same link) and «Другой способ» (`pn:<payment id>` →
+  `routers/extra/payment_nudge.py` reopens `Subscription.PAYMENT_METHOD` for the same plan and period through
+  `checkout_entry.open_checkout`). Sent only while billing says PENDING, never after the user paid something since, only
+  for the user's newest payment (`payment_nudge_latest`), once per payment (`payment_nudge_sent`), once per 30 min per
+  user (`payment_nudge_user`); a send later than 15 min after its due time is dropped. The old self-deleting 15 minute
+  reminder (`ntf-event-cancel-survey-pending`) is gone; the cancel survey itself is unchanged. Widget payments
+  (`WidgetService`, flag off in prod) and the proxy purchase are not queued. Metric `bot_payment_nudge_sent_total{gateway}`.
+- **Offer (COM-192).** One 30% first-month discount per user, ever, only for users we would lose: (a) trial expired and
+  never paid, in the expiry notice (`notify_subscription_expired` → `ntf-event-user-expired-offer`); (b) an abandoned
+  payment, 15 min after creation (`process_due_payment_offers`, zset `pending_recovery_offer`, `ntf-recovery-offer`).
+  The once-ever guard is the billing claim `user_reminders(kind='RETURN_OFFER', dedup_key='v1')`; paid users are never
+  claimed (`services/recovery_offer.py has_paid`: a COMPLETED payment above 0, or an active non-trial subscription). The
+  button `ro:<payment id|->` (`routers/extra/recovery_offer.py`) activates billing promocode `RETURN30`
+  (PURCHASE_DISCOUNT 30, `purchase_discount_max_days` 30, availability NEW, unlimited activations, no expiry — one row per
+  environment, created by hand in `billing.promocodes`) and opens the plan list, or the durations of the abandoned plan.
+  Billing applies the discount only to durations up to 30 days and clears it after the first completed purchase, so
+  renewals are full price. Nothing is auto-applied and nobody is asked to type a code: the COMPONO30 hints are gone from
+  the 1-day notice and the check-in (the COMPONO30 code itself still works if typed). Known edge: the discount stays on a
+  user who never buys, and a proxy purchase (plan 5, 30 days) can consume it without clearing it. Metrics
+  `bot_recovery_offer_sent_total{source}`, `bot_recovery_offer_accepted_total{source}`.
+- **Prices and terms (COM-192).** Plan screen lines: «Старт — 119 ₽/мес · 100 ГБ, 2 устройства» (`plans_getter`, price
+  from billing `calculate_price` for 30 days, struck-through old price when discounted). First screen for users who can
+  take the trial: «Бесплатный пробник: 2 дня, 5 ГБ, 1 устройство … Дальше VPN от 119 ₽/мес» (`services/first_screen.py`,
+  read from the trial plan and the cheapest 30-day price). The trial screen has «💳 Купить подписку» (same
+  `on_subscription_plans` purchase flow).
+- **Source survey (COM-194).** Asked right after «✅ Оплата прошла успешно!» (`redirect_to_successed_payment_task`),
+  not after the trial. Eligibility unchanged (`services/source_survey.py`): no source tag, no referral, account up to 7
+  days old, once per user. «Другое» is a one-tap answer; there is no free-text step, so a typed promocode is never taken
+  as survey text.

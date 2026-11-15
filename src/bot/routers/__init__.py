@@ -26,6 +26,7 @@ def setup_routers(router: Router) -> None:
     routers = [
         extra.payment.router,
         extra.payment_nudge.router,
+        extra.recovery_offer.router,
         extra.notification.router,
         extra.commands.router,
         extra.member.router,

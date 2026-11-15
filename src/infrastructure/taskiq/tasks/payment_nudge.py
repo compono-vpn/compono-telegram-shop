@@ -4,7 +4,7 @@ from redis.asyncio import Redis
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.broker import broker
 from src.services.notification import NotificationService
-from src.services.payment_nudge import process_due_payment_nudges
+from src.services.payment_nudge import process_due_payment_nudges, process_due_payment_offers
 from src.services.user import UserService
 
 
@@ -17,6 +17,12 @@ async def process_pending_payment_nudges_task(
     redis_client: FromDishka[Redis],
 ) -> None:
     await process_due_payment_nudges(
+        redis_client=redis_client,
+        billing=billing,
+        user_service=user_service,
+        notification_service=notification_service,
+    )
+    await process_due_payment_offers(
         redis_client=redis_client,
         billing=billing,
         user_service=user_service,

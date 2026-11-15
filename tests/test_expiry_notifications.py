@@ -242,12 +242,54 @@ class TestExpiredEvent:
         assert await _expired(s, _payload()) is False
 
         (_, payload, ntf_type, _) = s.notifications.sent[0]
-        assert payload.i18n_key == "ntf-event-user-expired"
+        assert payload.i18n_key == "ntf-event-user-expired-offer"
         assert payload.i18n_kwargs == {"is_trial": True}
-        assert payload.reply_markup.inline_keyboard[0][0].text == "btn-goto-subscription"
+        assert payload.reply_markup.inline_keyboard[0][0].text == "btn-recovery-offer-accept"
+        assert payload.reply_markup.inline_keyboard[0][0].callback_data == "ro:-"
         assert ntf_type is UserNotificationType.EXPIRED
         assert (TG, "SUB_EXPIRED", "sub-7:20261011") in s.billing.claims
         assert len(s.notifications.sent) == 1
+
+    async def test_trial_expiry_claims_the_offer_once_ever(self):
+        s = _services(current=_current(active=False, expires_in=-timedelta(minutes=2)))
+        s.billing.by_id[7] = _billing_sub(status="EXPIRED")
+
+        await _expired(s, _payload())
+
+        assert (TG, "RETURN_OFFER", "v1") in s.billing.claims
+
+    async def test_trial_user_who_was_offered_before_gets_the_plain_notice(self):
+        s = _services(current=_current(active=False, expires_in=-timedelta(minutes=2)))
+        s.billing.by_id[7] = _billing_sub(status="EXPIRED")
+        s.billing.claims[(TG, "RETURN_OFFER", "v1")] = None
+
+        await _expired(s, _payload())
+
+        payload = s.notifications.sent[0][1]
+        assert payload.i18n_key == "ntf-event-user-expired"
+        assert payload.reply_markup.inline_keyboard[0][0].text == "btn-goto-subscription"
+
+    async def test_trial_user_who_already_paid_gets_the_plain_notice(self):
+        s = _services(current=_current(active=False, expires_in=-timedelta(minutes=2)))
+        s.billing.by_id[7] = _billing_sub(status="EXPIRED")
+        s.billing.transactions[TG] = [
+            SimpleNamespace(Status="COMPLETED", Pricing=SimpleNamespace(final_amount="119"))
+        ]
+
+        await _expired(s, _payload())
+
+        assert s.notifications.sent[0][1].i18n_key == "ntf-event-user-expired"
+        assert (TG, "RETURN_OFFER", "v1") not in s.billing.claims
+
+    async def test_an_undelivered_notice_gives_the_offer_back(self):
+        s = _services(current=_current(active=False, expires_in=-timedelta(minutes=2)))
+        s.billing.by_id[7] = _billing_sub(status="EXPIRED")
+        s.notifications = make_notification_service(error=RuntimeError("telegram down"))
+
+        with pytest.raises(RuntimeError):
+            await _expired(s, _payload())
+
+        assert (TG, "RETURN_OFFER", "v1") not in s.billing.claims
 
     async def test_paid_expiry_offers_renewal(self):
         s = _services(current=_current(active=False, expires_in=-timedelta(minutes=2)))
@@ -350,11 +392,11 @@ def _render(translator, key, **kwargs):
 
 
 class TestRussianCopy:
-    def test_trial_expiring_mentions_compono30_and_plain_wording(self, translator):
+    def test_trial_expiring_has_plain_wording_and_no_discount_code(self, translator):
         text = _render(translator, "ntf-event-user-expiring", is_trial=True, value=1)
         assert "через 1 день" in text
         assert "пробный период" in text
-        assert "COMPONO30" in text
+        assert "COMPONO30" not in text
         assert "FIRST30" not in text
         assert "пробник" not in text
 
@@ -365,10 +407,10 @@ class TestRussianCopy:
         assert "COMPONO30" not in text
         assert "Продлите" in text
 
-    def test_trial_expired_mentions_compono30(self, translator):
+    def test_trial_expired_plain_notice_has_no_discount_code(self, translator):
         text = _render(translator, "ntf-event-user-expired", is_trial=True)
         assert "пробный период закончился" in text
-        assert "COMPONO30" in text
+        assert "COMPONO30" not in text
         assert "FIRST30" not in text
 
     def test_paid_expired_asks_to_renew(self, translator):
@@ -390,7 +432,7 @@ class TestRussianCopy:
     def test_checkin_answers_carry_the_promised_content(self, translator):
         yes = _render(translator, "ntf-setup-checkin-connected")
         no = _render(translator, "ntf-setup-checkin-not-connected")
-        assert "COMPONO30" in yes and "30 дней" in yes
+        assert "COMPONO30" not in yes and "30 дней" in yes
         assert "FIRST30" not in yes and "FIRST30" not in no
         assert "Белый список" in no and "Direct" in no
         assert "Обновите подписку" in no and "другое приложение" in no

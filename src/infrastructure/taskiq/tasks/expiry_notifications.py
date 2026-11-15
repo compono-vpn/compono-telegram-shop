@@ -12,13 +12,15 @@ from typing import Any, Optional
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
 
-from src.bot.keyboards import get_buy_keyboard, get_renew_keyboard
+from src.bot.keyboards import get_buy_keyboard, get_recovery_offer_keyboard, get_renew_keyboard
 from src.core.enums import UserNotificationType
+from src.core.metrics import RECOVERY_OFFER_SENT_TOTAL
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.broker import broker
 from src.models.dto import UserDto
 from src.services.notification import NotificationService
+from src.services.recovery_offer import claim_offer, release_offer
 from src.services.reminder_delivery import (
     Sleeper,
     can_receive_reminders,
@@ -112,23 +114,56 @@ async def notify_subscription_expired(
     billing_subscription = await billing.get_subscription(int(subscription_id))
     is_trial = bool(billing_subscription.IsTrial) if billing_subscription else False
 
-    message = await claim_and_send(
+    message = await _send_expired_notice(
         billing=billing,
         notification_service=notification_service,
         user=user,
-        kind=KIND_EXPIRED,
-        dedup_key=dedup_key(int(subscription_id), expire_at),
-        payload=MessagePayload(
-            i18n_key="ntf-event-user-expired",
-            i18n_kwargs={"is_trial": is_trial},
-            reply_markup=_keyboard(is_trial),
-            auto_delete_after=None,
-            add_close_button=True,
-        ),
-        ntf_type=UserNotificationType.EXPIRED,
+        is_trial=is_trial,
+        subscription_id=int(subscription_id),
+        expire_at=expire_at,
         sleeper=sleeper,
     )
     return message is not None
+
+
+async def _send_expired_notice(
+    *,
+    billing: BillingClient,
+    notification_service: NotificationService,
+    user: UserDto,
+    is_trial: bool,
+    subscription_id: int,
+    expire_at: datetime,
+    sleeper: Sleeper,
+) -> Any:
+    offer = is_trial and await claim_offer(billing, user)
+    payload = MessagePayload(
+        i18n_key="ntf-event-user-expired-offer" if offer else "ntf-event-user-expired",
+        i18n_kwargs={"is_trial": is_trial},
+        reply_markup=get_recovery_offer_keyboard(None) if offer else _keyboard(is_trial),
+        auto_delete_after=None,
+        add_close_button=True,
+    )
+    try:
+        message = await claim_and_send(
+            billing=billing,
+            notification_service=notification_service,
+            user=user,
+            kind=KIND_EXPIRED,
+            dedup_key=dedup_key(subscription_id, expire_at),
+            payload=payload,
+            ntf_type=UserNotificationType.EXPIRED,
+            sleeper=sleeper,
+        )
+    except Exception:
+        if offer:
+            await release_offer(billing, user.telegram_id)
+        raise
+    if offer and message is None:
+        await release_offer(billing, user.telegram_id)
+    elif offer:
+        RECOVERY_OFFER_SENT_TOTAL.labels(source="trial_expired").inc()
+    return message
 
 
 def due_expiring_marks(

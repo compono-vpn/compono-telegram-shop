@@ -2,16 +2,15 @@ from uuid import UUID
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
-from aiogram_dialog import DialogManager, ShowMode, StartMode
+from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 
-from src.bot.routers.subscription.handlers import CURRENT_DURATION_KEY
+from src.bot.routers.extra.checkout_entry import open_checkout
 from src.bot.states import Subscription
 from src.core.constants import PAYMENT_NUDGE_PREFIX
 from src.core.enums import PurchaseType, TransactionStatus
-from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_plan_to_dto
@@ -50,22 +49,12 @@ async def on_payment_nudge_other(
         await callback.answer()
         return
 
-    purchase_type = PurchaseType(transaction.PurchaseType or PurchaseType.NEW.value)
-    await dialog_manager.start(
-        Subscription.PAYMENT_METHOD,
-        mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.NO_UPDATE,
-    )
-    dialog_manager.show_mode = ShowMode.DELETE_AND_SEND
-    seed = DialogDataAdapter(dialog_manager).save(billing_plan_to_dto(billing_plan))
-    await dialog_manager.update(
-        {
-            "plandto": seed,
-            CURRENT_DURATION_KEY: transaction.Plan.duration,
-            "purchase_type": purchase_type,
-            "only_single_plan": False,
-            "only_single_duration": False,
-        }
+    await open_checkout(
+        dialog_manager,
+        state=Subscription.PAYMENT_METHOD,
+        purchase_type=PurchaseType(transaction.PurchaseType or PurchaseType.NEW.value),
+        plan=billing_plan_to_dto(billing_plan),
+        duration_days=transaction.Plan.duration,
     )
     logger.info(f"{log(user)} Reopened the payment methods from the payment nudge")
     await callback.answer()

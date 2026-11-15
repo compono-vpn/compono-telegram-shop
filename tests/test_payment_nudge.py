@@ -25,57 +25,11 @@ from src.services.payment_nudge import (
     schedule_payment_nudge,
 )
 from tests.conftest import make_user
+from tests.reminder_fakes import KvRedis
 
 TG = 4242
 URL = "https://pay.example/abc"
 NOW = 1_800_000_000.0
-
-
-class KvRedis:
-    def __init__(self) -> None:
-        self.values: dict[str, Any] = {}
-        self.zsets: dict[str, dict[str, float]] = {}
-        self.ttls: dict[str, int] = {}
-
-    async def get(self, key: str):
-        value = self.values.get(key)
-        return value.encode() if isinstance(value, str) else value
-
-    async def set(self, key: str, value: Any, nx: bool = False, ex: Optional[int] = None):
-        if nx and key in self.values:
-            return None
-        self.values[key] = value
-        if ex:
-            self.ttls[key] = ex
-        return True
-
-    async def delete(self, *keys: str) -> int:
-        return sum(self.values.pop(key, None) is not None for key in keys)
-
-    async def zadd(self, key: str, mapping: dict[str, float], nx: bool = False) -> int:
-        zset = self.zsets.setdefault(key, {})
-        added = 0
-        for member, score in mapping.items():
-            if nx and member in zset:
-                continue
-            added += member not in zset
-            zset[member] = score
-        return added
-
-    async def zrem(self, key: str, *members: str) -> int:
-        zset = self.zsets.get(key, {})
-        return sum(zset.pop(member, None) is not None for member in members)
-
-    async def zrangebyscore(self, key: str, low: Any, high: Any, withscores: bool = False):
-        hi = float("inf") if high == "+inf" else float(high)
-        lo = float("-inf") if low == "-inf" else float(low)
-        rows = sorted(
-            (item for item in self.zsets.get(key, {}).items() if lo <= item[1] <= hi),
-            key=lambda item: item[1],
-        )
-        if withscores:
-            return [(member.encode(), score) for member, score in rows]
-        return [member.encode() for member, _ in rows]
 
 
 def _transaction(status: str = "PENDING", created_at: Optional[datetime] = None, **kwargs):

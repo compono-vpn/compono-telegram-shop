@@ -79,6 +79,9 @@ class SourceSurveyAnsweredKey(StorageKey, prefix="source_survey_answered"):
 class PendingPaymentNudgesKey(StorageKey, prefix="pending_payment_nudge"): ...
 
 
+class PendingRecoveryOffersKey(StorageKey, prefix="pending_recovery_offer"): ...
+
+
 class PaymentNudgeDataKey(StorageKey, prefix="payment_nudge_data"):
     """What the nudge message needs: payment link, plan name, price (2 days)."""
 

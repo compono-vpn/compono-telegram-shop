@@ -291,6 +291,13 @@ success_trial = Window(
     Row(
         *connect_buttons,
     ),
+    Row(
+        Button(
+            text=I18nFormat("btn-trial-buy"),
+            id=f"{PURCHASE_PREFIX}{PurchaseType.NEW}",
+            on_click=on_subscription_plans,
+        ),
+    ),
     *back_main_menu_button,
     IgnoreUpdate(),
     state=Subscription.TRIAL,

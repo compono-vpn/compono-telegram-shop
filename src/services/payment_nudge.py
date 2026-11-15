@@ -8,23 +8,26 @@ from uuid import UUID
 from loguru import logger
 from redis.asyncio import Redis
 
-from src.bot.keyboards import get_payment_nudge_keyboard
+from src.bot.keyboards import get_payment_nudge_keyboard, get_recovery_offer_keyboard
 from src.core.enums import Currency, TransactionStatus
-from src.core.metrics import PAYMENT_NUDGE_SENT_TOTAL
+from src.core.metrics import PAYMENT_NUDGE_SENT_TOTAL, RECOVERY_OFFER_SENT_TOTAL
 from src.core.storage.keys import (
     PaymentNudgeDataKey,
     PaymentNudgeLatestKey,
     PaymentNudgeSentKey,
     PaymentNudgeUserKey,
     PendingPaymentNudgesKey,
+    PendingRecoveryOffersKey,
 )
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
 from src.services.notification import NotificationService
+from src.services.recovery_offer import claim_offer, release_offer
 from src.services.reminder_delivery import can_receive_reminders
 from src.services.user import UserService
 
 NUDGE_DELAY_SECONDS = 5 * 60
+OFFER_DELAY_SECONDS = 15 * 60
 MAX_LATENESS_SECONDS = 15 * 60
 RETRY_DELAY_SECONDS = 60
 DATA_TTL_SECONDS = 2 * 24 * 60 * 60
@@ -32,6 +35,7 @@ SENT_TTL_SECONDS = 7 * 24 * 60 * 60
 USER_WINDOW_SECONDS = 30 * 60
 
 _QUEUE_KEY = PendingPaymentNudgesKey()
+_OFFER_QUEUE_KEY = PendingRecoveryOffersKey()
 
 
 def format_price_text(amount: Decimal | str, currency_code: str) -> str:
@@ -76,6 +80,11 @@ async def schedule_payment_nudge(
     await redis_client.zadd(
         _QUEUE_KEY.pack(),
         {f"{payment_id}:{telegram_id}": created + NUDGE_DELAY_SECONDS},
+        nx=True,
+    )
+    await redis_client.zadd(
+        _OFFER_QUEUE_KEY.pack(),
+        {f"{payment_id}:{telegram_id}": created + OFFER_DELAY_SECONDS},
         nx=True,
     )
     logger.debug(f"Scheduled payment nudge for payment '{payment_id}'")
@@ -225,4 +234,96 @@ async def process_due_payment_nudges(
             )
         except Exception:
             logger.opt(exception=True).warning(f"Payment nudge '{member}' failed; skipping")
+    return sent
+
+
+async def _offer_one(
+    *,
+    member: str,
+    due_at: float,
+    now: float,
+    redis_client: Redis,
+    billing: BillingClient,
+    user_service: UserService,
+    notification_service: NotificationService,
+) -> bool:
+    payment_id, _, telegram_id_raw = member.partition(":")
+    telegram_id = int(telegram_id_raw)
+
+    if now - due_at > MAX_LATENESS_SECONDS:
+        return False
+
+    latest = await redis_client.get(PaymentNudgeLatestKey(telegram_id=telegram_id).pack())
+    if latest is not None and _text(latest) != payment_id:
+        return False
+
+    transaction = await billing.get_transaction(UUID(payment_id))
+    if not transaction or transaction.Status not in (
+        TransactionStatus.PENDING.value,
+        TransactionStatus.CANCELED.value,
+    ):
+        return False
+
+    user = await user_service.get(telegram_id)
+    if user is None or not can_receive_reminders(user):
+        return False
+
+    if not await claim_offer(billing, user):
+        return False
+
+    try:
+        message = await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(
+                i18n_key="ntf-recovery-offer",
+                reply_markup=get_recovery_offer_keyboard(payment_id),
+                auto_delete_after=None,
+                add_close_button=False,
+            ),
+        )
+    except Exception:
+        await release_offer(billing, telegram_id)
+        await redis_client.zadd(
+            _OFFER_QUEUE_KEY.pack(), {member: now + RETRY_DELAY_SECONDS}, nx=True
+        )
+        logger.opt(exception=True).warning(
+            f"Recovery offer for '{payment_id}' failed to send; will retry"
+        )
+        return False
+
+    if message is None:
+        return False
+
+    RECOVERY_OFFER_SENT_TOTAL.labels(source="payment").inc()
+    logger.info(f"Sent the recovery offer for '{payment_id}' to '{telegram_id}'")
+    return True
+
+
+async def process_due_payment_offers(
+    *,
+    redis_client: Redis,
+    billing: BillingClient,
+    user_service: UserService,
+    notification_service: NotificationService,
+    now: Optional[float] = None,
+) -> int:
+    current = time.time() if now is None else now
+    key = _OFFER_QUEUE_KEY.pack()
+    due = await redis_client.zrangebyscore(key, "-inf", current, withscores=True)
+    sent = 0
+    for raw_member, due_at in due:
+        member = _text(raw_member)
+        await redis_client.zrem(key, member)
+        try:
+            sent += await _offer_one(
+                member=member,
+                due_at=float(due_at),
+                now=current,
+                redis_client=redis_client,
+                billing=billing,
+                user_service=user_service,
+                notification_service=notification_service,
+            )
+        except Exception:
+            logger.opt(exception=True).warning(f"Recovery offer '{member}' failed; skipping")
     return sent
