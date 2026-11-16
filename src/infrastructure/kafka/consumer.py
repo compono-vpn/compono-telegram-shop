@@ -16,8 +16,11 @@ from src.core.utils.formatters import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.message_payload import MessagePayload
+from src.infrastructure.billing import BillingClient
 from src.infrastructure.kafka.base_consumer import SupervisedKafkaConsumer
+from src.services.dedicated_ip import offer_country_choice
 from src.services.notification import NotificationService
+from src.services.user import UserService
 
 
 def _format_plan_i18n_kwargs(i18n_kwargs: dict) -> None:
@@ -147,6 +150,28 @@ class UserNotificationConsumer(SupervisedKafkaConsumer):
         )
 
         logger.info(f"Redirected user {telegram_id} to subscription success")
+        await self._offer_dedicated_ip(telegram_id)
+
+    async def _offer_dedicated_ip(self, telegram_id: int) -> None:
+        try:
+            async with self._container() as request_container:
+                billing = await request_container.get(BillingClient)
+                notification_service = await request_container.get(NotificationService)
+                user_service = await request_container.get(UserService)
+                user = await user_service.get(telegram_id)
+                subscription = await billing.get_current_subscription(telegram_id)
+                plan_tag = subscription.Plan.tag if subscription and subscription.Plan else None
+                if user:
+                    await offer_country_choice(
+                        user=user,
+                        plan_tag=plan_tag,
+                        billing=billing,
+                        notification_service=notification_service,
+                    )
+        except Exception:
+            logger.opt(exception=True).warning(
+                f"Could not offer the dedicated IP country after payment to {telegram_id}"
+            )
 
     async def _start_redirect(self, telegram_id: int, state: State, data: dict) -> None:
         async with self._container() as request_container:

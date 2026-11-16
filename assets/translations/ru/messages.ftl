@@ -1251,3 +1251,5 @@ msg-subscription-promocode-success =
 msg-trial-monthly-offer = Вы уже попробовали VPN. Продолжите на 30 дней с тарифом «{ $monthly_trial_plan }». Цена с вашими скидками будет показана перед оплатой.
 
 msg-widget-card-caption = Карточка не открылась? Обновите Telegram.
+
+plan-dedicated-ip-feature = 🌐 личный IP (Швеция или Нидерланды)

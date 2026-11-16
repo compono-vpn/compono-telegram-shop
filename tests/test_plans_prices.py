@@ -120,3 +120,19 @@ async def test_buttons_still_list_the_plans():
     )
 
     assert data["plans"] == [{"id": 1, "name": "⚡️ Старт"}]
+
+
+async def test_ultra_line_names_the_dedicated_ip():
+    ultra = _plan(38, "👑 Ультра", 1024, 20)
+    ultra.Tag = "ULTRA"
+    billing = _billing(
+        [_plan(3, "💎 Макс", 1024, 20), ultra], {(3, 30): ("399", "399"), (38, 30): ("799", "799")}
+    )
+
+    lines = [line.replace("\u00a0", " ").replace("\u202f", " ") for line in await _summary(billing)]
+
+    assert lines[0] == "💎 Макс — 399 ₽/мес · 1 024 ГБ, 20 устройств"
+    assert (
+        lines[1]
+        == "👑 Ультра — 799 ₽/мес · 1 024 ГБ, 20 устройств, 🌐 личный IP (Швеция или Нидерланды)"
+    )

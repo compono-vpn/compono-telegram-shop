@@ -775,4 +775,4 @@ class TestFourthPlanOnThePlanScreen:
         assert data["plans"][3]["name"] == "👑 Ультра"
         lines = [re.sub(r"\s", " ", line) for line in data["summary"].split("\n")]
         assert lines[2] == "💎 Макс — 499 ₽/мес · 1 024 ГБ, 20 устройств"
-        assert lines[3] == "👑 Ультра — 799 ₽/мес · 1 024 ГБ, 20 устройств"
+        assert lines[3] == "👑 Ультра — 799 ₽/мес · 1 024 ГБ, 20 устройств, 🌐 личный IP (Швеция или Нидерланды)"

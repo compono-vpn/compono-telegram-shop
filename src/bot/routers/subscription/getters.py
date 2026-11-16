@@ -34,7 +34,7 @@ from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
-from src.services.dedicated_ip import is_ultra_user
+from src.services.dedicated_ip import is_ultra_tag, is_ultra_user
 from src.services.experiment import ExperimentService
 from src.services.payment_nudge import format_price_text
 from src.services.remnawave import RemnawaveService
@@ -147,6 +147,8 @@ async def plans_getter(
             f"{i18n.get('unit-gigabyte', value=plan.traffic_limit)}, "
             f"{i18n.get('unit-device', value=plan.device_limit)}"
         )
+        if is_ultra_tag(getattr(plan, "tag", None)):
+            limits = f"{limits}, {i18n.get('plan-dedicated-ip-feature')}"
         lines.append(f"{plan.name} — {price} · {limits}" if price else f"{plan.name} — {limits}")
 
     return {
