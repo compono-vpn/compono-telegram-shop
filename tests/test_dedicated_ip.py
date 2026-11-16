@@ -168,15 +168,14 @@ class TestUltraDetection:
 
 
 class TestKeyboard:
-    def test_three_countries_one_per_row_with_short_callbacks(self):
+    def test_offers_sweden_and_netherlands_only(self):
         rows = get_dedicated_ip_keyboard().inline_keyboard
 
-        assert [len(row) for row in rows] == [1, 1, 1]
+        assert [len(row) for row in rows] == [1, 1]
         assert [row[0].callback_data for row in rows] == [
-            f"{DEDICATED_IP_PREFIX}{code}" for code in ("LT", "SE", "NL")
+            f"{DEDICATED_IP_PREFIX}{code}" for code in ("SE", "NL")
         ]
         assert [row[0].text for row in rows] == [
-            "btn-dedicated-ip-lt",
             "btn-dedicated-ip-se",
             "btn-dedicated-ip-nl",
         ]
@@ -187,7 +186,7 @@ class TestKeyboard:
 
 
 class TestOffer:
-    async def test_ultra_purchase_sends_the_prompt_with_three_buttons(self):
+    async def test_ultra_purchase_sends_the_prompt_with_two_buttons(self):
         billing = Billing()
         ntf = AsyncMock()
         before = DEDICATED_IP_OFFERED_TOTAL._value.get()
@@ -201,7 +200,7 @@ class TestOffer:
         assert payload.i18n_key == "ntf-dedicated-ip-offer"
         assert payload.auto_delete_after is None
         buttons = [b for row in payload.reply_markup.inline_keyboard for b in row]
-        assert len(buttons) == 3
+        assert len(buttons) == 2
         assert REF in billing.claims
         assert DEDICATED_IP_OFFERED_TOTAL._value.get() == before + 1
 
@@ -688,7 +687,7 @@ class TestSubscriptionScreen:
 
         payload = ntf.notify_user.await_args.kwargs["payload"]
         assert payload.i18n_key == "ntf-dedicated-ip-pick"
-        assert len(payload.reply_markup.inline_keyboard) == 3
+        assert len(payload.reply_markup.inline_keyboard) == 2
         assert REF in billing.claims
 
     async def test_button_survives_billing_errors(self):

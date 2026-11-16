@@ -267,9 +267,12 @@ def get_source_survey_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+OFFERED_DEDICATED_IP_COUNTRIES = (DedicatedIpCountry.SE, DedicatedIpCountry.NL)
+
+
 def get_dedicated_ip_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for country in DedicatedIpCountry:
+    for country in OFFERED_DEDICATED_IP_COUNTRIES:
         builder.row(
             InlineKeyboardButton(
                 text=f"btn-dedicated-ip-{country.value.lower()}",
