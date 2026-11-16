@@ -1,3 +1,4 @@
+from aiogram import Bot
 from dishka import AsyncContainer
 from loguru import logger
 
@@ -55,6 +56,7 @@ class SubscriptionExpiredConsumer(SupervisedKafkaConsumer):
                 await flag_release_after_expiry(
                     telegram_id=int(telegram_id),
                     billing=await request_container.get(BillingClient),
+                    bot=await request_container.get(Bot),
                     config=await request_container.get(AppConfig),
                 )
         except Exception:

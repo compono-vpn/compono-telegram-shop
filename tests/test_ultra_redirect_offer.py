@@ -1,3 +1,4 @@
+from aiogram import Bot
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -9,6 +10,7 @@ from src.services.notification import NotificationService
 from src.services.user import UserService
 
 CONFIG = MagicMock()
+BOT = MagicMock()
 
 
 def _consumer(billing, user_service, notification_service) -> UserNotificationConsumer:
@@ -18,6 +20,7 @@ def _consumer(billing, user_service, notification_service) -> UserNotificationCo
         UserService: user_service,
         NotificationService: notification_service,
         AppConfig: CONFIG,
+        Bot: BOT,
     }
 
     @asynccontextmanager
@@ -54,6 +57,7 @@ async def test_paid_subscription_redirect_offers_the_ultra_country():
         billing=billing,
         notification_service=notification_service,
         config=CONFIG,
+        bot=BOT,
     )
 
 

@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+from html import escape
 from typing import Any, Optional
 
+from aiogram import Bot
 from loguru import logger
 
 from src.bot.keyboards import get_dedicated_ip_keyboard
@@ -68,27 +70,74 @@ def provision_command(
     return f"{PROVISION_SCRIPT} {action} {telegram_id}{suffix}"
 
 
-async def post_ip_card(
-    config: AppConfig,
+COUNTRY_LABELS = {
+    DedicatedIpCountry.LT: "🇱🇹 Литва",
+    DedicatedIpCountry.SE: "🇸🇪 Швеция",
+    DedicatedIpCountry.NL: "🇳🇱 Нидерланды",
+}
+
+
+def support_task_text(
     *,
-    telegram_id: int,
     title: str,
     summary: str,
+    telegram_id: int,
+    username: Optional[str],
+    country: Optional[DedicatedIpCountry],
+    command: str,
+    subscription_id: Optional[int] = None,
+) -> str:
+    who = f"@{escape(username)} · " if username else ""
+    lines = [
+        f"🌐 <b>{escape(title)}</b>",
+        "",
+        f"Клиент: {who}<code>{telegram_id}</code>",
+        f"Страна: {COUNTRY_LABELS.get(country, '—') if country else '—'}",
+    ]
+    if subscription_id:
+        lines.append(f"Подписка: <code>{subscription_id}</code>")
+    lines += ["", escape(summary), "", f"<code>{escape(command)}</code>"]
+    return "\n".join(lines)
+
+
+async def send_ip_task(
+    bot: Bot,
+    config: AppConfig,
+    *,
+    title: str,
+    summary: str,
+    telegram_id: int,
     command: str,
     country: Optional[DedicatedIpCountry],
-    extra: Optional[dict[str, Any]] = None,
+    username: Optional[str] = None,
+    subscription_id: Optional[int] = None,
 ) -> bool:
-    details: dict[str, Any] = {
-        "telegram_id": telegram_id,
-        "country": country.value if country else "none",
-        **(extra or {}),
-        "command": command,
-    }
+    text = support_task_text(
+        title=title,
+        summary=summary,
+        telegram_id=telegram_id,
+        username=username,
+        country=country,
+        command=command,
+        subscription_id=subscription_id,
+    )
+    try:
+        await bot.send_message(
+            chat_id=config.bot.support_chat_id,
+            text=text,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+        return True
+    except Exception:
+        logger.opt(exception=True).warning(
+            f"Could not DM support about the dedicated IP of '{telegram_id}', using the ops card"
+        )
     return await post_ops_event(
         config,
         title=title,
         summary=summary,
-        details=details,
+        details={"telegram_id": str(telegram_id), "command": command},
         key=f"compono-ultra-ip:{telegram_id}",
     )
 
@@ -97,6 +146,7 @@ async def flag_release_after_expiry(
     *,
     telegram_id: int,
     billing: BillingClient,
+    bot: Bot,
     config: AppConfig,
 ) -> bool:
     country = await get_choice(billing, telegram_id)
@@ -105,11 +155,12 @@ async def flag_release_after_expiry(
     current = await billing.get_current_subscription(telegram_id)
     if is_active_ultra_billing_subscription(current):
         return False
-    return await post_ip_card(
+    return await send_ip_task(
+        bot,
         config,
+        title="Ультра закончился: снять IP",
+        summary="Подписка закончилась. Снимите выделенный IP.",
         telegram_id=telegram_id,
-        title=f"Ultra ended: release IP {country.value}",
-        summary=f"Ultra for {telegram_id} expired. Release the dedicated IP.",
         command=provision_command("remove", telegram_id),
         country=country,
     )
@@ -117,21 +168,21 @@ async def flag_release_after_expiry(
 
 async def flag_check_after_renewal(
     *,
-    telegram_id: int,
+    user: UserDto,
     country: DedicatedIpCountry,
+    bot: Bot,
     config: AppConfig,
 ) -> bool:
-    return await post_ip_card(
+    return await send_ip_task(
+        bot,
         config,
-        telegram_id=telegram_id,
-        title=f"Ultra paid again: check IP {country.value}",
-        summary=(
-            f"Ultra client {telegram_id} paid again. If the IP was released, add it back; "
-            "otherwise verify it."
-        ),
+        title="Ультра оплачен снова: проверить IP",
+        summary="Проверьте выделенный IP. Если его сняли, подключите заново.",
+        telegram_id=user.telegram_id,
+        username=user.username,
         command=(
-            f"{provision_command('verify', telegram_id)} || "
-            f"{provision_command('add', telegram_id, country)}"
+            f"{provision_command('verify', user.telegram_id)} || "
+            f"{provision_command('add', user.telegram_id, country)}"
         ),
         country=country,
     )
@@ -176,6 +227,7 @@ async def offer_country_choice(
     billing: BillingClient,
     notification_service: NotificationService,
     config: Optional[AppConfig] = None,
+    bot: Optional[Bot] = None,
 ) -> bool:
     if not is_ultra_tag(plan_tag):
         return False
@@ -183,10 +235,8 @@ async def offer_country_choice(
     try:
         chosen = await get_choice(billing, user.telegram_id)
         if chosen is not None:
-            if config is not None:
-                await flag_check_after_renewal(
-                    telegram_id=user.telegram_id, country=chosen, config=config
-                )
+            if config is not None and bot is not None:
+                await flag_check_after_renewal(user=user, country=chosen, bot=bot, config=config)
             return False
         sent = await send_country_prompt(
             user=user,

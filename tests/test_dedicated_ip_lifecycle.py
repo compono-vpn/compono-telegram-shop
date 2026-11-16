@@ -46,44 +46,58 @@ class TestActiveUltra:
 class TestReleaseAfterExpiry:
     async def test_expired_ultra_with_ip_posts_remove_card(self):
         billing = _billing("NL", _sub(status="EXPIRED", days=-1))
+        bot = MagicMock(send_message=AsyncMock())
+        config = MagicMock()
+        config.bot.support_chat_id = 7504773334
+        assert await flag_release_after_expiry(
+            telegram_id=42, billing=billing, bot=bot, config=config
+        )
+        kwargs = bot.send_message.await_args.kwargs
+        assert kwargs["chat_id"] == 7504773334
+        assert "<code>tools/compono-dedicated-ip.sh remove 42</code>" in kwargs["text"]
+        assert "🇳🇱 Нидерланды" in kwargs["text"]
+
+    async def test_dm_failure_falls_back_to_ops_card(self):
+        billing = _billing("NL", _sub(status="EXPIRED", days=-1))
+        bot = MagicMock(send_message=AsyncMock(side_effect=RuntimeError("blocked")))
         with patch.object(dedicated_ip, "post_ops_event", new=AsyncMock(return_value=True)) as post:
             assert await flag_release_after_expiry(
-                telegram_id=42, billing=billing, config=MagicMock()
+                telegram_id=42, billing=billing, bot=bot, config=MagicMock()
             )
-        kwargs = post.await_args.kwargs
-        assert kwargs["details"]["command"] == "tools/compono-dedicated-ip.sh remove 42"
-        assert kwargs["key"] == "compono-ultra-ip:42"
+        assert post.await_args.kwargs["details"]["telegram_id"] == "42"
 
     async def test_no_country_no_card(self):
         billing = _billing(None, _sub(status="EXPIRED", days=-1))
-        with patch.object(dedicated_ip, "post_ops_event", new=AsyncMock()) as post:
-            assert not await flag_release_after_expiry(
-                telegram_id=42, billing=billing, config=MagicMock()
-            )
-        post.assert_not_awaited()
+        bot = MagicMock(send_message=AsyncMock())
+        assert not await flag_release_after_expiry(
+            telegram_id=42, billing=billing, bot=bot, config=MagicMock()
+        )
+        bot.send_message.assert_not_awaited()
 
     async def test_already_renewed_no_card(self):
         billing = _billing("SE", _sub())
-        with patch.object(dedicated_ip, "post_ops_event", new=AsyncMock()) as post:
-            assert not await flag_release_after_expiry(
-                telegram_id=42, billing=billing, config=MagicMock()
-            )
-        post.assert_not_awaited()
+        bot = MagicMock(send_message=AsyncMock())
+        assert not await flag_release_after_expiry(
+            telegram_id=42, billing=billing, bot=bot, config=MagicMock()
+        )
+        bot.send_message.assert_not_awaited()
 
 
 class TestRepeatPayment:
     async def test_saved_country_posts_check_card_and_no_prompt(self):
         billing = _billing("SE", _sub())
         ntf = MagicMock(notify_user=AsyncMock())
-        with patch.object(dedicated_ip, "post_ops_event", new=AsyncMock(return_value=True)) as post:
-            sent = await offer_country_choice(
-                user=SimpleNamespace(telegram_id=7),
-                plan_tag="ULTRA",
-                billing=billing,
-                notification_service=ntf,
-                config=MagicMock(),
-            )
+        bot = MagicMock(send_message=AsyncMock())
+        sent = await offer_country_choice(
+            user=SimpleNamespace(telegram_id=7, username="anna"),
+            plan_tag="ULTRA",
+            billing=billing,
+            notification_service=ntf,
+            config=MagicMock(),
+            bot=bot,
+        )
         assert sent is False
         ntf.notify_user.assert_not_called()
-        command = post.await_args.kwargs["details"]["command"]
-        assert "verify 7" in command and f"add 7 {DedicatedIpCountry.SE.value}" in command
+        text = bot.send_message.await_args.kwargs["text"]
+        assert "verify 7" in text and f"add 7 {DedicatedIpCountry.SE.value}" in text
+        assert "@anna" in text

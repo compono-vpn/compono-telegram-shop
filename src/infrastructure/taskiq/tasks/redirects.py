@@ -82,6 +82,7 @@ async def redirect_to_successed_payment_task(
         billing=billing,
         notification_service=notification_service,
         config=config,
+        bot=bot,
     )
     await offer_source_survey(user=user, billing=billing, notification_service=notification_service)
 

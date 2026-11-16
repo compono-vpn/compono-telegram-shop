@@ -1,4 +1,4 @@
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
@@ -19,37 +19,36 @@ from src.services.dedicated_ip import (
     KIND,
     get_choice,
     is_active_ultra_billing_subscription,
+    send_ip_task,
 )
-from src.services.ops_notify import post_ops_event
+from src.services.dedicated_ip import provision_command as _command
 
 router = Router(name=__name__)
 
 _LOCK_TTL = 60
-_PROVISION_SCRIPT = "tools/compono-dedicated-ip.sh"
 
 
 def provision_command(telegram_id: int, country: DedicatedIpCountry) -> str:
-    return f"{_PROVISION_SCRIPT} add {telegram_id} {country.value}"
+    return _command("add", telegram_id, country)
 
 
 async def _post_card(
+    bot: Bot,
     config: AppConfig,
     user: UserDto,
     subscription_id: int,
     country: DedicatedIpCountry,
 ) -> None:
-    await post_ops_event(
+    await send_ip_task(
+        bot,
         config,
-        title=f"Ultra dedicated IP: {country.value}",
-        summary=f"Ultra client {user.telegram_id} chose {country.value}. Provision the IP.",
-        details={
-            "telegram_id": user.telegram_id,
-            "username": f"@{user.username}" if user.username else "none",
-            "subscription_id": subscription_id,
-            "country": country.value,
-            "command": provision_command(user.telegram_id, country),
-        },
-        key=f"compono-ultra-ip:{user.telegram_id}",
+        title="Ультра: подключить выделенный IP",
+        summary="Клиент выбрал страну. Подключите IP и напишите клиенту, какой сервер выбрать.",
+        telegram_id=user.telegram_id,
+        username=user.username,
+        subscription_id=subscription_id,
+        command=provision_command(user.telegram_id, country),
+        country=country,
     )
 
 
@@ -113,7 +112,7 @@ async def on_dedicated_ip_country(
     DEDICATED_IP_CHOSEN_TOTAL.labels(country=country.value).inc()
     logger.info(f"{log(user)} Chose the dedicated IP country: {country.value}")
 
-    await _post_card(config, user, subscription.ID, country)
+    await _post_card(callback.bot, config, user, subscription.ID, country)
 
     if isinstance(callback.message, Message):
         await callback.message.edit_text(

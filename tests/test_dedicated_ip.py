@@ -438,7 +438,7 @@ class TestCountryCallback:
         callback = _callback(f"{DEDICATED_IP_PREFIX}LT")
         before = DEDICATED_IP_CHOSEN_TOTAL.labels(country="LT")._value.get()
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock()) as post:
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock()) as post:
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(callback, _user(), make_i18n(), billing, _redis(), _config())
 
@@ -448,14 +448,12 @@ class TestCountryCallback:
         )
         assert DEDICATED_IP_CHOSEN_TOTAL.labels(country="LT")._value.get() == before + 1
         post.assert_awaited_once()
-        details = post.await_args.kwargs["details"]
-        assert details == {
-            "telegram_id": TG,
-            "username": "@anna",
-            "subscription_id": 901,
-            "country": "LT",
-            "command": f"tools/compono-dedicated-ip.sh add {TG} LT",
-        }
+        kwargs = post.await_args.kwargs
+        assert kwargs["telegram_id"] == TG
+        assert kwargs["username"] == "anna"
+        assert kwargs["subscription_id"] == 901
+        assert kwargs["country"] == DedicatedIpCountry.LT
+        assert kwargs["command"] == f"tools/compono-dedicated-ip.sh add {TG} LT"
 
     @pytest.mark.parametrize("code", ["LT", "SE", "NL"])
     async def test_every_country_builds_the_provisioning_command(self, code):
@@ -467,7 +465,7 @@ class TestCountryCallback:
         billing = Billing(_ultra_billing_subscription())
         billing.claims[REF] = None
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock()) as post:
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock()) as post:
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(
                 _callback(f"{DEDICATED_IP_PREFIX}SE"),
@@ -478,13 +476,13 @@ class TestCountryCallback:
                 _config(),
             )
 
-        assert post.await_args.kwargs["details"]["username"] == "none"
+        assert post.await_args.kwargs["username"] is None
 
     async def test_pick_without_a_prompt_row_still_saves(self):
         billing = Billing(_ultra_billing_subscription())
         callback = _callback(f"{DEDICATED_IP_PREFIX}NL")
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock()):
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock()):
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(callback, _user(), make_i18n(), billing, _redis(), _config())
 
@@ -495,7 +493,7 @@ class TestCountryCallback:
         billing.claims[REF] = "LT"
         callback = _callback(f"{DEDICATED_IP_PREFIX}SE")
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock()) as post:
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock()) as post:
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(callback, _user(), make_i18n(), billing, _redis(), _config())
 
@@ -509,7 +507,7 @@ class TestCountryCallback:
         billing.claims[REF] = None
         callback = _callback(f"{DEDICATED_IP_PREFIX}SE")
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock()) as post:
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock()) as post:
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(callback, _user(), make_i18n(), billing, _redis(locked=True), _config())
 
@@ -524,7 +522,7 @@ class TestCountryCallback:
         billing = Billing(subscription)
         callback = _callback(f"{DEDICATED_IP_PREFIX}LT")
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock()) as post:
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock()) as post:
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(callback, _user(), make_i18n(), billing, _redis(), _config())
 
@@ -550,7 +548,7 @@ class TestCountryCallback:
         redis = _redis()
         callback = _callback(f"{DEDICATED_IP_PREFIX}LT")
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock()) as post:
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock()) as post:
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(callback, _user(), make_i18n(), billing, redis, _config())
 
@@ -563,7 +561,7 @@ class TestCountryCallback:
         billing.claims[REF] = None
         callback = _callback(f"{DEDICATED_IP_PREFIX}LT")
 
-        with patch.object(dedicated_ip_router, "post_ops_event", new=AsyncMock(return_value=False)):
+        with patch.object(dedicated_ip_router, "send_ip_task", new=AsyncMock(return_value=False)):
             raw = unwrap_inject(on_dedicated_ip_country)
             await raw(callback, _user(), make_i18n(), billing, _redis(), _config())
 

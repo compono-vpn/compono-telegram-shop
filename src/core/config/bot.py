@@ -14,6 +14,7 @@ class BotConfig(BaseConfig, env_prefix="BOT_"):
     secret_token: SecretStr
     dev_id: int
     support_username: SecretStr
+    support_chat_id: int = 7504773334
     mini_app: Union[bool, SecretStr] = False
     channel_address: Optional[str] = None
     api_server: Optional[str] = None

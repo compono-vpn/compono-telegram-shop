@@ -111,11 +111,12 @@ EXPIRED/DISABLED/DELETED and `ExpireAt` is in the future.
   VPN client (those are the Remnawave host remarks); the Direct entry keeps the shared exit IP. After the choice the bot
   says it will write when the IP works; that message is sent by whoever runs the tool.
 - **Storage.** Billing `user_reminders`: kind `DEDICATED_IP`, dedup key `v1`, `answer` = country. First answer wins.
-- **Owner cards** (notify.bdtfs.com `/v1/event`, source `compono`, topic General, one card per user, key
-  `compono-ultra-ip:<telegram_id>`, so later events edit the same card): country chosen → `add` command; Ultra paid again
-  with a saved country → `verify … || add …`; billing `subscription.expired` for a user with a saved country who no longer
-  has active Ultra → `remove` command (`SubscriptionExpiredConsumer._flag_dedicated_ip`). Env `APP_NOTIFY_URL`,
-  `APP_NOTIFY_TOKEN` (Vault `kv/compono-shop-prod-env`).
+- **Support DM.** Each step is a message from @compono_bot to the @compono_support account (`BOT_SUPPORT_CHAT_ID`,
+  default 7504773334; that account has started the bot) with the client, country and the tool command in `<code>`:
+  country chosen → `add`; Ultra paid again with a saved country → `verify … || add …`; billing `subscription.expired`
+  for a user with a saved country who no longer has active Ultra → `remove` (`SubscriptionExpiredConsumer._flag_dedicated_ip`).
+  If the DM fails (support blocked the bot), the same step goes to notify.bdtfs.com General as before (`APP_NOTIFY_URL`,
+  `APP_NOTIFY_TOKEN`).
 - **Profile.** «🌐 Выделенный IP» on the Subscription screen (Ultra users only) sends the saved country and its server
   name, or the country prompt when nothing is saved (also covers users granted Ultra by hand).
 - Not covered: web buyers without Telegram get no country prompt; a plan change from Ultra to another plan sends no card
