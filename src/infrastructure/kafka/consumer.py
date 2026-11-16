@@ -167,6 +167,7 @@ class UserNotificationConsumer(SupervisedKafkaConsumer):
                         plan_tag=plan_tag,
                         billing=billing,
                         notification_service=notification_service,
+                        config=await request_container.get(AppConfig),
                     )
         except Exception:
             logger.opt(exception=True).warning(

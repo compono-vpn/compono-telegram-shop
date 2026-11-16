@@ -98,23 +98,25 @@ own poller finishes the payment if the chain is slower. Stage receiving wallet: 
 
 ## Ultra dedicated IP (COM-196, 2026-11-16)
 
-Billing plan 38 «👑 Ультра» (tag `ULTRA`, hidden while `is_active=false`) is Макс plus a personal outgoing IP in
-Lithuania, Sweden or the Netherlands, set up by hand with `tools/compono-dedicated-ip.sh add <telegram_id> <LT|SE|NL>`.
-The shop never matches the plan id, only the tag (`services/dedicated_ip.py` `is_ultra_tag`).
+Billing plan 38 «👑 Ультра» (tag `ULTRA`, live since 2026-11-16) is Макс plus a personal outgoing IP in Sweden or the
+Netherlands (Lithuania is hidden: `OFFERED_DEDICATED_IP_COUNTRIES` in `src/bot/keyboards.py`), set up by hand with
+`tools/compono-dedicated-ip.sh add <telegram_id> <SE|NL>`. The shop never matches the plan id, only the tag
+(`services/dedicated_ip.py` `is_ultra_tag`). Ultra counts as active only while its billing status is not
+EXPIRED/DISABLED/DELETED and `ExpireAt` is in the future.
 
-- **Prompt.** `purchase_subscription_task` passes `plan_tag` to `redirect_to_successed_payment_task` only when the
-  plan is Ultra (other plans keep the old call shape, so a rolling deploy cannot break their success screen). After the
-  success screen the task sends «Тариф Ультра активирован! Выберите страну…» with three buttons (`dip:LT|SE|NL`),
-  for NEW, CHANGE and RENEW alike, unless a country is already saved.
-- **Storage.** The shop has no SQL database of its own, so the choice lives in billing's durable `user_reminders`
-  (same table as the source survey): kind `DEDICATED_IP`, dedup key `v1`, `answer` = `LT|SE|NL`. A row without an
-  answer means "asked, not answered". The first answer wins; later taps and stale buttons only say "already chosen".
-- **Owner card.** After the answer is stored the shop posts one card to notify.bdtfs.com `/v1/event` (source
-  `compono`, topic General, key `compono-ultra-ip:<telegram_id>`) with telegram id, @username, subscription id,
-  country and the provisioning command. Env `APP_NOTIFY_URL` and `APP_NOTIFY_TOKEN` (Vault
-  `kv/compono-shop-prod-env`); without them the card is skipped and logged, the choice is still saved. The shop's
-  other admin cards (`system_notify`) DM the owner and are not used here.
-- **Profile.** «🌐 Выделенный IP» on the Subscription screen (Ultra users only) sends the saved country, or the
-  three-button prompt when nothing is saved (also covers users granted Ultra by hand).
-- Not covered: billing tg_proxies row 10 (`stable.compono.online`) lists `eligible_plan_ids {1,2,3}`, so Ultra
-  users get no paid proxy until plan 38 is added there.
+- **Prompt.** After a paid Ultra payment (Kafka `subscription_success` redirect and the taskiq success task) the bot sends
+  «Тариф Ультра активирован! Выберите страну…» with one button per offered country (`dip:SE|NL`), unless a country is
+  already saved.
+- **Texts name no app.** The IP works on the «🇸🇪 Sweden · Белый список» / «🇳🇱 Netherlands · Белый список» server in any
+  VPN client (those are the Remnawave host remarks); the Direct entry keeps the shared exit IP. After the choice the bot
+  says it will write when the IP works; that message is sent by whoever runs the tool.
+- **Storage.** Billing `user_reminders`: kind `DEDICATED_IP`, dedup key `v1`, `answer` = country. First answer wins.
+- **Owner cards** (notify.bdtfs.com `/v1/event`, source `compono`, topic General, one card per user, key
+  `compono-ultra-ip:<telegram_id>`, so later events edit the same card): country chosen → `add` command; Ultra paid again
+  with a saved country → `verify … || add …`; billing `subscription.expired` for a user with a saved country who no longer
+  has active Ultra → `remove` command (`SubscriptionExpiredConsumer._flag_dedicated_ip`). Env `APP_NOTIFY_URL`,
+  `APP_NOTIFY_TOKEN` (Vault `kv/compono-shop-prod-env`).
+- **Profile.** «🌐 Выделенный IP» on the Subscription screen (Ultra users only) sends the saved country and its server
+  name, or the country prompt when nothing is saved (also covers users granted Ultra by hand).
+- Not covered: web buyers without Telegram get no country prompt; a plan change from Ultra to another plan sends no card
+  until that subscription expires.

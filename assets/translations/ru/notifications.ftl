@@ -321,7 +321,7 @@ ntf-dedicated-ip-offer = 🎉 Тариф Ультра активирован! В
 
 ntf-dedicated-ip-pick = 🌐 Выберите страну для вашего выделенного IP:
 
-ntf-dedicated-ip-accepted = Принято! Настроим ваш выделенный IP в течение 24 часов и напишем вам, что нажать в Happ.
+ntf-dedicated-ip-accepted = Принято! Подключим ваш выделенный IP в течение 24 часов и пришлём сообщение, когда он заработает.
 
 ntf-dedicated-ip-current =
     🌐 <b>Выделенный IP:</b> { $country ->
@@ -330,7 +330,11 @@ ntf-dedicated-ip-current =
         *[NL] 🇳🇱 Нидерланды
     }
 
-    Настраиваем его и напишем вам, что нажать в Happ.
+    Он работает на сервере «{ $country ->
+        [LT] 🇱🇹 Lithuania
+        [SE] 🇸🇪 Sweden
+        *[NL] 🇳🇱 Netherlands
+    } · Белый список» в любом VPN-приложении. Если мы ещё не написали, что IP подключён, значит подключаем: это занимает до 24 часов.
 
 ntf-event-source-survey =
     #EventSourceSurvey

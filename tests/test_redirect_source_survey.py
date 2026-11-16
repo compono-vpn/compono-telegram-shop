@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from aiogram import Bot
 from aiogram_dialog import BgManagerFactory
 
+from src.core.config import AppConfig
 from src.core.enums import PurchaseType
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.tasks.redirects import redirect_to_successed_payment_task
@@ -41,6 +42,7 @@ async def _run(user, purchase_type, factory, billing, ntf):
         BgManagerFactory: factory,
         BillingClient: billing,
         NotificationService: ntf,
+        AppConfig: MagicMock(),
     }
     container = AsyncMock()
     container.get.side_effect = lambda dependency, **kwargs: deps[dependency]

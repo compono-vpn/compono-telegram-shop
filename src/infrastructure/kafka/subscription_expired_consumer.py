@@ -5,6 +5,7 @@ from src.core.config import AppConfig
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.kafka.base_consumer import SupervisedKafkaConsumer
 from src.infrastructure.taskiq.tasks.expiry_notifications import notify_subscription_expired
+from src.services.dedicated_ip import flag_release_after_expiry
 from src.services.notification import NotificationService
 from src.services.settings import SettingsService
 from src.services.subscription import SubscriptionService
@@ -43,3 +44,20 @@ class SubscriptionExpiredConsumer(SupervisedKafkaConsumer):
             f"Expired event for user {payload.get('telegram_id')} "
             f"subscription {payload.get('subscription_id')}: notice sent={sent}"
         )
+        await self._flag_dedicated_ip(payload)
+
+    async def _flag_dedicated_ip(self, payload: dict) -> None:
+        telegram_id = payload.get("telegram_id")
+        if not telegram_id:
+            return
+        try:
+            async with self._container() as request_container:
+                await flag_release_after_expiry(
+                    telegram_id=int(telegram_id),
+                    billing=await request_container.get(BillingClient),
+                    config=await request_container.get(AppConfig),
+                )
+        except Exception:
+            logger.opt(exception=True).warning(
+                f"Could not check the dedicated IP after expiry for {telegram_id}"
+            )

@@ -5,6 +5,7 @@ from aiogram_dialog import BgManagerFactory, ShowMode, StartMode
 from dishka.integrations.taskiq import FromDishka, inject
 
 from src.bot.states import MainMenu, Subscription
+from src.core.config import AppConfig
 from src.core.enums import PurchaseType
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.taskiq.broker import broker
@@ -61,6 +62,7 @@ async def redirect_to_successed_payment_task(
     bg_manager_factory: FromDishka[BgManagerFactory],
     billing: FromDishka[BillingClient],
     notification_service: FromDishka[NotificationService],
+    config: FromDishka[AppConfig],
     plan_tag: Optional[str] = None,
 ) -> None:
     bg_manager = bg_manager_factory.bg(
@@ -79,6 +81,7 @@ async def redirect_to_successed_payment_task(
         plan_tag=plan_tag,
         billing=billing,
         notification_service=notification_service,
+        config=config,
     )
     await offer_source_survey(user=user, billing=billing, notification_service=notification_service)
 

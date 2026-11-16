@@ -321,6 +321,7 @@ async def _run_redirect(user, purchase_type, factory, billing, ntf, **extra):
         BgManagerFactory: factory,
         BillingClient: billing,
         NotificationService: ntf,
+        AppConfig: MagicMock(),
     }
     container = AsyncMock()
     container.get.side_effect = lambda dependency, **kwargs: deps[dependency]
@@ -710,9 +711,22 @@ class TestTranslations:
             "🎉 Тариф Ультра активирован! Выберите страну для вашего выделенного IP:"
         )
         assert i18n.get("ntf-dedicated-ip-accepted") == (
-            "Принято! Настроим ваш выделенный IP в течение 24 часов "
-            "и напишем вам, что нажать в Happ."
+            "Принято! Подключим ваш выделенный IP в течение 24 часов "
+            "и пришлём сообщение, когда он заработает."
         )
+
+    def test_no_app_is_named(self):
+        i18n = _translator()
+        for key in ("ntf-dedicated-ip-accepted", "ntf-dedicated-ip-offer", "ntf-dedicated-ip-pick"):
+            assert "Happ" not in i18n.get(key)
+        for code in ("SE", "NL"):
+            assert "Happ" not in i18n.get("ntf-dedicated-ip-current", country=code)
+
+    @pytest.mark.parametrize(
+        "code,server", [("SE", "🇸🇪 Sweden · Белый список"), ("NL", "🇳🇱 Netherlands · Белый список")]
+    )
+    def test_current_names_the_server(self, code, server):
+        assert server in _translator().get("ntf-dedicated-ip-current", country=code)
 
     def test_button_labels(self):
         i18n = _translator()
@@ -775,4 +789,7 @@ class TestFourthPlanOnThePlanScreen:
         assert data["plans"][3]["name"] == "👑 Ультра"
         lines = [re.sub(r"\s", " ", line) for line in data["summary"].split("\n")]
         assert lines[2] == "💎 Макс — 499 ₽/мес · 1 024 ГБ, 20 устройств"
-        assert lines[3] == "👑 Ультра — 799 ₽/мес · 1 024 ГБ, 20 устройств, 🌐 личный IP (Швеция или Нидерланды)"
+        assert (
+            lines[3]
+            == "👑 Ультра — 799 ₽/мес · 1 024 ГБ, 20 устройств, 🌐 личный IP (Швеция или Нидерланды)"
+        )
