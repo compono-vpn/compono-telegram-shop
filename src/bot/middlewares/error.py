@@ -1,6 +1,7 @@
 import traceback
 from typing import Any, Awaitable, Callable, Optional, cast
 
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import ErrorEvent, TelegramObject
 from aiogram.types import User as AiogramUser
 from aiogram.utils.formatting import Text
@@ -25,6 +26,23 @@ from src.services.notification import NotificationService
 from src.services.user import UserService
 
 from .base import EventTypedMiddleware
+
+_STALE_CALLBACK_MARKERS = (
+    "query is too old",
+    "query id is invalid",
+)
+
+
+def is_stale_callback_error(error: BaseException) -> bool:
+    """Telegram refused answerCallbackQuery because the query expired or was already answered.
+
+    The handler has usually done its work by then; the user only misses the spinner stop, so this
+    is not worth an admin alert or a forced jump back to the main menu.
+    """
+    if not isinstance(error, TelegramBadRequest):
+        return False
+    text = str(error).lower()
+    return any(marker in text for marker in _STALE_CALLBACK_MARKERS)
 
 
 class ErrorMiddleware(EventTypedMiddleware):
@@ -51,6 +69,15 @@ class ErrorMiddleware(EventTypedMiddleware):
             return await handler(event, data)
 
         error = error_event.exception
+
+        if is_stale_callback_error(error):
+            ERRORS_TOTAL.labels(error_type="StaleCallbackQuery", source="bot").inc()
+            logger.warning(
+                f"Ignoring stale callback answer for user "
+                f"'{aiogram_user.id if aiogram_user else None}': {error}"
+            )
+            return None
+
         error_type_name = type(error).__name__
         ERRORS_TOTAL.labels(error_type=error_type_name, source="bot").inc()
         traceback_str = traceback.format_exc()
