@@ -9,7 +9,7 @@ from src.core.utils.time import MSK
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.models import BillingTGProxy
 
-PAID_PROXY_PLAN_IDS = frozenset({1, 2, 3})
+PAID_PROXY_PLAN_IDS = frozenset({1, 2, 3, 38})
 SOURCE_VPN_PLAN = "vpn_plan"
 SOURCE_PROXY_PLAN = "proxy_plan"
 STRIKETHROUGH_PRICE_RUB = 49
