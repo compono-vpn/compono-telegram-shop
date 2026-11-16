@@ -33,6 +33,7 @@ def setup_routers(router: Router) -> None:
         extra.goto.router,
         extra.cancel_survey.router,
         extra.source_survey.router,
+        extra.dedicated_ip.router,
         extra.setup_checkin.router,
         #
         menu.handlers.router,

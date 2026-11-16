@@ -1,6 +1,7 @@
 from . import (
     cancel_survey,
     commands,
+    dedicated_ip,
     error,
     goto,
     member,
@@ -16,6 +17,7 @@ from . import (
 __all__ = [
     "cancel_survey",
     "commands",
+    "dedicated_ip",
     "error",
     "goto",
     "member",

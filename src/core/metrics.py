@@ -171,6 +171,17 @@ SOURCE_SURVEY_ANSWERS_TOTAL = Counter(
     ["answer"],
 )
 
+DEDICATED_IP_OFFERED_TOTAL = Counter(
+    "bot_dedicated_ip_offered_total",
+    "Country prompts for the Ultra dedicated IP sent after a payment",
+)
+
+DEDICATED_IP_CHOSEN_TOTAL = Counter(
+    "bot_dedicated_ip_chosen_total",
+    "Dedicated IP country choices, by country",
+    ["country"],
+)
+
 
 def start_metrics_server(port: int) -> None:
     """Expose the process-local Prometheus registry over HTTP.

@@ -35,6 +35,7 @@ from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey_check
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
+from src.services.dedicated_ip import get_choice, send_country_prompt
 from src.services.experiment import ExperimentService
 from src.services.notification import NotificationService
 from src.services.payment_nudge import format_price_text, schedule_payment_nudge
@@ -907,3 +908,36 @@ async def on_trial_monthly_upgrade(
         }
     )
     await dialog_manager.switch_to(state=Subscription.PAYMENT_METHOD)
+
+
+@inject
+async def on_dedicated_ip(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    billing: FromDishka[BillingClient],
+    notification_service: FromDishka[NotificationService],
+) -> None:
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    dialog_manager.show_mode = ShowMode.NO_UPDATE
+    try:
+        chosen = await get_choice(billing, user.telegram_id)
+        if chosen is not None:
+            await notification_service.notify_user(
+                user=user,
+                payload=MessagePayload(
+                    i18n_key="ntf-dedicated-ip-current",
+                    i18n_kwargs={"country": chosen.value},
+                    auto_delete_after=None,
+                    add_close_button=True,
+                ),
+            )
+            return
+        await send_country_prompt(
+            user=user,
+            billing=billing,
+            notification_service=notification_service,
+            i18n_key="ntf-dedicated-ip-pick",
+        )
+    except Exception:
+        logger.opt(exception=True).warning(f"{log(user)} Could not open the dedicated IP screen")

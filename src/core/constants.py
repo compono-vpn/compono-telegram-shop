@@ -34,6 +34,7 @@ SETUP_CHECKIN_PREFIX: Final[str] = "sck:"
 SOURCE_SURVEY_PREFIX: Final[str] = "sq:"
 PAYMENT_NUDGE_PREFIX: Final[str] = "pn:"
 RECOVERY_OFFER_PREFIX: Final[str] = "ro:"
+DEDICATED_IP_PREFIX: Final[str] = "dip:"
 
 IMPORTED_TAG: Final[str] = "IMPORTED"
 

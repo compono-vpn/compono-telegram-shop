@@ -12,6 +12,7 @@ from src.bot.states import DashboardUser, MainMenu, Subscription
 from src.bot.widgets.i18n_format import I18nFormat
 from src.core.constants import (
     CANCEL_SURVEY_PREFIX,
+    DEDICATED_IP_PREFIX,
     GOTO_PREFIX,
     PAYMENT_NUDGE_PREFIX,
     PURCHASE_PREFIX,
@@ -23,6 +24,7 @@ from src.core.constants import (
 )
 from src.core.enums import (
     CancelSurveyReason,
+    DedicatedIpCountry,
     PurchaseType,
     SetupCheckinAnswer,
     SourceSurveyAnswer,
@@ -260,6 +262,18 @@ def get_source_survey_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=f"btn-source-survey-{answer.value.lower().replace('_', '-')}",
                 callback_data=f"{SOURCE_SURVEY_PREFIX}{answer.value}",
+            )
+        )
+    return builder.as_markup()
+
+
+def get_dedicated_ip_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for country in DedicatedIpCountry:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"btn-dedicated-ip-{country.value.lower()}",
+                callback_data=f"{DEDICATED_IP_PREFIX}{country.value}",
             )
         )
     return builder.as_markup()

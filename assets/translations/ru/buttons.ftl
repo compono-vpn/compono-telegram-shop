@@ -441,6 +441,10 @@ btn-subscription-new = 💸 Купить подписку
 btn-subscription-renew = 🔄 Продлить
 btn-subscription-change = 🔃 Изменить
 btn-subscription-promocode = 🎟 Активировать промокод
+btn-subscription-dedicated-ip = 🌐 Выделенный IP
+btn-dedicated-ip-lt = 🇱🇹 Литва
+btn-dedicated-ip-se = 🇸🇪 Швеция
+btn-dedicated-ip-nl = 🇳🇱 Нидерланды
 btn-subscription-payment-method = { gateway-type } | { $has_discount ->
     [1] 🔥 { $price } { $currency }
     *[0] { $price } { $currency }

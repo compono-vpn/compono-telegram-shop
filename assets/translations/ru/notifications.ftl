@@ -317,6 +317,21 @@ ntf-source-survey-prompt =
 
     Один тап — так мы поймём, где рассказывать о Compono.
 
+ntf-dedicated-ip-offer = 🎉 Тариф Ультра активирован! Выберите страну для вашего выделенного IP:
+
+ntf-dedicated-ip-pick = 🌐 Выберите страну для вашего выделенного IP:
+
+ntf-dedicated-ip-accepted = Принято! Настроим ваш выделенный IP в течение 24 часов и напишем вам, что нажать в Happ.
+
+ntf-dedicated-ip-current =
+    🌐 <b>Выделенный IP:</b> { $country ->
+        [LT] 🇱🇹 Литва
+        [SE] 🇸🇪 Швеция
+        *[NL] 🇳🇱 Нидерланды
+    }
+
+    Настраиваем его и напишем вам, что нажать в Happ.
+
 ntf-event-source-survey =
     #EventSourceSurvey
 

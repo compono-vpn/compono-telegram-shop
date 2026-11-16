@@ -44,6 +44,9 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     billing_url: str = ""
     billing_internal_secret: SecretStr = SecretStr("")
 
+    notify_url: str = ""
+    notify_token: SecretStr = SecretStr("")
+
     kafka_brokers: str = "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
     kafka_topic_env: str = "stage"
     kafka_group_id: str = "compono-shop"

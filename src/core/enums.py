@@ -69,6 +69,12 @@ class SourceSurveyAnswer(UpperStrEnum):
     OTHER = auto()
 
 
+class DedicatedIpCountry(UpperStrEnum):
+    LT = auto()
+    SE = auto()
+    NL = auto()
+
+
 class SubscriptionStatus(UpperStrEnum):
     ACTIVE = auto()
     DISABLED = auto()

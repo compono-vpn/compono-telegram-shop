@@ -34,6 +34,7 @@ from src.models.dto import (
     TransactionDto,
     UserDto,
 )
+from src.services.dedicated_ip import is_ultra_tag
 from src.services.notification import NotificationService
 from src.services.plan import PlanService
 from src.services.referral import ReferralService
@@ -412,7 +413,8 @@ async def purchase_subscription_task(
 
         await _flush_pending_referral_rewards(referral_service, user.telegram_id)
 
-        await redirect_to_successed_payment_task.kiq(user, purchase_type)
+        redirect_extra = {"plan_tag": plan.tag} if is_ultra_tag(plan.tag) else {}
+        await redirect_to_successed_payment_task.kiq(user, purchase_type, **redirect_extra)
         logger.info(f"Purchase subscription task completed for user '{user.telegram_id}'")
 
     except Exception as exception:

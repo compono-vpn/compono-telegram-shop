@@ -76,6 +76,12 @@ class SourceSurveyAnsweredKey(StorageKey, prefix="source_survey_answered"):
     telegram_id: int
 
 
+class DedicatedIpChoiceKey(StorageKey, prefix="dedicated_ip_choice"):
+    """Collapses a double tap on a dedicated IP country button into one choice."""
+
+    telegram_id: int
+
+
 class PendingPaymentNudgesKey(StorageKey, prefix="pending_payment_nudge"): ...
 
 

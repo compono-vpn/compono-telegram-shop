@@ -34,6 +34,7 @@ from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.channel_incentive import ChannelIncentiveService
+from src.services.dedicated_ip import is_ultra_user
 from src.services.experiment import ExperimentService
 from src.services.payment_nudge import format_price_text
 from src.services.remnawave import RemnawaveService
@@ -85,6 +86,7 @@ async def subscription_getter(
         "monthly_trial_plan": monthly_plan.name if monthly_plan else "",
         "has_active_subscription": has_active,
         "is_not_unlimited": not is_unlimited,
+        "is_ultra": is_ultra_user(user),
     }
 
 

@@ -38,6 +38,7 @@ from .getters import (
 )
 from .handlers import (
     on_crypto_asset_select,
+    on_dedicated_ip,
     on_duration_select,
     on_get_subscription,
     on_payment_method_select,
@@ -77,6 +78,14 @@ subscription = Window(
             id=f"{PURCHASE_PREFIX}{PurchaseType.CHANGE}",
             on_click=on_subscription_plans,
             when=F["has_active_subscription"],
+        ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-subscription-dedicated-ip"),
+            id="dedicated_ip",
+            on_click=on_dedicated_ip,
+            when=F["is_ultra"],
         ),
     ),
     Row(

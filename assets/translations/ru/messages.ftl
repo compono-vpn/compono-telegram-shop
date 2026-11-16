@@ -38,6 +38,13 @@ msg-recovery-offer-failed = Не получилось открыть предл�
 msg-source-survey-thanks = 🙏 Спасибо! Это помогает нам.
 msg-source-survey-already-answered = Вы уже ответили, спасибо!
 
+msg-dedicated-ip-not-ultra = Выделенный IP доступен на тарифе «Ультра».
+msg-dedicated-ip-already = Страна уже выбрана: { $country ->
+    [LT] 🇱🇹 Литва
+    [SE] 🇸🇪 Швеция
+    *[NL] 🇳🇱 Нидерланды
+}
+
 
 # Remnashop
 ntf-remnashop-info =
