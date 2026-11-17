@@ -117,3 +117,60 @@ review stays for the attached/expired/used/cancel edits.
 - What the user sees in a real Telegram client for the new message order (explanation, then the plan
   list below it): observed only as tgmock calls (unverified on a phone).
 - A real payment between the 422 and the retry: the e2e flips the fake billing's subscription instead.
+
+## QA round 2 (2026-11-18, separate QA worktree, commit d16f427, no change to `src/`)
+
+Round 2 found no new bug in the bot. It adds one e2e module, `tests/e2e/test_tv_pair_qa2_e2e.py`
+(skipped unless `SHOP_E2E=1`, like the other e2e modules), and evidence under
+`docs/test-evidence/tv-pairing/qa-r2/`.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `uv run ruff check src/` / `ruff format --check src/` | pass / 202 files formatted |
+| `uv run pytest tests/` | 1383 passed, 4 skipped (the four opt-in e2e modules), 0 failed |
+| Whole `tests/e2e` against the real compono-api binary (dacf3c4), Redis 7.4.1 | 41 passed, 0 failed (`qa-r2/e2e-all-real-api.txt`; 35 before this round) |
+| New module `ruff check` (T201 `print` ignored, as in the other e2e modules) and `ruff format` | pass |
+
+### New e2e cases (real bot + tgmock + real compono-api)
+
+| Case | Result |
+|---|---|
+| User sits in the promocode text input (a dialog `MessageInput`) and opens the TV link: the TV question appears, the `/start tv-` text is not sent to billing as a promocode, «Подключить» pairs the TV | pass |
+| Three taps without a subscription: one new explanation each, no `#EventError`, the code stays pending; taps 4-11: the 11th claim gets the alert «Слишком много попыток…» (claim limit 10 per 10 min), no `#EventError` | pass |
+| New user opens the TV link and taps «Отмена»: «Отменено», then a plain `/start` opens the main menu; the TV's code stays pending | pass |
+| After buying and pairing through the newest retry message, a tap on an older copy of the retry message: «Код устарел», no `#EventError` | pass |
+| One paid user pairs two TVs one after the other: both TVs get the same subscription URL | pass |
+| The bot log holds none of the full codes used in the module | pass |
+
+Red proof: with the `/start tv-` filter broken (`_is_tv_pair_start` always false) 5 of the 6 new cases
+fail (`qa-r2/qa2-e2e-red-proof.txt`); the log-scan case passes either way. Source restored from git.
+
+### Checked by reading or read-only, no test needed
+
+- Router order: `menu.handlers` (with the `/start tv-` handler) is registered before every dialog
+  router, so no dialog text input can swallow the link; the global `PrivateFilter` keeps the handler
+  out of group chats.
+- Production `platform.settings` (read-only SELECT): `rules_required=false`, `channel_required=false`,
+  `access_mode=PUBLIC`. If either requirement is switched on, `RulesMiddleware`/`ChannelMiddleware`
+  stop the `/start tv-` message and the payload is lost after the user accepts (same for every deep
+  link today, not new).
+- The bot's compono-api timeout is 30 s, longer than compono-api's 15 s billing timeout, so a slow
+  billing gives the user the «Не получилось…» alert, never a hang. Telegram may then refuse the late
+  `answerCallbackQuery` ("query is too old"), which the existing stale-callback handling counts and
+  ignores.
+
+### Observation, not changed (owner decision)
+
+- A paid user whose subscription is LIMITED or EXPIRED gets 422 and the plan list opens with purchase
+  type NEW (`open_checkout(..., PurchaseType.NEW)`), while the bot's own «Подписка» screen offers such a
+  user «Продлить»/«Изменить» (RENEW/CHANGE). Billing accepts NEW and, since v0.47.9, extends the
+  existing panel user, so nothing breaks, but the payment is recorded and announced as a new
+  subscription, and the `intro_price` experiment (off in prod) would count it as a first purchase.
+
+### Not tested in round 2, and why
+
+- Real Telegram clients and the stage bot `@compono_dev_bot`: nothing is deployed (unverified).
+- A real payment between the 422 and the retry: the e2e still flips the fake subscription.
+- Rules/channel requirement switched on: off in prod, not exercised.

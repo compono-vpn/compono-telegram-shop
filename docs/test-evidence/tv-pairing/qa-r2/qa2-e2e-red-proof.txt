@@ -1,0 +1,8 @@
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/test_tv_pair_qa2_e2e.py::test_tv_link_while_waiting_for_promocode_text
+FAILED tests/e2e/test_tv_pair_qa2_e2e.py::test_repeated_taps_without_subscription_then_the_claim_limit
+FAILED tests/e2e/test_tv_pair_qa2_e2e.py::test_new_user_cancels_then_uses_the_bot
+FAILED tests/e2e/test_tv_pair_qa2_e2e.py::test_old_retry_message_after_the_tv_paired
+FAILED tests/e2e/test_tv_pair_qa2_e2e.py::test_two_tvs_one_after_the_other - ...
+5 failed, 1 passed, 5 warnings in 29.48s
