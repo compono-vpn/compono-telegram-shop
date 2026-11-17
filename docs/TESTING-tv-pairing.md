@@ -38,6 +38,7 @@ it receives the subscription URL (the fake billing's URL for that user), and the
 | API client: exact path, header, body; every status mapped; network error → FAILED without raising | unit (httpx MockTransport) | pass | `TestClaimClient` |
 | Logs: the code never appears; 404 is logged at INFO, 503 at ERROR; shop log of the e2e has no full code | unit + e2e | pass | `test_logs_never_carry_the_code_and_expected_answers_are_not_errors`; e2e asserts `code not in shop.log()` |
 | Russian copy rendered with the real fluent files: contract sentences present, no price in the bot's new texts, alert texts within 200 chars | unit | pass | `TestCopy` |
+| Review fix: a repeated tap with the same outcome (second «Подключить» while still without a subscription, or a double tap) makes Telegram refuse the edit with "message is not modified". Before the fix this escaped the handler: the tap was not answered, the error middleware sent `#EventError` and queued a main-menu redirect. Now that one refusal is ignored; any other `TelegramBadRequest` still raises | unit + e2e (both modes, refusal injected in tgmock because tgmock does not emulate it) | pass; the e2e failed ("the tap was not answered") with the old handler and passes with the fix | `TestUnchangedEdit`; e2e `test_second_tap_without_subscription_is_quiet` |
 | Mutation check: 16 deliberate bugs | `mutate_shop.py` | 15 caught by unit tests; the 16th (start filter never matches) is not visible to unit tests and was caught by the e2e (1 failed) | `mutation-results.md` |
 
 Two fixes to the e2e fake billing were needed to model real billing: `GET /users/{id}` for an
@@ -53,3 +54,9 @@ creates the user. Without them no new-user flow could run in the e2e.
 - **Telegram clients' rendering** of the confirmation (HTML `<code>`) on phones: unverified.
 - **Concurrency through the bot.** Concurrent claims are covered on the API side; here only
   sequential taps were driven.
+
+## Review re-run (2026-11-17, independent reviewer)
+
+Re-run on the review commit in a fresh worktree: `ruff check src/` all passed, `ruff format --check src/`
+202 files formatted, `pytest tests/` 1382 passed, 2 skipped, 0 failed; e2e with the in-memory claim 15
+passed; TV e2e against a compono-api binary built from `feat/tv-pairing` 90610ba: 9 passed.

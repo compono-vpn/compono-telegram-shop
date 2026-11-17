@@ -42,6 +42,7 @@ PAID_ID = 730177001  # active paid subscription
 NOSUB_ID = 730177002  # no subscription, buys during the flow
 OTHER_ID = 730177003  # a second subscriber
 NEW_ID = 730177004  # never seen by the bot before
+NOSUB_AGAIN_ID = 730177006  # no subscription, taps «Подключить» twice without buying
 ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 API_BIN = os.environ.get("SHOP_E2E_API_BIN")
 
@@ -136,7 +137,12 @@ class TV:
 async def env():
     shop = ShopE2E()
     shop.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid, name in ((PAID_ID, "Paid"), (NOSUB_ID, "NoSub"), (OTHER_ID, "Other")):
+    for uid, name in (
+        (PAID_ID, "Paid"),
+        (NOSUB_ID, "NoSub"),
+        (OTHER_ID, "Other"),
+        (NOSUB_AGAIN_ID, "NoSubAgain"),
+    ):
         shop.billing.add_user(uid, name)
     shop.billing.add_active_subscription(PAID_ID)
     shop.billing.add_active_subscription(OTHER_ID)
@@ -327,6 +333,42 @@ async def test_user_without_subscription_gets_plans_then_retries(env) -> None:
     assert done and "телевизор подключится" in done[-1]["text"]
     status, body = await tv.poll(token, code)
     assert body["status"] in ("paired", "claimed"), body
+
+
+async def test_second_tap_without_subscription_is_quiet(env) -> None:
+    """Regression: tapping «Подключить» again while still without a subscription produces the
+    same text and buttons, so Telegram refuses the edit with "message is not modified". tgmock
+    does not emulate that refusal, so it is injected for the second tap. The bot must answer the
+    tap, send no #EventError and not push the user to the main menu."""
+    shop, tv = env
+    code, token = await tv.create()
+    question = await open_link(shop, NOSUB_AGAIN_ID, code)
+    after = await tap(shop, NOSUB_AGAIN_ID, question, f"tvp:{code}")
+    edited = [
+        s
+        for s in after
+        if s["method"] == "editMessageText" and s["message_id"] == question["message_id"]
+    ]
+    assert edited and "нужна активная подписка" in edited[-1]["text"]
+
+    t0 = time.time()
+    shop.tg.failures["editMessageText"] = (
+        400,
+        "Bad Request: message is not modified: specified new message content and reply markup "
+        "are exactly the same as a current content and reply markup of the message",
+    )
+    try:
+        since = await send(shop, callback_update(NOSUB_AGAIN_ID, f"tvp:{code}", edited[-1]))
+        await shop.wait_for(lambda: shop.tg.calls_of("answerCallbackQuery", since), timeout=15)
+        await shop.wait_for(lambda: alerts(shop, t0), timeout=4)
+    finally:
+        shop.tg.failures.pop("editMessageText", None)
+    answers = shop.tg.calls_of("answerCallbackQuery", since)
+    print(f"[second tap] answers={len(answers)} alerts={len(alerts(shop, t0))}")
+    assert answers, "the tap was not answered"
+    assert not alerts(shop, t0), "an unchanged message must not page admins"
+    status, body = await tv.poll(token, code)
+    assert body["status"] == "pending", "the code stays valid after a 422"
 
 
 async def test_code_used_by_someone_else(env) -> None:
