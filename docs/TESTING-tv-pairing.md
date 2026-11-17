@@ -174,3 +174,51 @@ fail (`qa-r2/qa2-e2e-red-proof.txt`); the log-scan case passes either way. Sourc
 - Real Telegram clients and the stage bot `@compono_dev_bot`: nothing is deployed (unverified).
 - A real payment between the 422 and the retry: the e2e still flips the fake subscription.
 - Rules/channel requirement switched on: off in prod, not exercised.
+
+## QA round 3 (2026-11-18, separate QA worktree from 62991d0)
+
+One bug found and fixed in `src/services/tv_pair.py`.
+
+### Bug: typed look-alike letters were taken as a TV code
+
+`re.IGNORECASE` in Python also folds a few non-ASCII letters onto ASCII ones (KELVIN SIGN U+212A
+onto K, LATIN SMALL LETTER LONG S U+017F onto S). A typed `/start tv-` with the Kelvin sign got the
+«Подключить телевизор?» question with a code that looks right, but the button carried a code the
+callback parser refuses, so the tap did nothing. With the long s the bot asked about a different
+code (`…S`). Telegram deep links cannot carry these letters, so only a hand-typed command hits it.
+Fix: `re.ASCII` on both start regexes; such a command is now an ordinary /start.
+
+Regression tests: `TestNonAsciiLookalikes` in `tests/test_tv_pair.py` (3 failed before the fix,
+`qa-r3/lookalike-unit-before-fix.txt`) and `test_typed_lookalike_code_is_an_ordinary_start` in
+`tests/e2e/test_tv_pair_qa3_e2e.py` (2 failed before the fix, `qa-r3/qa3-red-proof.txt`).
+
+### New e2e cases (`tests/e2e/test_tv_pair_qa3_e2e.py`, real bot + tgmock + real compono-api with the round-3 API fix)
+
+| Case | Result |
+|---|---|
+| The claim lands on compono-api but the connection drops before the bot reads the answer | short alert «Не получилось подключить телевизор», question keeps its buttons, no `#EventError`; the TV still gets exactly the user's URL |
+| Same, then the user taps again before the TV polls | «Готово, телевизор подключится…» (idempotent 200), TV paired |
+| The connection drops before the claim reaches compono-api | alert, code still pending on the API, next tap pairs |
+| Typed look-alike codes (2 cases) | ordinary main menu, no TV question, no claim |
+| Bot log scan | no full code, no URL |
+
+Mutation check (`qa-r3/mutate_r3.sh`, `qa-r3/mutation-r3-shop.txt`): 4 of 4 caught (network error
+reported as attached; network error escaping the client; failure alert editing the question; the
+round-3 regex bug put back).
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `ruff check src/`, `ruff format --check src/` | pass, 202 files formatted |
+| `pytest tests/` | 1390 passed, 5 skipped (the five opt-in e2e modules), 0 failed (before: 1383 passed) |
+| whole `tests/e2e` with tgmock, Redis 7.4.1 and the real compono-api binary (round-3 API fix) | 47 passed, 0 failed (`qa-r3/e2e-all-real-api.txt`) |
+
+### Not tested in round 3, and why
+
+- Real Telegram clients and the stage bot: nothing deployed.
+- How long real Telegram accepts a callback answer after a slow claim (compono-api waits up to
+  15 s for billing, the bot's client up to 30 s): tgmock accepts any delay. A late answer is
+  already handled as a stale callback (no `#EventError`).
+- Still open from round 2: the owner's real subscription token in `tests/test_menu_getter.py` and
+  `tests/test_subscription_service.py` on main (not changed here).

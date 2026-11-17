@@ -1,0 +1,145 @@
+FFFFF....                                                                [100%]
+=================================== FAILURES ===================================
+_______ test_typed_lookalike_code_is_an_ordinary_start[tv-\u212a7M4QX9P] _______
+
+env = (<tests.e2e.harness.ShopE2E object at 0x12f73e000>, <tests.e2e.test_tv_pair_e2e.TV object at 0x12f763800>)
+payload = 'tv-K7M4QX9P'
+
+    @pytest.mark.parametrize(
+        "payload",
+        ["tv-K7M4QX9P", "tv-K7M4QX9ſ"],  # KELVIN SIGN for K, LONG S for S
+    )
+    async def test_typed_lookalike_code_is_an_ordinary_start(env, payload) -> None:
+        """Typed by hand (Telegram deep links cannot carry these letters). Before the round-3 fix the
+        Kelvin sign got the TV question with a button whose tap did nothing."""
+        shop, _ = env
+        t0 = time.time()
+        mark = len(shop.billing.bodies)
+        update = start_update(LOOKALIKE, payload)
+        update["update_id"] = _next()
+        since = await send(shop, update)
+        shown = await wait_screens(shop, LOOKALIKE, since)
+        texts = [s.get("text") or "" for s in shown]
+        print(f"[lookalike {payload.encode('unicode_escape').decode()}] {[t[:60] for t in texts]}")
+>       assert not any("Подключить телевизор" in t for t in texts), texts
+E       AssertionError: ['📺 <b>Подключить телевизор?</b>
+E         
+E         Код <code>K7M4-QX9P</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.']
+E       assert not True
+E        +  where True = any(<generator object test_typed_lookalike_code_is_an_ordinary_start.<locals>.<genexpr> at 0x12f7335e0>)
+
+tests/e2e/test_tv_pair_qa3_e2e.py:217: AssertionError
+----------------------------- Captured stdout call -----------------------------
+[lookalike tv-\u212a7M4QX9P] ['📺 <b>Подключить телевизор?</b>\n\nКод <code>K7M4-QX9P</code>. ']
+_______ test_typed_lookalike_code_is_an_ordinary_start[tv-K7M4QX9\u017f] _______
+
+env = (<tests.e2e.harness.ShopE2E object at 0x12f73e000>, <tests.e2e.test_tv_pair_e2e.TV object at 0x12f763800>)
+payload = 'tv-K7M4QX9ſ'
+
+    @pytest.mark.parametrize(
+        "payload",
+        ["tv-K7M4QX9P", "tv-K7M4QX9ſ"],  # KELVIN SIGN for K, LONG S for S
+    )
+    async def test_typed_lookalike_code_is_an_ordinary_start(env, payload) -> None:
+        """Typed by hand (Telegram deep links cannot carry these letters). Before the round-3 fix the
+        Kelvin sign got the TV question with a button whose tap did nothing."""
+        shop, _ = env
+        t0 = time.time()
+        mark = len(shop.billing.bodies)
+        update = start_update(LOOKALIKE, payload)
+        update["update_id"] = _next()
+        since = await send(shop, update)
+        shown = await wait_screens(shop, LOOKALIKE, since)
+        texts = [s.get("text") or "" for s in shown]
+        print(f"[lookalike {payload.encode('unicode_escape').decode()}] {[t[:60] for t in texts]}")
+>       assert not any("Подключить телевизор" in t for t in texts), texts
+E       AssertionError: ['📺 <b>Подключить телевизор?</b>
+E         
+E         Код <code>K7M4-QX9S</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.']
+E       assert not True
+E        +  where True = any(<generator object test_typed_lookalike_code_is_an_ordinary_start.<locals>.<genexpr> at 0x12f733920>)
+
+tests/e2e/test_tv_pair_qa3_e2e.py:217: AssertionError
+----------------------------- Captured stdout call -----------------------------
+[lookalike tv-K7M4QX9\u017f] ['📺 <b>Подключить телевизор?</b>\n\nКод <code>K7M4-QX9S</code>. ']
+--------------------------- Captured stdout teardown ---------------------------
+
+--- shop log: /var/folders/05/2x3fnz1x7ls0bzcr_qjncy100000gs/T/shop-e2e-fw5iy8pl/shop.log
+_ TestNonAsciiLookalikes.test_lookalike_is_not_a_tv_code[/start tv-\u212a7M4QX9P] _
+
+self = <tests.test_tv_pair.TestNonAsciiLookalikes object at 0x12f6db1a0>
+text = '/start tv-K7M4QX9P'
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/start tv-K7M4QX9P",  # KELVIN SIGN instead of K
+            "/start tv-K7M4QX9ſ",  # LATIN SMALL LETTER LONG S instead of S
+            "/start tv-K7m4qx9p",
+        ],
+    )
+    def test_lookalike_is_not_a_tv_code(self, text):
+>       assert code_from_start_text(text) is None
+E       AssertionError: assert 'K7M4QX9P' is None
+E        +  where 'K7M4QX9P' = code_from_start_text('/start tv-K7M4QX9P')
+
+tests/test_tv_pair.py:204: AssertionError
+_ TestNonAsciiLookalikes.test_lookalike_is_not_a_tv_code[/start tv-K7M4QX9\u017f] _
+
+self = <tests.test_tv_pair.TestNonAsciiLookalikes object at 0x12f714b90>
+text = '/start tv-K7M4QX9ſ'
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/start tv-K7M4QX9P",  # KELVIN SIGN instead of K
+            "/start tv-K7M4QX9ſ",  # LATIN SMALL LETTER LONG S instead of S
+            "/start tv-K7m4qx9p",
+        ],
+    )
+    def test_lookalike_is_not_a_tv_code(self, text):
+>       assert code_from_start_text(text) is None
+E       AssertionError: assert 'K7M4QX9S' is None
+E        +  where 'K7M4QX9S' = code_from_start_text('/start tv-K7M4QX9ſ')
+
+tests/test_tv_pair.py:204: AssertionError
+_ TestNonAsciiLookalikes.test_lookalike_is_not_a_tv_code[/start tv-\u212a7m4qx9p] _
+
+self = <tests.test_tv_pair.TestNonAsciiLookalikes object at 0x12f7145f0>
+text = '/start tv-K7m4qx9p'
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/start tv-K7M4QX9P",  # KELVIN SIGN instead of K
+            "/start tv-K7M4QX9ſ",  # LATIN SMALL LETTER LONG S instead of S
+            "/start tv-K7m4qx9p",
+        ],
+    )
+    def test_lookalike_is_not_a_tv_code(self, text):
+>       assert code_from_start_text(text) is None
+E       AssertionError: assert 'K7M4QX9P' is None
+E        +  where 'K7M4QX9P' = code_from_start_text('/start tv-K7m4qx9p')
+
+tests/test_tv_pair.py:204: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: 22 warnings
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: DeprecationWarning: Behavior without patch module is deprecated, use patch_module = True
+    return _inject_wrapper(func, patch_module=patch_module)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/test_tv_pair_qa3_e2e.py::test_typed_lookalike_code_is_an_ordinary_start[tv-\u212a7M4QX9P]
+FAILED tests/e2e/test_tv_pair_qa3_e2e.py::test_typed_lookalike_code_is_an_ordinary_start[tv-K7M4QX9\u017f]
+FAILED tests/test_tv_pair.py::TestNonAsciiLookalikes::test_lookalike_is_not_a_tv_code[/start tv-\u212a7M4QX9P]
+FAILED tests/test_tv_pair.py::TestNonAsciiLookalikes::test_lookalike_is_not_a_tv_code[/start tv-K7M4QX9\u017f]
+FAILED tests/test_tv_pair.py::TestNonAsciiLookalikes::test_lookalike_is_not_a_tv_code[/start tv-\u212a7m4qx9p]
+5 failed, 4 passed, 107 deselected, 27 warnings in 17.19s

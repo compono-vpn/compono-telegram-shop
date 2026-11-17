@@ -1,0 +1,38 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.3, pytest-8.4.2, pluggy-1.6.0 -- /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/bin/python
+rootdir: /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.3.0, tgmock-0.2.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 6 items
+
+tests/e2e/test_tv_pair_qa3_e2e.py::test_answer_lost_after_the_claim_landed [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>M3X7-XMEY</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:M3X7XMEY'), ('Отмена', 'tvx')]
+[lost answer] alert: 'Не получилось подключить телевизор. Попробуйте ещё раз.', screens: []
+PASSED
+tests/e2e/test_tv_pair_qa3_e2e.py::test_answer_lost_then_user_taps_again_before_the_tv_polls [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>D0CF-4A4N</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:D0CF4A4N'), ('Отмена', 'tvx')]
+PASSED
+tests/e2e/test_tv_pair_qa3_e2e.py::test_connection_reset_before_the_claim [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>2G7N-3ZCP</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:2G7N3ZCP'), ('Отмена', 'tvx')]
+PASSED
+tests/e2e/test_tv_pair_qa3_e2e.py::test_typed_lookalike_code_is_an_ordinary_start[tv-\u212a7M4QX9P] [lookalike tv-\u212a7M4QX9P] ['<b>👤 Профиль:</b>\n<blockquote>• <b>ID</b>: <code>730299003</']
+PASSED
+tests/e2e/test_tv_pair_qa3_e2e.py::test_typed_lookalike_code_is_an_ordinary_start[tv-K7M4QX9\u017f] [lookalike tv-K7M4QX9\u017f] ['<b>👤 Профиль:</b>\n<blockquote>• <b>ID</b>: <code>730299003</']
+PASSED
+tests/e2e/test_tv_pair_qa3_e2e.py::test_bot_log_has_no_full_code [log] bot log 51118 bytes, 3 codes checked, 0 found
+PASSED
+--- shop log: /var/folders/05/2x3fnz1x7ls0bzcr_qjncy100000gs/T/shop-e2e-_k7ym85x/shop.log
+
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 6 passed, 5 warnings in 41.46s ========================

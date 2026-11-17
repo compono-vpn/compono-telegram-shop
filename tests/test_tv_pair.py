@@ -186,6 +186,42 @@ class TestStartText:
         assert not _is_tv_pair_start(message)
 
 
+class TestNonAsciiLookalikes:
+    """QA round 3: re.IGNORECASE folds a few non-ASCII letters onto ASCII ones (KELVIN SIGN
+    -> k, LONG S -> s). A typed /start with one of them was taken as a TV code: with the
+    Kelvin sign the bot asked «Подключить телевизор?» with a code that looks right, but the
+    button carried a code the callback parser refuses, so the tap did nothing at all."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/start tv-K7M4QX9P",  # KELVIN SIGN instead of K
+            "/start tv-K7M4QX9ſ",  # LATIN SMALL LETTER LONG S instead of S
+            "/start tv-K7m4qx9p",
+        ],
+    )
+    def test_lookalike_is_not_a_tv_code(self, text):
+        assert code_from_start_text(text) is None
+        assert code_from_start_param(text.split()[1]) is None
+        message = MagicMock(spec=Message)
+        message.text = text
+        assert not _is_tv_pair_start(message)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            f"/start tv-{CODE}",
+            f"/start tv-{CODE.lower()}",
+            "/start tv-k7m4qx9s",
+            "/start tv-ZZZZ0000",
+        ],
+    )
+    def test_every_accepted_code_makes_a_working_button(self, text):
+        code = code_from_start_text(text)
+        assert code is not None and code.isascii()
+        assert code_from_callback(TV_PAIR_CONFIRM_PREFIX + code) == code
+
+
 class TestCallbackData:
     def test_round_trip(self):
         kb = confirm_keyboard(CODE, "ok", "no")
