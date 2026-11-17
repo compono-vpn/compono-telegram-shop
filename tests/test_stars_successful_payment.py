@@ -26,6 +26,7 @@ CHARGE_ID = "stxCHARGE"
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
     monkeypatch.setattr(payment_router, "HANDLE_FREE_RETRY_DELAYS", (0, 0), raising=False)
+    monkeypatch.setattr(payment_router, "COMPLETION_POLL_DELAYS", (0, 0, 0), raising=False)
 
 
 def _message() -> MagicMock:
@@ -103,4 +104,33 @@ async def test_dev_payment_is_refunded_only_once():
     billing = AsyncMock()
     billing.get_transaction.return_value = _tx("CANCELED")
     bot, _ = await _run(billing, dev=True)
+    bot.refund_star_payment.assert_awaited_once()
+
+
+# Billing's /payment/handle-free only queues a Kafka event (compono-billing
+# PaymentUseCase.HandleFreePayment); the consumer moves the payment from PENDING to COMPLETED a
+# moment later. Right after the call the payment is still PENDING, and refunding then would give
+# every buyer both the stars back and the subscription.
+
+
+async def test_payment_completed_a_moment_later_is_not_refunded():
+    billing = AsyncMock()
+    billing.get_transaction.side_effect = [_tx("PENDING"), _tx("PENDING"), _tx("COMPLETED")]
+    bot, message = await _run(billing)
+    bot.refund_star_payment.assert_not_awaited()
+    message.answer.assert_not_awaited()
+
+
+async def test_payment_still_pending_is_not_refunded_and_alerts():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("PENDING")
+    with pytest.raises(RuntimeError):
+        await _run(billing)
+    assert billing.get_transaction.await_count >= 2
+
+
+async def test_payment_cancelled_after_a_pending_read_is_refunded():
+    billing = AsyncMock()
+    billing.get_transaction.side_effect = [_tx("PENDING"), _tx("CANCELED")]
+    bot, _ = await _run(billing)
     bot.refund_star_payment.assert_awaited_once()

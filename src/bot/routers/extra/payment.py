@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any, Optional
 from uuid import UUID
 
 from aiogram import Bot, F, Router
@@ -26,6 +27,9 @@ UNCOMPLETED_PAYMENT_TEXT = (
 )
 # Waits between billing retries after a successful Stars payment (3 attempts in all).
 HANDLE_FREE_RETRY_DELAYS = (1, 3)
+# handle-free only queues a Kafka event; billing's consumer completes the payment a moment later.
+# Waits between reads of the payment status while it is still PENDING (about 20 s in all).
+COMPLETION_POLL_DELAYS = (0.5, 1, 1.5, 2, 3, 5, 7)
 
 
 @router.pre_checkout_query()
@@ -99,11 +103,19 @@ async def on_successful_payment(
     payment_id = UUID(payment.invoice_payload)
     await _complete_in_billing(billing, payment_id, user)
 
-    # Billing completes only PENDING payments and answers 200 for any other one (its 30-minute
-    # timeout can cancel the payment between our pre-checkout answer and this message).
-    transaction = await billing.get_transaction(payment_id)
+    # Billing completes only PENDING payments and skips any other one (its 30-minute timeout can
+    # cancel the payment between our pre-checkout answer and this message). handle-free completes
+    # nothing itself: it queues a Kafka event, so PENDING right after it is normal.
+    transaction = await _wait_until_settled(billing, payment_id)
     if transaction is not None and transaction.Status == TransactionStatus.COMPLETED.value:
         return
+    if transaction is not None and transaction.Status == TransactionStatus.PENDING.value:
+        # Billing is slow, not refusing: the payment can still complete, so the stars stay.
+        # Raising sends #EventError so a person checks it.
+        raise RuntimeError(
+            f"Stars payment '{payment_id}' (charge '{payment.telegram_payment_charge_id}') is "
+            f"still PENDING in billing after handle-free; check that it completes"
+        )
 
     status = transaction.Status if transaction else "not found"
     logger.error(
@@ -131,3 +143,14 @@ async def _complete_in_billing(billing: BillingClient, payment_id: UUID, user: U
                 f"(attempt {attempt}), retrying in {delay}s"
             )
             await asyncio.sleep(delay)
+
+
+async def _wait_until_settled(billing: BillingClient, payment_id: UUID) -> Optional[Any]:
+    """Read the payment until it leaves PENDING, or give up and return the last read."""
+    transaction = await billing.get_transaction(payment_id)
+    for delay in COMPLETION_POLL_DELAYS:
+        if transaction is None or transaction.Status != TransactionStatus.PENDING.value:
+            return transaction
+        await asyncio.sleep(delay)
+        transaction = await billing.get_transaction(payment_id)
+    return transaction

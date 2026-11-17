@@ -10,6 +10,7 @@ every non-Stars row even when billing says it is active. Opt-in, like the other 
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import os
 import time
@@ -186,6 +187,7 @@ def stars_checkout(shop: ShopE2E, screen: dict[str, Any], invoices_before: int) 
 async def pay_with_stars(shop: ShopE2E, uid: int, invoice: dict[str, Any]) -> None:
     """What Telegram sends after the user pays the invoice: pre_checkout_query, successful_payment."""
     amount = invoice["prices"][0]["amount"]
+    started = time.time()
     update_id = _next_update_id()
     await send(
         shop,
@@ -222,6 +224,15 @@ async def pay_with_stars(shop: ShopE2E, uid: int, invoice: dict[str, Any]) -> No
         },
     )
     assert await shop.wait_for(lambda: invoice["payload"] in shop.billing.completed, timeout=10)
+    # Billing completes the payment asynchronously (Kafka); the paid stars must stay paid.
+    assert await shop.wait_for(
+        lambda: shop.billing.transactions[invoice["payload"]]["Status"] == "COMPLETED", timeout=10
+    )
+    await asyncio.sleep(3)  # let the handler finish its own completion check
+    assert not shop.tg.calls_of("refundStarPayment", started), "a paid order was refunded"
+    assert not any(
+        "Звёзды вернули" in (s.get("text") or "") for s in user_screens(shop, started, uid)
+    )
 
 
 # ------------------------------------------------------------------ tests

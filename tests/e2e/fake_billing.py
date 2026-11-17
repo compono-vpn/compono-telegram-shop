@@ -6,6 +6,7 @@ Only the routes the e2e flows touch are modelled; every other path answers 404 a
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import uuid
@@ -44,6 +45,7 @@ class FakeBilling:
         self.personal_proxies: dict[int, dict[str, Any]] = {}
         self.created: list[dict[str, Any]] = []  # POST /payment/create bodies + the result
         self.completed: list[str] = []  # payment ids sent to /payment/handle-free
+        self.completion_delay = 0.7  # seconds until the "consumer" completes a handle-free payment
         self.port = 0
         self._runner: web.AppRunner | None = None
 
@@ -284,10 +286,15 @@ class FakeBilling:
             return web.json_response(self._create_payment(body or {}))
         if method == "POST" and route == "/payment/handle-free":
             payment_id = (body or {}).get("payment_id", "")
-            # Like billing's TransitionStatus: only a PENDING payment completes; others are skipped.
-            tx = self.transactions.get(payment_id)
-            if tx is not None and tx.get("Status") == "PENDING":
-                tx["Status"] = "COMPLETED"
+            # Like billing: handle-free only queues a Kafka event and the consumer completes the
+            # payment a moment later (PaymentUseCase.HandleFreePayment). Like TransitionStatus, only
+            # a PENDING payment completes; others are skipped.
+            def _complete() -> None:
+                tx = self.transactions.get(payment_id)
+                if tx is not None and tx.get("Status") == "PENDING":
+                    tx["Status"] = "COMPLETED"
+
+            asyncio.get_running_loop().call_later(self.completion_delay, _complete)
             self.completed.append(payment_id)
             return web.json_response({})
         if method == "POST" and route == "/promocode/activate":

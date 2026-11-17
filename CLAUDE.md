@@ -15,10 +15,13 @@ returns. `_create_payment_and_get_data` refuses any other gateway. Prices are re
 
 Paying a Stars invoice (`src/bot/routers/extra/payment.py`): `pre_checkout_query` says ok only for this user's PENDING
 Stars payment in billing. `successful_payment` (the stars are already taken) calls billing `/payment/handle-free` up to
-3 times (waits 1 s, 3 s), then reads the payment back; if billing does not have it COMPLETED (billing's 30-minute
-timeout cancelled it meanwhile, or it is unknown) the bot refunds the stars with `refundStarPayment` and tells the user.
-If billing cannot be reached at all, the handler raises, so `#EventError` reaches the admins; nothing is refunded then,
-complete the payment by hand once billing is back (`/payment/handle-free` with the payment id from the log).
+3 times (waits 1 s, 3 s). handle-free completes nothing itself: it only queues a Kafka event and billing's consumer moves
+the payment from PENDING to COMPLETED a moment later, so the bot then reads the payment until it leaves PENDING (about
+20 s). COMPLETED: done. Cancelled (billing's 30-minute timeout won the race) or unknown: the bot refunds the stars with
+`refundStarPayment` and tells the user. Still PENDING after the wait, or billing unreachable: the handler raises, so
+`#EventError` reaches the admins and nothing is refunded; check that the payment completes, or complete it by hand
+(`/payment/handle-free` with the payment id from the log). Never refund on a PENDING read: that gave every buyer the
+stars back and the subscription (found in QA, 2026-11-18).
 
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
