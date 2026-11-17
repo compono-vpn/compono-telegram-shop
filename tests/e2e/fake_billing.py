@@ -159,15 +159,19 @@ class FakeBilling:
                         return str(price["Price"])
         return None
 
-    def _pricing(self, body: dict[str, Any]) -> dict[str, Any] | None:
-        """Like billing: a user's purchase discount, whole stars floored; proxy plans undiscounted."""
+    def _pricing(self, body: dict[str, Any], *, recorded: bool = False) -> dict[str, Any] | None:
+        """Like billing: a user's purchase discount, whole stars floored.
+
+        A proxy payment is recorded undiscounted (CreatePayment prices it for a bare user), while
+        /pricing/calculate (CalculateForPlan) applies the user's discount to any plan.
+        """
         price = self._price(body)
         if price is None:
             return None
         plan = self._plan(int(body.get("plan_id", 0))) or {}
         discount = (
             0
-            if plan.get("Type") == "PROXY"
+            if recorded and plan.get("Type") == "PROXY"
             else self.discounts.get(int(body.get("telegram_id", 0)), 0)
         )
         original = Decimal(price)
@@ -188,7 +192,10 @@ class FakeBilling:
     def _create_payment(self, body: dict[str, Any]) -> dict[str, Any]:
         payment_id = str(uuid.uuid4())
         gateway = body.get("gateway_type", "")
-        pricing = self._pricing(body) or {"original_amount": "0", "final_amount": "0"}
+        pricing = self._pricing(body, recorded=True) or {
+            "original_amount": "0",
+            "final_amount": "0",
+        }
         plan = self._plan(int(body.get("plan_id", 0))) or {}
         self.transactions[payment_id] = {
             "ID": len(self.transactions) + 1,
@@ -209,11 +216,23 @@ class FakeBilling:
             "CreatedAt": _now(),
             "UpdatedAt": _now(),
         }
+        if pricing["final_amount"] == "0":
+            # Like billing: a 0-price payment completes by itself (CreatePayment queues the event).
+            self._complete_later(payment_id)
         # Billing returns no URL for Stars (the bot makes the invoice link itself).
         url = None if gateway == "TELEGRAM_STARS" else f"https://pay.platega.io/{payment_id}"
         result = {"ID": payment_id, "URL": url}
         self.created.append({**body, **result})
         return result
+
+    def _complete_later(self, payment_id: str) -> None:
+        # Like TransitionStatus, only a PENDING payment completes; others are skipped.
+        def _complete() -> None:
+            tx = self.transactions.get(payment_id)
+            if tx is not None and tx.get("Status") == "PENDING":
+                tx["Status"] = "COMPLETED"
+
+        asyncio.get_running_loop().call_later(self.completion_delay, _complete)
 
     @staticmethod
     def _not_found() -> web.Response:
@@ -298,12 +317,7 @@ class FakeBilling:
             # Like billing: handle-free only queues a Kafka event and the consumer completes the
             # payment a moment later (PaymentUseCase.HandleFreePayment). Like TransitionStatus, only
             # a PENDING payment completes; others are skipped.
-            def _complete() -> None:
-                tx = self.transactions.get(payment_id)
-                if tx is not None and tx.get("Status") == "PENDING":
-                    tx["Status"] = "COMPLETED"
-
-            asyncio.get_running_loop().call_later(self.completion_delay, _complete)
+            self._complete_later(payment_id)
             self.completed.append(payment_id)
             return web.json_response({})
         if method == "POST" and route == "/promocode/activate":

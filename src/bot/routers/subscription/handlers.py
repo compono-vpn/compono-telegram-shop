@@ -562,10 +562,15 @@ async def on_plan_select(
     redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    billing_plan = await billing.get_plan(plan_id=selected_plan)
+    # Select passes whatever id the callback carries (an older message, a modified client). Sell
+    # only a plan billing offers this user, the list the screen shows: never the trial, the proxy
+    # or a hidden plan, which billing's payment creation would accept by id.
+    offered = await billing.get_available_plans(user.telegram_id)
+    billing_plan = next((p for p in offered if p.ID == selected_plan), None)
 
     if not billing_plan:
-        raise ValueError(f"Selected plan '{selected_plan}' not found")
+        logger.warning(f"{log(user)} Ignored plan '{selected_plan}': not offered to the user")
+        return
 
     plan = billing_plan_to_dto(billing_plan)
     logger.info(f"{log(user)} Selected plan '{plan.id}'")

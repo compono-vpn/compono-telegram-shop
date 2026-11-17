@@ -126,6 +126,37 @@ it; not built.
   `tests/test_payment_user_load.py` (2 failed on the old code), e2e
   `test_payment_while_billing_blips_still_reaches_billing` (fake billing answers 503 twice; failed on the old code).
 
+## QA round 4 (2026-11-18): two more gaps in the refund and slow-billing paths, fixed with failing tests first
+
+- A refund the bot owes (a payment billing cancelled, a second charge) that Telegram refuses left the stars taken, and the
+  #EventError carried only Telegram's text («TelegramBadRequest: … CHARGE_NOT_FOUND»): no payment, no charge id, so
+  nobody could send the stars back by hand. Every refund now goes through `_refund` in `src/bot/routers/extra/payment.py`,
+  and a failure raises an alert that starts with the payment, the charge and the user.
+  `tests/test_stars_successful_payment.py::test_failed_refund_*` (2 failed on the old code), e2e
+  `test_refund_telegram_refuses_alerts_admins_with_the_charge` (tgmock refuses `refundStarPayment`; failed on the old
+  code with the bare Telegram error in the alert).
+- When billing's Kafka consumer took longer than the bot's ~20 s wait, the user paid, got no «оплата прошла» yet and
+  was only sent to the main menu by the error handler, so they could buy the same plan a second time. The bot now says
+  «Оплата получена, подписка оформляется… платить ещё раз не нужно» before the admin alert. Nothing is refunded.
+  `test_payment_still_pending_tells_the_user_not_to_pay_again`, e2e
+  `test_payment_billing_completes_late_tells_the_user_not_to_pay_again` (fake billing completes 28 s after
+  handle-free; failed on the old code: the user was told nothing).
+- The plan list sold any plan by id. aiogram-dialog's `Select` hands the handler whatever item id the callback carries
+  and never checks it against the rendered list, and `on_plan_select` read any plan with `get_plan`. A press from an
+  older message or a modified client could start a checkout for a plan not offered to the user: an inactive or
+  user-restricted plan (billing's `CreatePayment` checks neither), the proxy plan (recorded undiscounted while the
+  invoice used the user's discount) or the trial plan (0 stars, which billing completes by itself). `on_plan_select`
+  now takes the plan only from `/plans/available` for this user, the list the screen shows.
+  `tests/test_plan_select_guard.py` (3 failed on the old code), e2e `test_plan_not_offered_cannot_be_bought_by_id`
+  (failed on the old code: a payment for a hidden 1-star plan was created). Whether Telegram delivers callback data that
+  was never on a button is unverified; the older-message case does not depend on it.
+- The fake billing now behaves like billing in two more ways: a 0-price payment completes by itself at creation, and
+  `/pricing/calculate` applies the user's discount to the proxy plan too (only the recorded proxy payment is
+  undiscounted).
+- Known and left alone: picking a plan with a single duration from the plan list fails with `TypeError: on_duration_select()
+  got multiple values for keyword argument 'billing'` (the injected handler is called with explicit dependencies). No plan
+  in the prod list has a single duration (checked `componovpn.com/api/v1/plans` 2026-11-18: 1, 2, 3, 38 all have several).
+
 ## Release order
 
 1. Merge, stage sync, then walk the flows above on @compono_dev_bot.

@@ -5,6 +5,7 @@ button, and repeated taps. Opt-in like the other e2e modules (see test_stars_onl
 from __future__ import annotations
 
 import asyncio
+import copy
 import os
 import time
 
@@ -13,11 +14,13 @@ import pytest_asyncio
 
 pytest.importorskip("tgmock")
 
+from .fake_billing import STAGE  # noqa: E402
 from .harness import DEV_ID, ShopE2E, redis_server_binary  # noqa: E402
 from .test_stale_callback_e2e import (  # noqa: E402
     _bot_message,
     _next_update_id,
     _user,
+    buttons,
     callback_update,
     send,
     show,
@@ -47,7 +50,9 @@ BUSY = 820000004  # sends a message a moment before Telegram reports the payment
 BLIP = 820000005  # pays while billing cannot answer for a moment (restart, deploy)
 SLOW = 820000006  # pays while billing's Kafka consumer is slower than the bot waits
 REFUSED = 820000007  # billing cancelled the payment and Telegram refuses the refund
+FORGE = 820000008  # presses a plan button carrying the id of a plan not offered to them
 
+HIDDEN_PLAN_ID = 77  # an archived plan: in billing, not offered to anyone, cheaper than Старт
 OLD_PLATEGA_PAYMENT = "3d0c8f62-6a52-4a8e-9a55-6d1b2b0c1a01"
 
 
@@ -56,9 +61,16 @@ async def shop():
     e2e = ShopE2E()
     e2e.billing.gateways.extend(PROD_ROWS)
     e2e.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED):
+    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED, FORGE):
         e2e.billing.add_user(uid, f"u{uid}")
     e2e.billing.discounts[FREE] = 100
+    hidden = copy.deepcopy(STAGE["plans_available"][0])
+    hidden.update(ID=HIDDEN_PLAN_ID, Name="Архив", IsActive=False, Availability="ALLOWED")
+    for duration in hidden["Durations"]:
+        duration["PlanID"] = HIDDEN_PLAN_ID
+        for price in duration["Prices"]:
+            price["Price"] = "1.00"
+    e2e.billing.hidden_plans.append(hidden)
     e2e.billing.add_transaction(OLD_PLATEGA_PAYMENT, NUDGE, "PLATEGA")
     tx = e2e.billing.transactions[OLD_PLATEGA_PAYMENT]
     tx["Status"] = "PENDING"
@@ -86,8 +98,43 @@ async def test_free_order_needs_no_invoice_and_completes(shop: ShopE2E) -> None:
     show("after free", get)
     created = shop.billing.created[-1]
     assert created["gateway_type"] == "TELEGRAM_STARS"
-    assert await shop.wait_for(lambda: created["ID"] in shop.billing.completed, timeout=10)
+    # Billing completes a 0-price payment by itself; the button is only a backup.
+    assert await shop.wait_for(
+        lambda: shop.billing.transactions[created["ID"]]["Status"] == "COMPLETED", timeout=10
+    )
     assert get is not None
+
+
+async def test_plan_not_offered_cannot_be_bought_by_id(shop: ShopE2E) -> None:
+    # The plan Select passes whatever item id the callback carries, and the handler read any plan
+    # by id. A press carrying the id of a plan not in the user's list (an older message, a modified
+    # client) started a checkout for it: an inactive or user-restricted plan (billing's
+    # CreatePayment checks neither), the proxy plan (recorded undiscounted while the invoice used
+    # the user's discount) or the trial plan (0 stars, billing completes it by itself).
+    plans = await open_plans(shop, FORGE)
+    start = next(b for b in buttons(plans) if "Старт" in b.get("text", ""))
+    prefix, _, item = start["callback_data"].rpartition(":")
+    assert item == "1", start["callback_data"]
+    message = _bot_message(
+        plans["message_id"], plans.get("text", ""), plans.get("reply_markup"), FORGE
+    )
+    created = len(shop.billing.created)
+    invoices = len(shop.tg.invoices)
+    since = await send(shop, callback_update(f"{prefix}:{HIDDEN_PLAN_ID}", message))
+    await shop.wait_for(lambda: user_screens(shop, since, FORGE), timeout=3)
+    screens = user_screens(shop, since, FORGE)
+    if screens and any("1 месяц" in b.get("text", "") for b in buttons(screens[-1])):
+        await tap(shop, screens[-1], "1 месяц")  # the old code opened the hidden plan's durations
+    await send(shop, callback_update(f"{prefix}:4", message))  # the trial plan
+    await asyncio.sleep(3)
+    bought = [
+        (c["plan_id"], c.get("duration_days"))
+        for c in shop.billing.created[created:]
+        if int(c["plan_id"]) in (HIDDEN_PLAN_ID, 4)
+    ]
+    print("\n[payments for plans not offered]", bought)
+    assert not bought, f"a plan not offered to the user was bought by id: {bought}"
+    assert len(shop.tg.invoices) == invoices
 
 
 async def test_old_other_method_button_opens_the_stars_checkout(shop: ShopE2E) -> None:
