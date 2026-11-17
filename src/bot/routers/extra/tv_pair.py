@@ -40,6 +40,18 @@ async def _edit(callback: CallbackQuery, text: str, reply_markup=None) -> None: 
             raise
 
 
+async def _send_no_subscription(
+    callback: CallbackQuery, user: UserDto, code: str, i18n: TranslatorRunner
+) -> None:
+    text = i18n.get("msg-tv-pair-no-subscription", code=display_code(code))
+    markup = retry_keyboard(code, i18n.get("btn-tv-pair-retry"))
+    if isinstance(callback.message, Message):
+        await callback.message.answer(text=text, reply_markup=markup)
+        return
+    if callback.bot is not None:
+        await callback.bot.send_message(chat_id=user.telegram_id, text=text, reply_markup=markup)
+
+
 @inject
 @router.callback_query(F.data.startswith(TV_PAIR_CONFIRM_PREFIX))
 async def on_tv_pair_confirm(
@@ -64,13 +76,12 @@ async def on_tv_pair_confirm(
         await callback.answer()
         return
     if result is TvPairClaim.NO_SUBSCRIPTION:
-        # The code stays valid until it expires: keep a retry button on the question
-        # and open the plan list so the user can buy, then tap again.
-        await _edit(
-            callback,
-            i18n.get("msg-tv-pair-no-subscription", code=display_code(code)),
-            reply_markup=retry_keyboard(code, i18n.get("btn-tv-pair-retry")),
-        )
+        # The code stays valid until it expires: send the explanation with a retry button
+        # as a NEW message, then open the plan list so the user can buy and tap again.
+        # It must not be an edit of the tapped message: the plan list opens with
+        # DELETE_AND_SEND, and aiogram-dialog deletes the message the callback came from,
+        # which would take the explanation and the retry button with it (QA round 1).
+        await _send_no_subscription(callback, user, code, i18n)
         await callback.answer()
         await open_checkout(
             dialog_manager, state=Subscription.PLANS, purchase_type=PurchaseType.NEW
