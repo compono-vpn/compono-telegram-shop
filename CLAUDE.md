@@ -3,6 +3,25 @@
 Python aiogram 3 + aiogram-dialog 2.6 + dishka bot. Checks before merge (CI runs on pull requests and on push to `main`):
 `ruff check src/`, `ruff format --check src/`, `pytest tests/`.
 
+## E2E against a fake Telegram (tgmock, 2026-11-17)
+
+`tests/e2e/` runs the real app (uvicorn webhook mode, aiogram, aiogram-dialog, dishka, Redis) against tgmock's fake
+Bot API (`~/ws/bdtfs/src/compono/tgmock`) and an in-memory billing (`tests/e2e/fake_billing.py`) seeded with real
+stage plans and gateways (`tests/e2e/fixtures/billing_stage.json`, gateway settings removed). Updates are POSTed to
+the bot's webhook exactly like Telegram does; `FailingTelegram.failures[method] = (400, "...")` makes the fake API
+refuse a method. Covered: /start main menu, Подписка → plans → durations → payment methods with prices, Подключиться
+→ «Просто дай ссылку» for a paid user, and the stale-callback fix below. Skipped unless enabled (CI has neither tgmock
+nor redis): `uv pip install -e ../../tgmock` (from the repo root: the path to tgmock), then
+`SHOP_E2E=1 SHOP_E2E_REDIS_SERVER=<redis-server> uv run pytest tests/e2e -v -s`. On this Mac `/usr/local/bin/redis-server`
+is an x86 build that does not run, and the default docker context is a remote host, so build redis from source.
+
+## Stale callback answers (2026-11-17)
+
+`answerCallbackQuery` that Telegram refuses with "query is too old and response timeout expired or query ID is
+invalid" (the user tapped long ago or the query was already answered) is benign: the handler's work is done.
+`src/bot/middlewares/error.py` counts it as `bot_errors_total{error_type="StaleCallbackQuery"}`, logs a warning and
+sends no `#EventError` and no main-menu redirect. Any other `TelegramBadRequest` still alerts.
+
 ## Lost dialog context (2026-11-07)
 
 Every inline keyboard carries an aiogram-dialog intent id. If its context is gone from Redis (a Redis flush,

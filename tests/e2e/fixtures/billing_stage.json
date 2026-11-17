@@ -1,0 +1,528 @@
+{
+ "_source": "stage compono-billing GET responses, 2026-11-17 (gateway Settings removed)",
+ "plans_available": [
+  {
+   "ID": 1,
+   "OrderIndex": 0,
+   "IsActive": true,
+   "Type": "BOTH",
+   "Availability": "ALL",
+   "Name": "⚡️ Старт",
+   "Description": "100 ГБ в месяц. Для лёгкого использования — мессенджеры, соцсети, новости. Два устройства.",
+   "Tag": null,
+   "TrafficLimit": 100,
+   "DeviceLimit": 2,
+   "TrafficLimitStrategy": "MONTH",
+   "AllowedUserIDs": [],
+   "InternalSquads": [
+    "683111d4-ab20-4422-a74b-559bb4501dc4"
+   ],
+   "ExternalSquad": null,
+   "Durations": [
+    {
+     "ID": 2,
+     "PlanID": 1,
+     "Days": 30,
+     "Prices": [
+      {
+       "ID": 5,
+       "DurationID": 2,
+       "Currency": "XTR",
+       "Price": "119.00"
+      },
+      {
+       "ID": 6,
+       "DurationID": 2,
+       "Currency": "RUB",
+       "Price": "119.00"
+      },
+      {
+       "ID": 4,
+       "DurationID": 2,
+       "Currency": "USD",
+       "Price": "1.49"
+      },
+      {
+       "ID": 88,
+       "DurationID": 2,
+       "Currency": "TON",
+       "Price": "1.39"
+      }
+     ]
+    },
+    {
+     "ID": 3,
+     "PlanID": 1,
+     "Days": 90,
+     "Prices": [
+      {
+       "ID": 8,
+       "DurationID": 3,
+       "Currency": "XTR",
+       "Price": "319.00"
+      },
+      {
+       "ID": 9,
+       "DurationID": 3,
+       "Currency": "RUB",
+       "Price": "319.00"
+      },
+      {
+       "ID": 7,
+       "DurationID": 3,
+       "Currency": "USD",
+       "Price": "3.99"
+      },
+      {
+       "ID": 89,
+       "DurationID": 3,
+       "Currency": "TON",
+       "Price": "3.71"
+      }
+     ]
+    },
+    {
+     "ID": 4,
+     "PlanID": 1,
+     "Days": 180,
+     "Prices": [
+      {
+       "ID": 11,
+       "DurationID": 4,
+       "Currency": "XTR",
+       "Price": "579.00"
+      },
+      {
+       "ID": 12,
+       "DurationID": 4,
+       "Currency": "RUB",
+       "Price": "579.00"
+      },
+      {
+       "ID": 10,
+       "DurationID": 4,
+       "Currency": "USD",
+       "Price": "6.99"
+      },
+      {
+       "ID": 90,
+       "DurationID": 4,
+       "Currency": "TON",
+       "Price": "6.72"
+      }
+     ]
+    },
+    {
+     "ID": 13,
+     "PlanID": 1,
+     "Days": 365,
+     "Prices": [
+      {
+       "ID": 38,
+       "DurationID": 13,
+       "Currency": "XTR",
+       "Price": "999.00"
+      },
+      {
+       "ID": 39,
+       "DurationID": 13,
+       "Currency": "RUB",
+       "Price": "999.00"
+      },
+      {
+       "ID": 37,
+       "DurationID": 13,
+       "Currency": "USD",
+       "Price": "11.99"
+      },
+      {
+       "ID": 97,
+       "DurationID": 13,
+       "Currency": "TON",
+       "Price": "11.59"
+      }
+     ]
+    }
+   ],
+   "CreatedAt": "2026-02-19T19:12:40.82593Z",
+   "UpdatedAt": "2026-03-01T21:25:21.697999Z"
+  },
+  {
+   "ID": 2,
+   "OrderIndex": 1,
+   "IsActive": true,
+   "Type": "BOTH",
+   "Availability": "ALL",
+   "Name": "🚀 Про",
+   "Description": "300 ГБ в месяц. Для ежедневного использования — YouTube, видеозвонки, работа. Шесть устройств.",
+   "Tag": null,
+   "TrafficLimit": 300,
+   "DeviceLimit": 6,
+   "TrafficLimitStrategy": "MONTH",
+   "AllowedUserIDs": [],
+   "InternalSquads": [
+    "683111d4-ab20-4422-a74b-559bb4501dc4"
+   ],
+   "ExternalSquad": null,
+   "Durations": [
+    {
+     "ID": 5,
+     "PlanID": 2,
+     "Days": 30,
+     "Prices": [
+      {
+       "ID": 14,
+       "DurationID": 5,
+       "Currency": "XTR",
+       "Price": "239.00"
+      },
+      {
+       "ID": 15,
+       "DurationID": 5,
+       "Currency": "RUB",
+       "Price": "239.00"
+      },
+      {
+       "ID": 13,
+       "DurationID": 5,
+       "Currency": "USD",
+       "Price": "2.99"
+      },
+      {
+       "ID": 91,
+       "DurationID": 5,
+       "Currency": "TON",
+       "Price": "2.78"
+      }
+     ]
+    },
+    {
+     "ID": 7,
+     "PlanID": 2,
+     "Days": 90,
+     "Prices": [
+      {
+       "ID": 20,
+       "DurationID": 7,
+       "Currency": "XTR",
+       "Price": "649.00"
+      },
+      {
+       "ID": 21,
+       "DurationID": 7,
+       "Currency": "RUB",
+       "Price": "649.00"
+      },
+      {
+       "ID": 19,
+       "DurationID": 7,
+       "Currency": "USD",
+       "Price": "7.99"
+      },
+      {
+       "ID": 92,
+       "DurationID": 7,
+       "Currency": "TON",
+       "Price": "7.53"
+      }
+     ]
+    },
+    {
+     "ID": 8,
+     "PlanID": 2,
+     "Days": 180,
+     "Prices": [
+      {
+       "ID": 23,
+       "DurationID": 8,
+       "Currency": "XTR",
+       "Price": "1149.00"
+      },
+      {
+       "ID": 24,
+       "DurationID": 8,
+       "Currency": "RUB",
+       "Price": "1149.00"
+      },
+      {
+       "ID": 22,
+       "DurationID": 8,
+       "Currency": "USD",
+       "Price": "13.99"
+      },
+      {
+       "ID": 93,
+       "DurationID": 8,
+       "Currency": "TON",
+       "Price": "13.34"
+      }
+     ]
+    },
+    {
+     "ID": 14,
+     "PlanID": 2,
+     "Days": 365,
+     "Prices": [
+      {
+       "ID": 41,
+       "DurationID": 14,
+       "Currency": "XTR",
+       "Price": "2039.00"
+      },
+      {
+       "ID": 42,
+       "DurationID": 14,
+       "Currency": "RUB",
+       "Price": "2039.00"
+      },
+      {
+       "ID": 40,
+       "DurationID": 14,
+       "Currency": "USD",
+       "Price": "24.99"
+      },
+      {
+       "ID": 98,
+       "DurationID": 14,
+       "Currency": "TON",
+       "Price": "23.66"
+      }
+     ]
+    }
+   ],
+   "CreatedAt": "2026-02-19T19:15:48.498141Z",
+   "UpdatedAt": "2026-03-01T21:25:39.062506Z"
+  },
+  {
+   "ID": 3,
+   "OrderIndex": 2,
+   "IsActive": true,
+   "Type": "BOTH",
+   "Availability": "ALL",
+   "Name": "💎 Макс",
+   "Description": "1 ТБ в месяц. Для тех, кто не хочет думать о лимитах — стриминг 4K, загрузки, вся семья. Двадцать устройств.",
+   "Tag": null,
+   "TrafficLimit": 1024,
+   "DeviceLimit": 20,
+   "TrafficLimitStrategy": "MONTH",
+   "AllowedUserIDs": [],
+   "InternalSquads": [
+    "683111d4-ab20-4422-a74b-559bb4501dc4"
+   ],
+   "ExternalSquad": null,
+   "Durations": [
+    {
+     "ID": 9,
+     "PlanID": 3,
+     "Days": 30,
+     "Prices": [
+      {
+       "ID": 26,
+       "DurationID": 9,
+       "Currency": "XTR",
+       "Price": "399.00"
+      },
+      {
+       "ID": 27,
+       "DurationID": 9,
+       "Currency": "RUB",
+       "Price": "399.00"
+      },
+      {
+       "ID": 25,
+       "DurationID": 9,
+       "Currency": "USD",
+       "Price": "4.99"
+      },
+      {
+       "ID": 94,
+       "DurationID": 9,
+       "Currency": "TON",
+       "Price": "4.63"
+      }
+     ]
+    },
+    {
+     "ID": 11,
+     "PlanID": 3,
+     "Days": 90,
+     "Prices": [
+      {
+       "ID": 32,
+       "DurationID": 11,
+       "Currency": "XTR",
+       "Price": "1099.00"
+      },
+      {
+       "ID": 33,
+       "DurationID": 11,
+       "Currency": "RUB",
+       "Price": "1099.00"
+      },
+      {
+       "ID": 31,
+       "DurationID": 11,
+       "Currency": "USD",
+       "Price": "12.99"
+      },
+      {
+       "ID": 95,
+       "DurationID": 11,
+       "Currency": "TON",
+       "Price": "12.75"
+      }
+     ]
+    },
+    {
+     "ID": 12,
+     "PlanID": 3,
+     "Days": 180,
+     "Prices": [
+      {
+       "ID": 35,
+       "DurationID": 12,
+       "Currency": "XTR",
+       "Price": "1999.00"
+      },
+      {
+       "ID": 36,
+       "DurationID": 12,
+       "Currency": "RUB",
+       "Price": "1999.00"
+      },
+      {
+       "ID": 34,
+       "DurationID": 12,
+       "Currency": "USD",
+       "Price": "23.99"
+      },
+      {
+       "ID": 96,
+       "DurationID": 12,
+       "Currency": "TON",
+       "Price": "23.20"
+      }
+     ]
+    },
+    {
+     "ID": 15,
+     "PlanID": 3,
+     "Days": 365,
+     "Prices": [
+      {
+       "ID": 44,
+       "DurationID": 15,
+       "Currency": "XTR",
+       "Price": "3499.00"
+      },
+      {
+       "ID": 45,
+       "DurationID": 15,
+       "Currency": "RUB",
+       "Price": "3499.00"
+      },
+      {
+       "ID": 43,
+       "DurationID": 15,
+       "Currency": "USD",
+       "Price": "41.99"
+      },
+      {
+       "ID": 99,
+       "DurationID": 15,
+       "Currency": "TON",
+       "Price": "40.60"
+      }
+     ]
+    }
+   ],
+   "CreatedAt": "2026-02-19T19:18:58.63581Z",
+   "UpdatedAt": "2026-03-01T21:27:53.611961Z"
+  }
+ ],
+ "plan_trial": {
+  "ID": 4,
+  "OrderIndex": 3,
+  "IsActive": true,
+  "Type": "BOTH",
+  "Availability": "TRIAL",
+  "Name": "🎁 Пробный период",
+  "Description": null,
+  "Tag": null,
+  "TrafficLimit": 5,
+  "DeviceLimit": 1,
+  "TrafficLimitStrategy": "NO_RESET",
+  "AllowedUserIDs": [],
+  "InternalSquads": [
+   "683111d4-ab20-4422-a74b-559bb4501dc4"
+  ],
+  "ExternalSquad": null,
+  "Durations": [
+   {
+    "ID": 17,
+    "PlanID": 4,
+    "Days": 1,
+    "Prices": [
+     {
+      "ID": 49,
+      "DurationID": 17,
+      "Currency": "USD",
+      "Price": "0"
+     },
+     {
+      "ID": 50,
+      "DurationID": 17,
+      "Currency": "XTR",
+      "Price": "0"
+     },
+     {
+      "ID": 51,
+      "DurationID": 17,
+      "Currency": "RUB",
+      "Price": "0"
+     }
+    ]
+   }
+  ],
+  "CreatedAt": "2026-03-01T10:06:07.411638Z",
+  "UpdatedAt": "2026-03-08T13:05:28.511685Z"
+ },
+ "gateways_active": [
+  {
+   "ID": 1,
+   "OrderIndex": 1,
+   "Type": "TELEGRAM_STARS",
+   "Channel": "ALL",
+   "Currency": "XTR",
+   "IsActive": true,
+   "Settings": null
+  },
+  {
+   "ID": 2,
+   "OrderIndex": 2,
+   "Type": "YOOKASSA",
+   "Channel": "WEB",
+   "Currency": "RUB",
+   "IsActive": true,
+   "Settings": null
+  },
+  {
+   "ID": 7,
+   "OrderIndex": 2,
+   "Type": "YOOKASSA",
+   "Channel": "BOT",
+   "Currency": "RUB",
+   "IsActive": true,
+   "Settings": null
+  },
+  {
+   "ID": 9,
+   "OrderIndex": 20,
+   "Type": "TON",
+   "Channel": "ALL",
+   "Currency": "TON",
+   "IsActive": true,
+   "Settings": null
+  }
+ ]
+}
