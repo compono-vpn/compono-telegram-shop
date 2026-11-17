@@ -246,6 +246,22 @@ def claims(shop: ShopE2E, since_index: int) -> list[Any]:
     return [b for (_, route, b) in shop.billing.bodies[since_index:] if route == "/tv-pair/claim"]
 
 
+def deleted_message_ids(shop: ShopE2E) -> set[int]:
+    return {int(c["data"].get("message_id", 0)) for c in shop.tg.calls_of("deleteMessage")}
+
+
+def no_subscription_message(after: list[dict[str, Any]]) -> dict[str, Any]:
+    """The «нужна активная подписка» message with the retry button: a new message, not an
+    edit (the plan list replaces the tapped message)."""
+    sent = [
+        s
+        for s in after
+        if s["method"] == "sendMessage" and "нужна активная подписка" in (s.get("text") or "")
+    ]
+    assert sent, f"no explanation message was sent: {[s.get('text') for s in after]}"
+    return sent[-1]
+
+
 def show(tag: str, screen: dict[str, Any]) -> None:
     text = (screen.get("text") or "").replace("\n", " | ")
     print(f"[{tag}] {screen.get('method')}: {text[:300]}")
@@ -312,23 +328,19 @@ async def test_user_without_subscription_gets_plans_then_retries(env) -> None:
     after = await tap(shop, NOSUB_ID, question, f"tvp:{code}")
     for s in after:
         show("no subscription", s)
-    edited = [
-        s
-        for s in after
-        if s["method"] == "editMessageText" and s["message_id"] == question["message_id"]
-    ]
-    assert edited and "нужна активная подписка" in edited[-1]["text"]
-    assert [b["callback_data"] for b in buttons(edited[-1])] == [f"tvp:{code}"]
-    others = [s for s in after if s is not edited[-1]]
+    retry = no_subscription_message(after)
+    assert [b["callback_data"] for b in buttons(retry)] == [f"tvp:{code}"]
+    others = [s for s in after if s is not retry]
     assert any("Старт" in b.get("text", "") for s in others for b in buttons(s)), (
         "the plan list was not opened"
     )
+    assert retry["message_id"] not in deleted_message_ids(shop), "the retry message was deleted"
     status, body = await tv.poll(token, code)
     assert body["status"] == "pending", "a 422 claim leaves the code pending"
 
-    # The user buys, then taps «Подключить» again on the same message.
+    # The user buys, then taps «Подключить» again on the retry message.
     shop.billing.add_active_subscription(NOSUB_ID)
-    after = await tap(shop, NOSUB_ID, edited[-1], f"tvp:{code}")
+    after = await tap(shop, NOSUB_ID, retry, f"tvp:{code}")
     done = [s for s in after if s["method"] == "editMessageText"]
     assert done and "телевизор подключится" in done[-1]["text"]
     status, body = await tv.poll(token, code)
@@ -336,20 +348,15 @@ async def test_user_without_subscription_gets_plans_then_retries(env) -> None:
 
 
 async def test_second_tap_without_subscription_is_quiet(env) -> None:
-    """Regression: tapping «Подключить» again while still without a subscription produces the
-    same text and buttons, so Telegram refuses the edit with "message is not modified". tgmock
-    does not emulate that refusal, so it is injected for the second tap. The bot must answer the
-    tap, send no #EventError and not push the user to the main menu."""
+    """Tapping «Подключить» again on the retry message while still without a subscription: the
+    bot answers the tap, sends a fresh explanation with a retry button (the tapped one is
+    replaced by the plan list), sends no #EventError and the code stays valid. An injected
+    "message is not modified" refusal of any edit must not matter either."""
     shop, tv = env
     code, token = await tv.create()
     question = await open_link(shop, NOSUB_AGAIN_ID, code)
     after = await tap(shop, NOSUB_AGAIN_ID, question, f"tvp:{code}")
-    edited = [
-        s
-        for s in after
-        if s["method"] == "editMessageText" and s["message_id"] == question["message_id"]
-    ]
-    assert edited and "нужна активная подписка" in edited[-1]["text"]
+    retry = no_subscription_message(after)
 
     t0 = time.time()
     shop.tg.failures["editMessageText"] = (
@@ -358,7 +365,7 @@ async def test_second_tap_without_subscription_is_quiet(env) -> None:
         "are exactly the same as a current content and reply markup of the message",
     )
     try:
-        since = await send(shop, callback_update(NOSUB_AGAIN_ID, f"tvp:{code}", edited[-1]))
+        since = await send(shop, callback_update(NOSUB_AGAIN_ID, f"tvp:{code}", retry))
         await shop.wait_for(lambda: shop.tg.calls_of("answerCallbackQuery", since), timeout=15)
         await shop.wait_for(lambda: alerts(shop, t0), timeout=4)
     finally:
@@ -366,7 +373,9 @@ async def test_second_tap_without_subscription_is_quiet(env) -> None:
     answers = shop.tg.calls_of("answerCallbackQuery", since)
     print(f"[second tap] answers={len(answers)} alerts={len(alerts(shop, t0))}")
     assert answers, "the tap was not answered"
-    assert not alerts(shop, t0), "an unchanged message must not page admins"
+    assert not alerts(shop, t0), "a repeated tap must not page admins"
+    again = no_subscription_message(screens(shop, NOSUB_AGAIN_ID, since))
+    assert again["message_id"] not in deleted_message_ids(shop), "the new retry was deleted"
     status, body = await tv.poll(token, code)
     assert body["status"] == "pending", "the code stays valid after a 422"
 

@@ -28,7 +28,7 @@ it receives the subscription URL (the fake billing's URL for that user), and the
 | No collision with `source-`, `ref_`, `aff-`, `web_`, `proxy`, `beta_testers`, `rs_`, `purchase_`, `gt_`, `enc_` | unit | pass | `test_other_payloads_are_not_tv`, `test_prefix_collides_with_no_existing_payload` |
 | Attribution unchanged: `tv-` decodes to None (source None, admin card "Прямой заход"); `source-` legacy and v1 still decode; a new user from a TV link is created with source/attribution None; a new user from `source-a1_site-header_lios_ry` still gets source `site-header` and the attribution touch | unit + e2e | pass | `TestAttributionIsUntouched`; e2e `test_new_user_via_tv_link_has_no_source`, `test_source_link_still_attributes`; existing `tests/test_attribution.py` still passes |
 | Paid user taps «Подключить» → claim `{"code","telegramId"}` for the tapping user → «Готово…», buttons removed → TV receives the URL once, 410 after | unit + e2e (real API) | pass | `TestConfirmHandler.test_attached`; e2e `test_paid_user_pairs_tv` |
-| No subscription → «нужна активная подписка», retry button kept, plan list opened; the code stays pending; after buying, the retry attaches | unit + e2e (real API) | pass | `test_no_subscription_opens_plans_and_keeps_a_retry`; e2e `test_user_without_subscription_gets_plans_then_retries` |
+| No subscription → «нужна активная подписка» with a retry button as a NEW message (see QA round 1), plan list opened; the code stays pending; after buying, the retry attaches | unit + e2e (real API) | pass | `test_no_subscription_opens_plans_and_keeps_a_retry`; e2e `test_user_without_subscription_gets_plans_then_retries` |
 | Code already claimed by someone else → «Этот код уже использован» | unit + e2e | pass | `test_final_answers_remove_the_buttons`; e2e `test_code_used_by_someone_else` |
 | Unknown or expired code → «Код устарел» | unit + e2e | pass | same; e2e `test_expired_or_unknown_code` |
 | 429 and failures (network, 400, 401, 5xx, non-JSON body) → alert, question and buttons kept | unit | pass | `test_transient_answers_keep_the_question`, `TestClaimClient` |
@@ -60,3 +60,60 @@ creates the user. Without them no new-user flow could run in the e2e.
 Re-run on the review commit in a fresh worktree: `ruff check src/` all passed, `ruff format --check src/`
 202 files formatted, `pytest tests/` 1382 passed, 2 skipped, 0 failed; e2e with the in-memory claim 15
 passed; TV e2e against a compono-api binary built from `feat/tv-pairing` 90610ba: 9 passed.
+
+## QA round 1 (2026-11-17, independent QA, branch `feat/tv-pairing`)
+
+Fresh worktree, own Redis 7.4.1 (built from source), tgmock 0.2.0, and a compono-api binary built
+from `feat/tv-pairing` including the QA round 1 API fixes. Evidence: `docs/test-evidence/tv-pairing/qa-r1/`.
+
+### Bug found and fixed
+
+**The «нужна активная подписка» message and its retry button were deleted the moment they appeared.**
+The handler edited the tapped question into the explanation with a retry button, then opened the plan
+list with `open_checkout` (`ShowMode.DELETE_AND_SEND`). aiogram-dialog treats the message a callback
+came from as the dialog's old message and deletes it, so the user saw only a plan list, never the
+explanation, and had no button to tap after buying (the author's e2e only checked that the edit was
+sent, not that the message survived; tgmock records the `deleteMessage`). `ShowMode.SEND` would not
+help: aiogram-dialog then strips that message's keyboard. Fix (`src/bot/routers/extra/tv_pair.py`):
+the explanation and retry button are sent as a new message (`callback.message.answer`, or
+`bot.send_message` to the user when the message is inaccessible), then the plan list opens and
+replaces the tapped message. A retry tap that still has no subscription does the same, so exactly one
+retry message stays visible. `open_checkout` and every other caller are unchanged.
+
+Regression tests: `test_no_subscription_opens_plans_and_keeps_a_retry` (rewritten),
+`test_no_subscription_message_is_sent_before_the_plan_list`,
+`test_no_subscription_on_an_inaccessible_message_still_sends` (3 failed on the old handler:
+`unit-before-fix.txt`), e2e `test_no_subscription_keeps_the_retry_message` (failed on the old handler
+with `deleted message ids after the tap: {3}; question=3`: `e2e-before-fix.txt`), and the two author
+e2e cases now assert the retry message is never deleted. The "message is not modified" guard from the
+review stays for the attached/expired/used/cancel edits.
+
+### Gates after the fix
+
+| Gate | Result |
+|---|---|
+| `uv run ruff check src/` | All checks passed |
+| `uv run ruff format --check src/` | 202 files already formatted |
+| `uv run pytest tests/` | 1383 passed, 3 skipped (the three opt-in e2e modules), 0 failed |
+| `SHOP_E2E=1 SHOP_E2E_API_BIN=<compono-api feat/tv-pairing + QA fixes> pytest tests/e2e` (whole e2e directory) | 35 passed, 0 failed (`e2e-after-fix-real-api.txt`) |
+
+### QA e2e matrix (`tests/e2e/test_tv_pair_qa_e2e.py`, real bot + real compono-api)
+
+| Case | Result |
+|---|---|
+| No subscription: the message with the explanation and the retry button exists and is never deleted | fail before fix, pass after |
+| `/start TV-<code in lower case>` → question shows the upper-case code, claim sent with it | pass |
+| Bad payloads `tv-ILOU1234`, `tv-ABC`, `tv-ABCDEFGH9`, `tv-`, `tv_ABCDEFGH`, `tv-ABCD-EFGH`, `xtv-ABCDEFGH` → normal main menu, no question, no claim | pass (7 cases) |
+| Forged buttons `tvp:`, `tvp:ABC`, `tvp:ILOU1234`, `tvp:abcdefgh`, `tvp:ABCDEFGH1`, `tvp:../../x` → answered, no claim, no `#EventError` | pass (6 cases) |
+| compono-api unreachable (claim forwarded to a closed port) → alert «Не получилось подключить телевизор…», no edit, buttons kept | pass |
+| Guessing: 5 unknown codes → «Код устарел» ×5, the 6th tap (a real code) → alert «Слишком много попыток» | pass |
+| Two «Подключить» taps delivered at the same moment → no `#EventError`, the TV pairs | pass |
+| Secrets in logs after a full pairing: the full code, pollToken and subscription URL (and its token part) appear in neither the bot log nor the compono-api log | pass |
+| Plain `/start` after a TV question → main menu | pass |
+
+### Not tested in this round, and why
+
+- Real Telegram clients and the stage bot: nothing is deployed (unverified).
+- What the user sees in a real Telegram client for the new message order (explanation, then the plan
+  list below it): observed only as tgmock calls (unverified on a phone).
+- A real payment between the 422 and the retry: the e2e flips the fake billing's subscription instead.

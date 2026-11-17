@@ -333,6 +333,7 @@ def _callback(data: str):
     callback.answer = AsyncMock()
     callback.message = MagicMock(spec=Message)
     callback.message.edit_text = AsyncMock()
+    callback.message.answer = AsyncMock()
     return callback
 
 
@@ -365,12 +366,57 @@ class TestConfirmHandler:
 
     async def test_no_subscription_opens_plans_and_keeps_a_retry(self):
         callback, _, dm, i18n = await _confirm(TvPairClaim.NO_SUBSCRIPTION)
-        kwargs = callback.message.edit_text.await_args.kwargs
+        # QA round 1 regression: the explanation and its retry button are a NEW message.
+        # Editing the tapped message is wrong: the plan list opens with DELETE_AND_SEND and
+        # aiogram-dialog deletes the tapped message, retry button included.
+        callback.message.edit_text.assert_not_called()
+        callback.message.answer.assert_awaited_once()
+        kwargs = callback.message.answer.await_args.kwargs
         assert kwargs["text"] == "[msg-tv-pair-no-subscription]"
         i18n.get.assert_any_call("msg-tv-pair-no-subscription", code="K7M4-QX9P")
         assert kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"tvp:{CODE}"
         dm.start.assert_awaited_once()
         assert dm.start.await_args.args[0] == Subscription.PLANS
+
+    async def test_no_subscription_message_is_sent_before_the_plan_list(self):
+        order: list[str] = []
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.answer = AsyncMock(side_effect=lambda **_: order.append("explain"))
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=TvPairClaim.NO_SUBSCRIPTION)
+        dm = make_dialog_manager()
+        dm.start = AsyncMock(side_effect=lambda *a, **k: order.append("plans"))
+        dm.update = AsyncMock()
+        await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=dm,
+            i18n=make_i18n(),
+            api_client=api,
+        )
+        assert order == ["explain", "plans"]
+
+    async def test_no_subscription_on_an_inaccessible_message_still_sends(self):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message = None
+        callback.bot = MagicMock()
+        callback.bot.send_message = AsyncMock()
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=TvPairClaim.NO_SUBSCRIPTION)
+        dm = make_dialog_manager()
+        dm.start = AsyncMock()
+        dm.update = AsyncMock()
+        await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=dm,
+            i18n=make_i18n(),
+            api_client=api,
+        )
+        kwargs = callback.bot.send_message.await_args.kwargs
+        assert kwargs["chat_id"] == TG
+        assert kwargs["reply_markup"].inline_keyboard[0][0].callback_data == f"tvp:{CODE}"
+        callback.answer.assert_awaited_once_with()
 
     @pytest.mark.parametrize(
         "result,key",
@@ -425,7 +471,7 @@ class TestUnchangedEdit:
     def _failing_edit(self, message: str):
         return AsyncMock(side_effect=TelegramBadRequest(method=MagicMock(), message=message))
 
-    @pytest.mark.parametrize("result", [TvPairClaim.ATTACHED, TvPairClaim.NO_SUBSCRIPTION])
+    @pytest.mark.parametrize("result", [TvPairClaim.ATTACHED])
     async def test_not_modified_is_ignored_and_the_tap_is_answered(self, monkeypatch, result):
         callback = _callback(f"tvp:{CODE}")
         callback.message.edit_text = self._failing_edit(self.NOT_MODIFIED)
@@ -443,8 +489,6 @@ class TestUnchangedEdit:
         )
         callback.message.edit_text.assert_awaited_once()
         callback.answer.assert_awaited_once_with()
-        if result is TvPairClaim.NO_SUBSCRIPTION:
-            dm.start.assert_awaited_once()
 
     async def test_cancel_not_modified_is_ignored(self):
         callback = _callback("tvx")

@@ -1,0 +1,152 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.3, pytest-8.4.2, pluggy-1.6.0 -- /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa-shop-tv-pairing/.venv/bin/python
+rootdir: /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa-shop-tv-pairing
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.3.0, tgmock-0.2.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 35 items
+
+tests/e2e/test_stale_callback_e2e.py::test_start_opens_main_menu 
+[/start] sendMessage: <b>👤 Профиль:</b> | <blockquote>• <b>ID</b>: <code>730166164</code> | • <b>Имя</b>: Vitaliy• 🧪 <b>Бета-тестер</b>: Нет</blockquote> |  | <b>💳 Подписка:</b> | <blockquote>• У вас нет оформленной подписки. |  | <i>↘️ Для покупки доступа перейдите в меню «Подписка».</i></blockquote>
+[/start] buttons: ['💳 Подписка', '📱 Приложение для iPhone', '👥 Пригласить', '🆘 Поддержка', 'ℹ️ Информация']
+PASSED
+tests/e2e/test_stale_callback_e2e.py::test_subscription_plans_durations_payment_methods 
+[Подписка] editMessageText: <b>💳 Подписка</b>
+[Подписка] buttons: ['💸 Купить подписку', '🎟 Активировать промокод', '↩️ Вернуться в главное меню']
+
+[Купить] editMessageText: <b>📦 Выберите план</b> |  | ⚡️ Старт — 119 ₽/мес · 100 ГБ, 2 устройства | 🚀 Про — 239 ₽/мес · 300 ГБ, 6 устройств | 💎 Макс — 399 ₽/мес · 1 024 ГБ, 20 устройств
+[Купить] buttons: ['⚡️ Старт', '🚀 Про', '💎 Макс', '⬅️ Назад', '↩️ Вернуться в главное меню']
+
+[Старт] editMessageText: <b>⏳ Выберите длительность</b> |  | <b>⚡️ Старт:</b> | <blockquote>100 ГБ в месяц. Для лёгкого использования — мессенджеры, соцсети, новости. Два устройства. |  | • <b>Лимит трафика</b>: 100 ГБ | • <b>Лимит устройств</b>: 2</blockquote>
+[Старт] buttons: ['1 месяц | 119₽', '3 месяца | 319₽', '6 месяцев | 579₽', '1 год | 999₽', '⬅️ Назад к выбору плана', '↩️ Вернуться в главное меню']
+
+[1 месяц] editMessageText: <b>💳 Выберите способ оплаты</b> |  | <b>⚡️ Старт:</b> | <blockquote>100 ГБ в месяц. Для лёгкого использования — мессенджеры, соцсети, новости. Два устройства. |  | • <b>Лимит трафика</b>: 100 ГБ | • <b>Лимит устройств</b>: 2 | • <b>Длительность</b>: 1 месяц</blockquote>
+[1 месяц] buttons: ['Telegram Stars | 119 ★', 'ЮKassa | 119 ₽', '⬅️ Изменить длительность', '↩️ Вернуться в главное меню']
+PASSED
+tests/e2e/test_stale_callback_e2e.py::test_connect_for_paid_user 
+[/start paid] sendMessage: <b>👤 Профиль:</b> | <blockquote>• <b>ID</b>: <code>730166165</code> | • <b>Имя</b>: Vitaliy• 🧪 <b>Бета-тестер</b>: Нет</blockquote> |  | <b>💳 Подписка:</b> | <blockquote>• <b>Лимит трафика</b>: 100 ГБ | • <b>Лимит устройств</b>: 2 | • <b>Осталось</b>: 19 дней 23 часа 59 минут</blockquote>
+[/start paid] buttons: ['🚀 Подключиться', '📱 Мои устройства', '💳 Подписка', '📱 Приложение для iPhone', '👥 Пригласить', '🆘 Поддержка', 'ℹ️ Информация']
+
+[Подключиться] editMessageText: <b>🚀 Подключиться</b> |  | Выберите, что вам нужно: | • пошаговая инструкция с настройкой приложения; | • или сразу ссылка на подписку, если вы уже знаете, что с ней делать.
+[Подключиться] buttons: ['📖 Пошаговая инструкция по подключению', '🔗 Просто дай ссылку', '⬅️ Назад']
+[Подключиться] guide url: https://componovpn.com/connect/e2e730166165
+
+[Просто дай ссылку] sendMessage: 🔗 Ваша ссылка на подписку: |  | <code>https://componovpn.com/api/sub/e2e730166165</code> |  | Вставьте её в приложение VPN (например, Hiddify или v2rayNG), чтобы подключиться.
+[Просто дай ссылку] buttons: ['❌ Закрыть']
+PASSED
+tests/e2e/test_stale_callback_e2e.py::test_stale_answer_is_benign 
+[stale] fake API: answerCallbackQuery -> 400 Bad Request: query is too old and response timeout expired or query ID is invalid
+[stale] stored answer -> {'telegram_id': '730166164', 'gateway': 'PLATEGA', 'reason': 'WILL_THINK', 'answered_at': '1794946959.1769931'}
+[stale] screens -> ['🙏 Спасибо за ответ! Учтём это.']
+[stale] answerCallbackQuery calls -> 1
+[stale] admin alerts -> 0 | main-menu redirects -> 0
+PASSED
+tests/e2e/test_stale_callback_e2e.py::test_other_bad_request_still_alerts 
+[control] fake API: answerCallbackQuery -> 400 Bad Request: chat not found
+[control] stored answer -> {'telegram_id': '730166164', 'gateway': 'TELEGRAM_STARS', 'reason': 'WILL_THINK', 'answered_at': '1794946965.448427'}
+[control] admin alerts -> [('sendDocument', '#EventError\n\n<b>🔅 Событие: Произошла ошибка!</b>\n\n<b>👤 Пользователь:</b>\n<blockquote>• <b>ID</b>: <code>730166164</code>\n• <b>Имя</b>: Vitaliy</blockquote>\n\n<b>')]
+[control] main-menu redirects -> 1
+PASSED
+tests/e2e/test_stale_callback_e2e.py::test_start_still_works_after_errors 
+[/start again] sendMessage: <b>👤 Профиль:</b> | <blockquote>• <b>ID</b>: <code>730166164</code> | • <b>Имя</b>: Vitaliy• 🧪 <b>Бета-тестер</b>: Нет</blockquote> |  | <b>💳 Подписка:</b> | <blockquote>• У вас нет оформленной подписки. |  | <i>↘️ Для покупки доступа перейдите в меню «Подписка».</i></blockquote>
+[/start again] buttons: ['💳 Подписка', '📱 Приложение для iPhone', '👥 Пригласить', '🆘 Поддержка', 'ℹ️ Информация']
+
+[billing] routes the fake does not model: [('GET', '/remnawave/api/internal-squads'), ('GET', '/remnawave/api/system/stats')]
+PASSED
+--- shop log: /var/folders/05/2x3fnz1x7ls0bzcr_qjncy100000gs/T/shop-e2e-l4nhcktn/shop.log
+
+tests/e2e/test_tv_pair_e2e.py::test_paid_user_pairs_tv 
+[tv e2e] TV side: real compono-api http://127.0.0.1:56054
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>405T-NR1R</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:405TNR1R'), ('Отмена', 'tvx')]
+[tap Подключить] editMessageText: ✅ Готово, телевизор подключится через несколько секунд.
+[tap Подключить] buttons: []
+[TV poll] 200 {'status': 'paired', 'subscriptionUrl': '<url>'}
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_user_without_subscription_gets_plans_then_retries [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>31FT-MFJ8</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:31FTMFJ8'), ('Отмена', 'tvx')]
+[no subscription] sendMessage: 📺 Для телевизора нужна активная подписка. |  | Оформите её и нажмите «Подключить» ещё раз. Код <code>31FT-MFJ8</code> действует 10 минут с момента появления на экране.
+[no subscription] buttons: [('📺 Подключить', 'tvp:31FTMFJ8')]
+[no subscription] sendMessage: <b>📦 Выберите план</b> |  | ⚡️ Старт — 119 ₽/мес · 100 ГБ, 2 устройства | 🚀 Про — 239 ₽/мес · 300 ГБ, 6 устройств | 💎 Макс — 399 ₽/мес · 1 024 ГБ, 20 устройств
+[no subscription] buttons: [('⚡️ Старт', 'PA07Aa\x1dpurchase_select_plan:1'), ('🚀 Про', 'PA07Aa\x1dpurchase_select_plan:2'), ('💎 Макс', 'PA07Aa\x1dpurchase_select_plan:3'), ('⬅️ Назад', 'PA07Aa\x1dpurchase_back'), ('↩️ Вернуться в главное меню', 'PA07Aa\x1dback_main_menu')]
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_second_tap_without_subscription_is_quiet [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>1ZA3-93YH</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:1ZA393YH'), ('Отмена', 'tvx')]
+[second tap] answers=1 alerts=0
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_code_used_by_someone_else [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>K3XQ-7MV4</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:K3XQ7MV4'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>K3XQ-7MV4</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:K3XQ7MV4'), ('Отмена', 'tvx')]
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_expired_or_unknown_code [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0000</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0000'), ('Отмена', 'tvx')]
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_cancel_does_not_claim [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>3M1N-FF6V</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:3M1NFF6V'), ('Отмена', 'tvx')]
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_new_user_via_tv_link_has_no_source [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>YYBW-H2MD</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:YYBWH2MD'), ('Отмена', 'tvx')]
+[new user] billing create_user bodies: [{'telegram_id': 730177004, 'username': None, 'referral_code': 'bjqkx5', 'name': 'TV', 'role': 'USER', 'language': 'ru', 'source': None, 'attribution': None}, {'telegram_id': 730177004, 'username': None, 'name': 'TV', 'source': None, 'attribution': None}]
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_source_link_still_attributes PASSED
+tests/e2e/test_tv_pair_e2e.py::test_plain_start_still_opens_main_menu PASSED
+--- shop log: /var/folders/05/2x3fnz1x7ls0bzcr_qjncy100000gs/T/shop-e2e-8hz9zu2f/shop.log
+
+tests/e2e/test_tv_pair_qa_e2e.py::test_no_subscription_keeps_the_retry_message [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>1X0Z-V5P7</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:1X0ZV5P7'), ('Отмена', 'tvx')]
+[no sub] deleted ids after the tap: {3}; retry messages: [4, 4]
+PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_lower_case_payload PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ILOU1234] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABC] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABCDEFGH9] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv_ABCDEFGH] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABCD-EFGH] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[xtv-ABCDEFGH] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ABC] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ILOU1234] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:abcdefgh] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ABCDEFGH1] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:../../x] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_api_failure_shows_alert_keeps_buttons [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>EP9K-2BNK</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:EP9K2BNK'), ('Отмена', 'tvx')]
+[api down] answer: {'callback_query_id': 'cq-940000039', 'text': 'Не получилось подключить телевизор. Попробуйте ещё раз.', 'show_alert': 'true'}
+PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_guessing_codes_is_stopped [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0000</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0000'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0010</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0010'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0020</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0020'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0030</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0030'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0040</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0040'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZREC-Y16K</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZRECY16K'), ('Отмена', 'tvx')]
+PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_double_tap_at_once [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>NBWY-92VY</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:NBWY92VY'), ('Отмена', 'tvx')]
+PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_nothing_secret_in_logs [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>3RHC-X1Y7</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:3RHCX1Y7'), ('Отмена', 'tvx')]
+[logs] api log 4482 bytes, bot log 103860 bytes, 0 secrets
+PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_main_menu_still_works_after_tv_question PASSED
+--- shop log: /var/folders/05/2x3fnz1x7ls0bzcr_qjncy100000gs/T/shop-e2e-8uo6ugim/shop.log
+
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 35 passed, 5 warnings in 199.15s (0:03:19) ==================

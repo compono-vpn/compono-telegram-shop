@@ -1,0 +1,4 @@
+FAILED tests/test_tv_pair.py::TestConfirmHandler::test_no_subscription_opens_plans_and_keeps_a_retry
+FAILED tests/test_tv_pair.py::TestConfirmHandler::test_no_subscription_message_is_sent_before_the_plan_list
+FAILED tests/test_tv_pair.py::TestConfirmHandler::test_no_subscription_on_an_inaccessible_message_still_sends
+3 failed, 100 passed, 27 warnings in 5.39s
