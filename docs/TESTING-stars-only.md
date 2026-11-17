@@ -77,6 +77,12 @@ Proof that the tests catch broken code (run on 2026-11-17):
 - Billing's proxy purchase through `/payment/handle-free`. Reading compono-billing `HandlePaymentSucceeded`, the
   proxy path does not depend on the gateway. Unverified on stage.
 
+- Completing a paid order: billing's `/payment/handle-free` only queues a Kafka event, and the payment turns COMPLETED
+  a moment later. The bot waits for that (about 20 s) and refunds only a cancelled or unknown payment. The e2e fake
+  billing completes asynchronously too (0.7 s), but real Kafka lag is unmeasured. On stage, after a Stars payment,
+  check that the subscription was granted and the bot did NOT say «Звёзды вернули», and that the log has no
+  "charged but billing has it" line.
+
 ## Release order
 
 1. Merge, stage sync, then walk the flows above on @compono_dev_bot.
