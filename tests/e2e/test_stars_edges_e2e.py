@@ -45,6 +45,8 @@ NUDGE = 820000002  # taps «Другой способ» on a reminder sent befor
 TAPS = 820000003  # taps the same duration twice
 BUSY = 820000004  # sends a message a moment before Telegram reports the payment
 BLIP = 820000005  # pays while billing cannot answer for a moment (restart, deploy)
+SLOW = 820000006  # pays while billing's Kafka consumer is slower than the bot waits
+REFUSED = 820000007  # billing cancelled the payment and Telegram refuses the refund
 
 OLD_PLATEGA_PAYMENT = "3d0c8f62-6a52-4a8e-9a55-6d1b2b0c1a01"
 
@@ -54,7 +56,7 @@ async def shop():
     e2e = ShopE2E()
     e2e.billing.gateways.extend(PROD_ROWS)
     e2e.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP):
+    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED):
         e2e.billing.add_user(uid, f"u{uid}")
     e2e.billing.discounts[FREE] = 100
     e2e.billing.add_transaction(OLD_PLATEGA_PAYMENT, NUDGE, "PLATEGA")
@@ -224,6 +226,113 @@ async def test_payment_while_billing_blips_still_reaches_billing(shop: ShopE2E) 
         lambda: shop.billing.transactions[invoice["payload"]]["Status"] == "COMPLETED", timeout=10
     )
     assert not shop.billing.fail_next[f"PUT /users/{BLIP}"], "the billing outage never happened"
+
+
+async def test_payment_billing_completes_late_tells_the_user_not_to_pay_again(
+    shop: ShopE2E,
+) -> None:
+    # Billing's consumer takes longer than the bot's ~20 s wait. The stars stay (billing will
+    # complete it), the admins get #EventError, and the user must hear that the money arrived:
+    # otherwise they see only the main menu and may buy the same plan a second time.
+    shop.billing.completion_delay = 28
+    try:
+        plans = await open_plans(shop, SLOW)
+        durations = await tap(shop, plans, "Старт")
+        invoices = len(shop.tg.invoices)
+        confirm = await tap(shop, durations, "1 месяц")
+        invoice = stars_checkout(shop, confirm, invoices)
+        assert _ok(await _pre_checkout(shop, SLOW, invoice))
+        await asyncio.sleep(1)
+        since = time.time()
+        payment = {
+            "update_id": _next_update_id(),
+            "message": {
+                "message_id": 1,
+                "from": _user(SLOW),
+                "chat": {"id": SLOW, "type": "private"},
+                "date": int(time.time()),
+                "successful_payment": {
+                    "currency": "XTR",
+                    "total_amount": invoice["prices"][0]["amount"],
+                    "invoice_payload": invoice["payload"],
+                    "telegram_payment_charge_id": "stxe2e-slow",
+                    "provider_payment_charge_id": "",
+                },
+            },
+        }
+        assert await shop.send_update(payment) == 200
+
+        def told() -> list[str]:
+            return [
+                str(c["data"].get("text", ""))
+                for c in shop.tg.calls_of("sendMessage", since)
+                if str(c["data"].get("chat_id")) == str(SLOW)
+            ]
+
+        assert await shop.wait_for(lambda: any("не нужно" in t for t in told()), timeout=30), (
+            f"the user paid and was told nothing while billing was slow: {told()}"
+        )
+        assert shop.billing.transactions[invoice["payload"]]["Status"] == "PENDING"
+        assert not shop.tg.calls_of("refundStarPayment", since)
+        assert await shop.wait_for(
+            lambda: shop.billing.transactions[invoice["payload"]]["Status"] == "COMPLETED", 15
+        )
+        assert not shop.tg.calls_of("refundStarPayment", since)
+        print("\n[told the user]", [t for t in told() if "не нужно" in t])
+    finally:
+        shop.billing.completion_delay = 0.7
+
+
+async def test_refund_telegram_refuses_alerts_admins_with_the_charge(shop: ShopE2E) -> None:
+    # Billing cancelled the payment (30-minute timeout) just before Telegram took the stars, and
+    # Telegram then refuses the refund. Only a person can send the stars back, so the admin alert
+    # must name the Telegram charge id; before, it carried only Telegram's error text.
+    plans = await open_plans(shop, REFUSED)
+    durations = await tap(shop, plans, "Старт")
+    invoices = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    invoice = stars_checkout(shop, confirm, invoices)
+    assert _ok(await _pre_checkout(shop, REFUSED, invoice))
+    shop.billing.transactions[invoice["payload"]]["Status"] = "CANCELED"
+    shop.tg.failures["refundStarPayment"] = (400, "Bad Request: CHARGE_NOT_FOUND")
+    await asyncio.sleep(1)
+    since = time.time()
+    try:
+        payment = {
+            "update_id": _next_update_id(),
+            "message": {
+                "message_id": 1,
+                "from": _user(REFUSED),
+                "chat": {"id": REFUSED, "type": "private"},
+                "date": int(time.time()),
+                "successful_payment": {
+                    "currency": "XTR",
+                    "total_amount": invoice["prices"][0]["amount"],
+                    "invoice_payload": invoice["payload"],
+                    "telegram_payment_charge_id": "stxe2e-refused",
+                    "provider_payment_charge_id": "",
+                },
+            },
+        }
+        assert await shop.send_update(payment) == 200
+
+        def alerts() -> list[str]:
+            # #EventError goes to the dev chat as a message or, with the traceback, a document.
+            return [
+                str(c["data"])
+                for c in shop.tg.calls
+                if c["at"] >= since
+                and c["method"] != "refundStarPayment"
+                and str(c["data"].get("chat_id")) == str(DEV_ID)
+            ]
+
+        assert await shop.wait_for(lambda: shop.tg.calls_of("refundStarPayment", since), 15)
+        assert await shop.wait_for(
+            lambda: any("stxe2e-refused" in a for a in alerts()), timeout=15
+        ), f"the failed refund alert names no charge: {alerts()}"
+        print("\n[admin alert]", [a for a in alerts() if "stxe2e-refused" in a][0][:400])
+    finally:
+        shop.tg.failures.pop("refundStarPayment", None)
 
 
 def _ok(answer: dict) -> bool:

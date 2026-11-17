@@ -34,6 +34,10 @@ SECOND_CHARGE_TEXT = (
     "Этот счёт уже был оплачен, поэтому второй платёж не нужен. Звёзды за него вернули на ваш "
     "счёт. Подписка оформляется по первому платежу."
 )
+PAYMENT_RECEIVED_TEXT = (
+    "Оплата получена, подписка оформляется. Это может занять несколько минут, платить ещё раз "
+    "не нужно. Если подписка не появится в течение часа, напишите в @compono_support."
+)
 # Waits between billing retries after a successful Stars payment (3 attempts in all).
 HANDLE_FREE_RETRY_DELAYS = (1, 3)
 # handle-free only queues a Kafka event; billing's consumer completes the payment a moment later.
@@ -108,17 +112,15 @@ async def on_successful_payment(
     if not payment:
         return
 
-    refunded = False
-    if user.is_dev:
-        logger.info(f"{log(user)} Refunding test payment '{payment.telegram_payment_charge_id}'")
-        await bot.refund_star_payment(
-            user_id=user.telegram_id,
-            telegram_payment_charge_id=payment.telegram_payment_charge_id,
-        )
-        refunded = True
-
     payment_id = UUID(payment.invoice_payload)
     charge_id = payment.telegram_payment_charge_id
+
+    refunded = False
+    if user.is_dev:
+        logger.info(f"{log(user)} Refunding test payment '{charge_id}'")
+        await _refund(bot, user, payment_id, charge_id)
+        refunded = True
+
     if not await claim_charge(redis_client, payment_id, charge_id):
         # Billing completes the payment for the first charge only; this one would buy nothing.
         logger.error(
@@ -126,9 +128,7 @@ async def on_successful_payment(
             f"refunding it"
         )
         if not refunded:
-            await bot.refund_star_payment(
-                user_id=user.telegram_id, telegram_payment_charge_id=charge_id
-            )
+            await _refund(bot, user, payment_id, charge_id)
         await message.answer(SECOND_CHARGE_TEXT)
         return
 
@@ -151,6 +151,8 @@ async def on_successful_payment(
     if status != TransactionStatus.CANCELED.value:
         # Only CANCELED means billing will never complete it. PENDING is billing being slow; any
         # other answer is unexpected. The stars stay and #EventError (raised) makes a person check.
+        if status == TransactionStatus.PENDING.value:
+            await _say_payment_received(message, user)
         raise RuntimeError(
             f"Stars payment '{payment_id}' (charge '{charge_id}') is {status} in billing after "
             f"handle-free; stars kept, check that it completes"
@@ -161,11 +163,31 @@ async def on_successful_payment(
         f"refunding charge '{charge_id}'"
     )
     if not refunded:
-        await bot.refund_star_payment(
-            user_id=user.telegram_id,
-            telegram_payment_charge_id=charge_id,
-        )
+        await _refund(bot, user, payment_id, charge_id)
     await message.answer(UNCOMPLETED_PAYMENT_TEXT)
+
+
+async def _say_payment_received(message: Message, user: UserDto) -> None:
+    """The error handler only opens the main menu: say the money arrived, or the user may buy the
+    same plan again while billing is still completing this one."""
+    try:
+        await message.answer(PAYMENT_RECEIVED_TEXT)
+    except Exception:
+        logger.opt(exception=True).warning(f"{log(user)} Could not say the payment arrived")
+
+
+async def _refund(bot: Bot, user: UserDto, payment_id: UUID, charge_id: str) -> None:
+    """Send the stars of one charge back. If Telegram refuses, a person must do it by hand."""
+    try:
+        await bot.refund_star_payment(
+            user_id=user.telegram_id, telegram_payment_charge_id=charge_id
+        )
+    except Exception as exception:
+        # Ids first: the #EventError text is cut at 512 characters.
+        raise RuntimeError(
+            f"Stars payment '{payment_id}' (charge '{charge_id}') of user '{user.telegram_id}': "
+            f"refund failed ({exception}); stars kept, refund the charge by hand"
+        ) from exception
 
 
 async def _complete_in_billing(billing: BillingClient, payment_id: UUID, user: UserDto) -> None:
