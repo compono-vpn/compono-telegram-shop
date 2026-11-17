@@ -6,6 +6,7 @@ from aiogram import Bot, F, Router
 from aiogram.types import Message, PreCheckoutQuery
 from dishka import FromDishka
 from loguru import logger
+from redis.asyncio import Redis
 
 from src.core.enums import TransactionStatus
 from src.core.utils.formatters import format_user_log as log
@@ -21,10 +22,22 @@ STALE_INVOICE_ERROR = (
     "Этот счёт уже оплачен или устарел. Откройте оплату заново: меню «Подписка» → «Купить»."
 )
 RETRY_ERROR = "Не получилось проверить счёт. Попробуйте ещё раз через минуту."
+ALREADY_PAID_ERROR = (
+    "Этот счёт уже оплачен, подписка оформляется. Подождите пару минут, платить ещё раз не нужно."
+)
 UNCOMPLETED_PAYMENT_TEXT = (
     "Этот счёт уже был закрыт, поэтому подписку оформить не получилось. Звёзды вернули на ваш "
     "счёт. Откройте оплату заново: меню «Подписка» → «Купить»."
 )
+SECOND_CHARGE_TEXT = (
+    "Этот счёт уже был оплачен, поэтому второй платёж не нужен. Звёзды за него вернули на ваш "
+    "счёт. Подписка оформляется по первому платежу."
+)
+# The first Telegram charge of each billing payment. Billing completes a payment once, so a second
+# charge for the same payment (the user paid the invoice again while billing's Kafka consumer was
+# still completing it) would take stars for nothing.
+CHARGE_KEY = "stars_charge:{payment_id}"
+CHARGE_KEY_TTL = 7 * 24 * 3600
 # Waits between billing retries after a successful Stars payment (3 attempts in all).
 HANDLE_FREE_RETRY_DELAYS = (1, 3)
 # handle-free only queues a Kafka event; billing's consumer completes the payment a moment later.
@@ -37,6 +50,7 @@ async def on_pre_checkout(
     pre_checkout_query: PreCheckoutQuery,
     user: UserDto,
     billing: FromDishka[BillingClient],
+    redis_client: FromDishka[Redis],
 ) -> None:
     """Accept only an invoice whose billing payment can still complete.
 
@@ -70,6 +84,13 @@ async def on_pre_checkout(
         reason = f"gateway '{transaction.GatewayType}' is not Stars"
     elif transaction.Status != TransactionStatus.PENDING.value:
         reason = f"payment is {transaction.Status}"
+    elif await _first_charge(redis_client, payment_id) is not None:
+        logger.warning(
+            f"{log(user)} Pre-checkout query for '{payment_id}' rejected: already charged, "
+            f"billing is still completing it"
+        )
+        await pre_checkout_query.answer(ok=False, error_message=ALREADY_PAID_ERROR)
+        return
     if reason:
         logger.warning(f"{log(user)} Pre-checkout query for '{payment_id}' rejected: {reason}")
         await pre_checkout_query.answer(ok=False, error_message=STALE_INVOICE_ERROR)
@@ -84,6 +105,7 @@ async def on_successful_payment(
     user: UserDto,
     bot: Bot,
     billing: FromDishka[BillingClient],
+    redis_client: FromDishka[Redis],
 ) -> None:
     payment = message.successful_payment
 
@@ -99,33 +121,47 @@ async def on_successful_payment(
         )
         refunded = True
 
-    # Telegram has already taken the stars: a failed billing call must not lose the order.
     payment_id = UUID(payment.invoice_payload)
+    charge_id = payment.telegram_payment_charge_id
+    if not await _claim_charge(redis_client, payment_id, charge_id):
+        # Billing completes the payment for the first charge only; this one would buy nothing.
+        logger.error(
+            f"{log(user)} Second charge '{charge_id}' for Stars payment '{payment_id}', "
+            f"refunding it"
+        )
+        if not refunded:
+            await bot.refund_star_payment(
+                user_id=user.telegram_id, telegram_payment_charge_id=charge_id
+            )
+        await message.answer(SECOND_CHARGE_TEXT)
+        return
+
+    # Telegram has already taken the stars: a failed billing call must not lose the order.
     await _complete_in_billing(billing, payment_id, user)
 
     # Billing completes only PENDING payments and skips any other one (its 30-minute timeout can
     # cancel the payment between our pre-checkout answer and this message). handle-free completes
     # nothing itself: it queues a Kafka event, so PENDING right after it is normal.
     transaction = await _wait_until_settled(billing, payment_id)
-    if transaction is not None and transaction.Status == TransactionStatus.COMPLETED.value:
+    status = transaction.Status if transaction else "not found"
+    if status == TransactionStatus.COMPLETED.value:
         return
-    if transaction is not None and transaction.Status == TransactionStatus.PENDING.value:
-        # Billing is slow, not refusing: the payment can still complete, so the stars stay.
-        # Raising sends #EventError so a person checks it.
+    if status != TransactionStatus.CANCELED.value:
+        # Only CANCELED means billing will never complete it. PENDING is billing being slow; any
+        # other answer is unexpected. The stars stay and #EventError (raised) makes a person check.
         raise RuntimeError(
-            f"Stars payment '{payment_id}' (charge '{payment.telegram_payment_charge_id}') is "
-            f"still PENDING in billing after handle-free; check that it completes"
+            f"Stars payment '{payment_id}' (charge '{charge_id}') is {status} in billing after "
+            f"handle-free; stars kept, check that it completes"
         )
 
-    status = transaction.Status if transaction else "not found"
     logger.error(
-        f"{log(user)} Stars payment '{payment_id}' was charged but billing has it {status}; "
-        f"refunding charge '{payment.telegram_payment_charge_id}'"
+        f"{log(user)} Stars payment '{payment_id}' was charged but billing cancelled it; "
+        f"refunding charge '{charge_id}'"
     )
     if not refunded:
         await bot.refund_star_payment(
             user_id=user.telegram_id,
-            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+            telegram_payment_charge_id=charge_id,
         )
     await message.answer(UNCOMPLETED_PAYMENT_TEXT)
 
@@ -154,3 +190,30 @@ async def _wait_until_settled(billing: BillingClient, payment_id: UUID) -> Optio
         await asyncio.sleep(delay)
         transaction = await billing.get_transaction(payment_id)
     return transaction
+
+
+async def _first_charge(redis_client: Redis, payment_id: UUID) -> Optional[str]:
+    """The charge already recorded for this payment, or None (also when Redis is unavailable)."""
+    try:
+        value = await redis_client.get(CHARGE_KEY.format(payment_id=payment_id))
+    except Exception:
+        logger.opt(exception=True).warning(f"Could not read the Stars charge of '{payment_id}'")
+        return None
+    return value.decode() if isinstance(value, bytes) else value
+
+
+async def _claim_charge(redis_client: Redis, payment_id: UUID, charge_id: str) -> bool:
+    """Record the payment's first charge. False only when another charge was recorded first.
+
+    A redelivered update carries the same charge id and is not a second charge. Without Redis the
+    claim cannot be checked, so the charge is treated as the first one (the behaviour before).
+    """
+    key = CHARGE_KEY.format(payment_id=payment_id)
+    try:
+        if await redis_client.set(key, charge_id, nx=True, ex=CHARGE_KEY_TTL):
+            return True
+    except Exception:
+        logger.opt(exception=True).warning(f"Could not record the Stars charge of '{payment_id}'")
+        return True
+    first = await _first_charge(redis_client, payment_id)
+    return first is None or first == charge_id

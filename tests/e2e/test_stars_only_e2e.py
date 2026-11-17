@@ -453,6 +453,70 @@ async def test_charge_for_a_payment_billing_cancelled_is_refunded(shop: ShopE2E)
     assert shop.billing.transactions[invoice["payload"]]["Status"] == "CANCELED"
 
 
+async def _successful_payment(
+    shop: ShopE2E, uid: int, invoice: dict[str, Any], charge: str
+) -> None:
+    update_id = _next_update_id()
+    await send(
+        shop,
+        {
+            "update_id": update_id,
+            "message": {
+                "message_id": update_id,
+                "from": _user(uid),
+                "chat": {"id": uid, "type": "private"},
+                "date": int(time.time()),
+                "successful_payment": {
+                    "currency": "XTR",
+                    "total_amount": invoice["prices"][0]["amount"],
+                    "invoice_payload": invoice["payload"],
+                    "telegram_payment_charge_id": charge,
+                    "provider_payment_charge_id": "",
+                },
+            },
+        },
+    )
+
+
+async def test_same_invoice_paid_twice_while_billing_is_slow(shop: ShopE2E) -> None:
+    # Billing's Kafka consumer lags: the paid payment stays PENDING for a while and the confirm
+    # screen still shows the invoice link. Billing completes a payment once, so a second payment of
+    # that invoice must be refused, and a second charge that gets through must be refunded, while
+    # the first charge stays paid.
+    shop.billing.completion_delay = 6
+    try:
+        plans = await open_plans(shop, BUYER)
+        durations = await tap(shop, plans, "Старт")
+        before = len(shop.tg.invoices)
+        confirm = await tap(shop, durations, "3 месяца")
+        invoice = stars_checkout(shop, confirm, before)
+        since = time.time()
+        assert _ok(await _pre_checkout(shop, BUYER, invoice))
+        await _successful_payment(shop, BUYER, invoice, "stxe2e-first")
+        assert await shop.wait_for(lambda: invoice["payload"] in shop.billing.completed, 10)
+        assert shop.billing.transactions[invoice["payload"]]["Status"] == "PENDING"
+
+        answer = await _pre_checkout(shop, BUYER, invoice)
+        print("\n[pre-checkout of an invoice paid a moment ago]", answer)
+        assert not _ok(answer) and answer.get("error_message")
+
+        # Two devices passed the pre-checkout at the same moment: Telegram charged twice.
+        await _successful_payment(shop, BUYER, invoice, "stxe2e-second")
+        assert await shop.wait_for(lambda: shop.tg.calls_of("refundStarPayment", since), 10)
+        assert await shop.wait_for(
+            lambda: shop.billing.transactions[invoice["payload"]]["Status"] == "COMPLETED", 15
+        )
+        await asyncio.sleep(2)
+        refunds = [
+            c["data"]["telegram_payment_charge_id"]
+            for c in shop.tg.calls_of("refundStarPayment", since)
+        ]
+        print("[refunded charges]", refunds)
+        assert refunds == ["stxe2e-second"]
+    finally:
+        shop.billing.completion_delay = 0.7
+
+
 async def test_no_ruble_payment_was_ever_created(shop: ShopE2E) -> None:
     print(
         "\n[billing] payments created:",
