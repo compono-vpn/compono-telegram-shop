@@ -125,9 +125,17 @@ async def test_billing_down_raises_for_the_alert_and_does_not_refund():
     billing = AsyncMock()
     billing.handle_free_payment.side_effect = BillingClientError(503, "unavailable")
     billing.get_transaction.side_effect = BillingClientError(503, "unavailable")
-    with pytest.raises(BillingClientError):
+    # The alert must carry what a person needs to finish or refund it by hand.
+    with pytest.raises(RuntimeError, match=f"{PAYMENT_ID}.*{CHARGE_ID}"):
         await _run(billing)
     assert billing.handle_free_payment.await_count == 3
+
+
+async def test_billing_down_after_handle_free_alerts_with_the_charge():
+    billing = AsyncMock()
+    billing.get_transaction.side_effect = BillingClientError(503, "unavailable")
+    with pytest.raises(RuntimeError, match=f"{PAYMENT_ID}.*{CHARGE_ID}"):
+        await _run(billing)
 
 
 async def test_dev_payment_is_refunded_only_once():

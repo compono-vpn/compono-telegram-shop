@@ -78,10 +78,30 @@ Proof that the tests catch broken code (run on 2026-11-17):
   proxy path does not depend on the gateway. Unverified on stage.
 
 - Completing a paid order: billing's `/payment/handle-free` only queues a Kafka event, and the payment turns COMPLETED
-  a moment later. The bot waits for that (about 20 s) and refunds only a cancelled or unknown payment. The e2e fake
+  a moment later. The bot waits for that (about 20 s) and refunds only a payment billing CANCELED; anything else raises
+  `#EventError` and keeps the stars. The e2e fake
   billing completes asynchronously too (0.7 s), but real Kafka lag is unmeasured. On stage, after a Stars payment,
   check that the subscription was granted and the bot did NOT say «Звёзды вернули», and that the log has no
   "charged but billing has it" line.
+
+## QA round 1 (2026-11-18): three money bugs, fixed with failing tests first
+
+- Same invoice paid twice while billing's Kafka consumer is slow: the payment stays PENDING, the pre-checkout passed and
+  Telegram took the stars twice for one order (billing completes a payment once). Now the first charge is recorded in
+  Redis, the pre-checkout refuses an already charged invoice and a second charge is refunded.
+  `tests/test_stars_successful_payment.py`, `tests/test_stars_pre_checkout.py`,
+  e2e `test_same_invoice_paid_twice_while_billing_is_slow` (fails on the previous code: pre-checkout said ok).
+- «Получить бесплатно» (`purchase_get`) pressed on the confirm screen of a paid order (an older message or a modified
+  client; aiogram-dialog ignores `when` when it handles a callback) completed the paid order through handle-free for 0
+  stars. `tests/test_free_order_get.py`, e2e `test_hidden_free_button_on_a_paid_order_completes_nothing` (fails on the
+  previous code: the Max order completed).
+- A rollout cancelled updates still being handled, after the webhook had answered Telegram 200: a successful_payment cut
+  off before handle-free lost the order with no refund and no alert. `tests/test_webhook_shutdown_drain.py`.
+- Hardening: refund only on CANCELED (not on "not found" or REFUNDED), and the alert names the payment and the charge.
+
+Still not covered: a successful_payment lost before it reaches the bot at all (pod killed hard, Redis/billing down for
+30 minutes): billing cancels the PENDING payment and nobody refunds. Reconciling with `getStarTransactions` would catch
+it; not built.
 
 ## Release order
 

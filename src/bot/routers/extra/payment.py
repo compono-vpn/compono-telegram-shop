@@ -137,12 +137,18 @@ async def on_successful_payment(
         return
 
     # Telegram has already taken the stars: a failed billing call must not lose the order.
-    await _complete_in_billing(billing, payment_id, user)
-
     # Billing completes only PENDING payments and skips any other one (its 30-minute timeout can
     # cancel the payment between our pre-checkout answer and this message). handle-free completes
     # nothing itself: it queues a Kafka event, so PENDING right after it is normal.
-    transaction = await _wait_until_settled(billing, payment_id)
+    try:
+        await _complete_in_billing(billing, payment_id, user)
+        transaction = await _wait_until_settled(billing, payment_id)
+    except Exception as exception:
+        # The alert must say what a person needs to complete or refund the order by hand.
+        raise RuntimeError(
+            f"Stars payment '{payment_id}' (charge '{charge_id}'): billing failed ({exception}); "
+            f"stars kept, complete it with handle-free or refund the charge"
+        ) from exception
     status = transaction.Status if transaction else "not found"
     if status == TransactionStatus.COMPLETED.value:
         return

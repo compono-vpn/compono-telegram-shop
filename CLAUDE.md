@@ -17,11 +17,17 @@ Paying a Stars invoice (`src/bot/routers/extra/payment.py`): `pre_checkout_query
 Stars payment in billing. `successful_payment` (the stars are already taken) calls billing `/payment/handle-free` up to
 3 times (waits 1 s, 3 s). handle-free completes nothing itself: it only queues a Kafka event and billing's consumer moves
 the payment from PENDING to COMPLETED a moment later, so the bot then reads the payment until it leaves PENDING (about
-20 s). COMPLETED: done. Cancelled (billing's 30-minute timeout won the race) or unknown: the bot refunds the stars with
-`refundStarPayment` and tells the user. Still PENDING after the wait, or billing unreachable: the handler raises, so
-`#EventError` reaches the admins and nothing is refunded; check that the payment completes, or complete it by hand
-(`/payment/handle-free` with the payment id from the log). Never refund on a PENDING read: that gave every buyer the
-stars back and the subscription (found in QA, 2026-11-18).
+20 s). COMPLETED: done. CANCELED (billing's 30-minute timeout won the race): the bot refunds the stars with
+`refundStarPayment` and tells the user. Anything else (still PENDING after the wait, not found, REFUNDED, billing
+unreachable): the handler raises, so `#EventError` (with the payment id and the charge id) reaches the admins and nothing
+is refunded; check that the payment completes, or complete it by hand (`/payment/handle-free` with the payment id). Never
+refund on a PENDING read: that gave every buyer the stars back and the subscription (found in QA, 2026-11-18).
+One charge per payment: the first charge id is kept in Redis `stars_charge:<payment id>` (7 days). Pre-checkout refuses
+an invoice that was already charged (the user paying again while billing's Kafka consumer is slow), and a second charge
+that still gets through is refunded; a redelivered update has the same charge id. «Получить бесплатно» calls
+handle-free only after billing confirms the payment is this user's, PENDING and 0 stars (aiogram-dialog runs a hidden
+button's handler too). Shutdown waits up to 20 s for updates in progress (`SHUTDOWN_DRAIN_SECONDS` in
+`src/api/endpoints/telegram.py`) because the webhook already answered Telegram 200 for them.
 
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
