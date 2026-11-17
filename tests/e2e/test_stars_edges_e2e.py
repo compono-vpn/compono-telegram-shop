@@ -16,6 +16,8 @@ pytest.importorskip("tgmock")
 from .harness import DEV_ID, ShopE2E, redis_server_binary  # noqa: E402
 from .test_stale_callback_e2e import (  # noqa: E402
     _bot_message,
+    _next_update_id,
+    _user,
     callback_update,
     send,
     show,
@@ -26,6 +28,8 @@ from .test_stale_callback_e2e import (  # noqa: E402
 from .test_stars_only_e2e import (  # noqa: E402
     PROD_ROWS,
     RUBLE_NOTE,
+    _pre_checkout,
+    _text_update,
     assert_stars_only,
     open_plans,
     stars_checkout,
@@ -39,6 +43,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="module")
 FREE = 820000001  # 100% purchase discount: the order costs 0 stars
 NUDGE = 820000002  # taps «Другой способ» on a reminder sent before the Stars-only release
 TAPS = 820000003  # taps the same duration twice
+BUSY = 820000004  # sends a message a moment before Telegram reports the payment
 
 OLD_PLATEGA_PAYMENT = "3d0c8f62-6a52-4a8e-9a55-6d1b2b0c1a01"
 
@@ -48,7 +53,7 @@ async def shop():
     e2e = ShopE2E()
     e2e.billing.gateways.extend(PROD_ROWS)
     e2e.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid in (FREE, NUDGE, TAPS):
+    for uid in (FREE, NUDGE, TAPS, BUSY):
         e2e.billing.add_user(uid, f"u{uid}")
     e2e.billing.discounts[FREE] = 100
     e2e.billing.add_transaction(OLD_PLATEGA_PAYMENT, NUDGE, "PLATEGA")
@@ -141,3 +146,45 @@ async def test_hidden_free_button_on_a_paid_order_completes_nothing(shop: ShopE2
     await asyncio.sleep(3)
     assert invoice["payload"] not in shop.billing.completed, "a paid order was completed for free"
     assert shop.billing.transactions[invoice["payload"]]["Status"] == "PENDING"
+
+
+async def test_payment_right_after_another_message_still_reaches_billing(shop: ShopE2E) -> None:
+    # The throttling middleware drops any message that comes within 0.5 s of the user's previous
+    # message or tap. A successful_payment is a message too: dropped, the stars stay taken and
+    # billing never hears of the order (no handle-free, no refund, no alert).
+    plans = await open_plans(shop, BUSY)
+    durations = await tap(shop, plans, "Старт")
+    invoices = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    invoice = stars_checkout(shop, confirm, invoices)
+    assert _ok(await _pre_checkout(shop, BUSY, invoice))
+    await asyncio.sleep(1)  # past the throttle window of the taps above
+    await send(shop, _text_update(BUSY, "/start"))
+    # Straight away, without the 1 s pause `send` keeps for the throttle.
+    payment = {
+        "update_id": _next_update_id(),
+        "message": {
+            "message_id": 1,
+            "from": _user(BUSY),
+            "chat": {"id": BUSY, "type": "private"},
+            "date": int(time.time()),
+            "successful_payment": {
+                "currency": "XTR",
+                "total_amount": invoice["prices"][0]["amount"],
+                "invoice_payload": invoice["payload"],
+                "telegram_payment_charge_id": "stxe2e-busy",
+                "provider_payment_charge_id": "",
+            },
+        },
+    }
+    assert await shop.send_update(payment) == 200
+    assert await shop.wait_for(lambda: invoice["payload"] in shop.billing.completed, timeout=10), (
+        "the payment message was dropped: stars taken, billing never asked to complete the order"
+    )
+    assert await shop.wait_for(
+        lambda: shop.billing.transactions[invoice["payload"]]["Status"] == "COMPLETED", timeout=10
+    )
+
+
+def _ok(answer: dict) -> bool:
+    return str(answer.get("ok")).lower() in ("true", "1")

@@ -17,6 +17,7 @@ from .base import EventTypedMiddleware
 
 class ThrottlingMiddleware(EventTypedMiddleware):
     __event_types__ = [MiddlewareEventType.MESSAGE, MiddlewareEventType.CALLBACK_QUERY]
+    __lets_payments_through__ = True
 
     def __init__(self, ttl: float = 0.5) -> None:
         self.cache: TTLCache[int, Any] = TTLCache(maxsize=10_000, ttl=ttl)
