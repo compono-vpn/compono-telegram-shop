@@ -44,6 +44,7 @@ FREE = 820000001  # 100% purchase discount: the order costs 0 stars
 NUDGE = 820000002  # taps «Другой способ» on a reminder sent before the Stars-only release
 TAPS = 820000003  # taps the same duration twice
 BUSY = 820000004  # sends a message a moment before Telegram reports the payment
+BLIP = 820000005  # pays while billing cannot answer for a moment (restart, deploy)
 
 OLD_PLATEGA_PAYMENT = "3d0c8f62-6a52-4a8e-9a55-6d1b2b0c1a01"
 
@@ -53,7 +54,7 @@ async def shop():
     e2e = ShopE2E()
     e2e.billing.gateways.extend(PROD_ROWS)
     e2e.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid in (FREE, NUDGE, TAPS, BUSY):
+    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP):
         e2e.billing.add_user(uid, f"u{uid}")
     e2e.billing.discounts[FREE] = 100
     e2e.billing.add_transaction(OLD_PLATEGA_PAYMENT, NUDGE, "PLATEGA")
@@ -184,6 +185,45 @@ async def test_payment_right_after_another_message_still_reaches_billing(shop: S
     assert await shop.wait_for(
         lambda: shop.billing.transactions[invoice["payload"]]["Status"] == "COMPLETED", timeout=10
     )
+
+
+async def test_payment_while_billing_blips_still_reaches_billing(shop: ShopE2E) -> None:
+    # The user middleware loads the user from billing before any handler runs. A short billing
+    # outage (a restart) used to fail it: the successful_payment handler with its own retries never
+    # ran, the alert named no payment, and the stars stayed taken with no order.
+    plans = await open_plans(shop, BLIP)
+    durations = await tap(shop, plans, "Старт")
+    invoices = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    invoice = stars_checkout(shop, confirm, invoices)
+    assert _ok(await _pre_checkout(shop, BLIP, invoice))
+    await asyncio.sleep(1)
+    # Every update writes the user back (PUT /users/<id>); the read is usually cached in Redis.
+    shop.billing.fail_next[f"PUT /users/{BLIP}"] = 2
+    payment = {
+        "update_id": _next_update_id(),
+        "message": {
+            "message_id": 1,
+            "from": _user(BLIP),
+            "chat": {"id": BLIP, "type": "private"},
+            "date": int(time.time()),
+            "successful_payment": {
+                "currency": "XTR",
+                "total_amount": invoice["prices"][0]["amount"],
+                "invoice_payload": invoice["payload"],
+                "telegram_payment_charge_id": "stxe2e-blip",
+                "provider_payment_charge_id": "",
+            },
+        },
+    }
+    assert await shop.send_update(payment) == 200
+    assert await shop.wait_for(lambda: invoice["payload"] in shop.billing.completed, timeout=15), (
+        "billing blipped while loading the user: stars taken, the order never reached billing"
+    )
+    assert await shop.wait_for(
+        lambda: shop.billing.transactions[invoice["payload"]]["Status"] == "COMPLETED", timeout=10
+    )
+    assert not shop.billing.fail_next[f"PUT /users/{BLIP}"], "the billing outage never happened"
 
 
 def _ok(answer: dict) -> bool:

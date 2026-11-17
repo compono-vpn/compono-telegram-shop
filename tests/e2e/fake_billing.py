@@ -46,6 +46,8 @@ class FakeBilling:
         self.created: list[dict[str, Any]] = []  # POST /payment/create bodies + the result
         self.completed: list[str] = []  # payment ids sent to /payment/handle-free
         self.completion_delay = 0.7  # seconds until the "consumer" completes a handle-free payment
+        # "<METHOD> <path>" -> how many next requests answer 503 (billing restarting).
+        self.fail_next: dict[str, int] = {}
         self.port = 0
         self._runner: web.AppRunner | None = None
 
@@ -163,8 +165,10 @@ class FakeBilling:
         if price is None:
             return None
         plan = self._plan(int(body.get("plan_id", 0))) or {}
-        discount = 0 if plan.get("Type") == "PROXY" else self.discounts.get(
-            int(body.get("telegram_id", 0)), 0
+        discount = (
+            0
+            if plan.get("Type") == "PROXY"
+            else self.discounts.get(int(body.get("telegram_id", 0)), 0)
         )
         original = Decimal(price)
         final = original * (100 - discount) / 100
@@ -219,6 +223,10 @@ class FakeBilling:
         path = request.path
         method = request.method
         self.calls.append((method, request.path_qs))
+        failing = f"{method} {path[len(PREFIX) :]}"
+        if self.fail_next.get(failing, 0) > 0:
+            self.fail_next[failing] -= 1
+            return web.json_response({"error": "unavailable"}, status=503)
         if not path.startswith(PREFIX):
             # Remnawave and anything else is not available in the e2e.
             self.unknown.append((method, request.path_qs))
@@ -286,6 +294,7 @@ class FakeBilling:
             return web.json_response(self._create_payment(body or {}))
         if method == "POST" and route == "/payment/handle-free":
             payment_id = (body or {}).get("payment_id", "")
+
             # Like billing: handle-free only queues a Kafka event and the consumer completes the
             # payment a moment later (PaymentUseCase.HandleFreePayment). Like TransitionStatus, only
             # a PENDING payment completes; others are skipped.
