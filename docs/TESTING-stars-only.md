@@ -103,6 +103,20 @@ Still not covered: a successful_payment lost before it reaches the bot at all (p
 30 minutes): billing cancels the PENDING payment and nobody refunds. Reconciling with `getStarTransactions` would catch
 it; not built.
 
+## QA round 2 (2026-11-18): two more money bugs, fixed with failing tests first
+
+- A successful_payment within 0.5 s of the user's previous message or tap was dropped by the throttling middleware
+  (also by the access, rules and channel gates: a blocked user, RESTRICTED mode, unaccepted rules, a left channel). The
+  stars were taken and billing never heard of the order: no handle-free, no refund, no alert. Payment messages now pass
+  every gate. `tests/test_payment_message_gates.py` (4 failed on the old code), e2e
+  `test_payment_right_after_another_message_still_reaches_billing` (failed on the old code: "User throttled" in the log,
+  no handle-free).
+- While billing's Kafka consumer lagged, a paid payment stayed PENDING, so 5 minutes later the bot said «Оплата не
+  завершена» with the same link and at 15 minutes offered 30% off a new payment. A user who had paid was asked to pay
+  again, and both orders completed when billing caught up. Both reminders now skip a payment with a recorded charge.
+  `tests/test_payment_nudge.py::TestChargedButNotYetCompleted`,
+  `tests/test_recovery_offer.py::TestChargedButNotYetCompletedOffer`.
+
 ## Release order
 
 1. Merge, stage sync, then walk the flows above on @compono_dev_bot.

@@ -28,6 +28,10 @@ that still gets through is refunded; a redelivered update has the same charge id
 handle-free only after billing confirms the payment is this user's, PENDING and 0 stars (aiogram-dialog runs a hidden
 button's handler too). Shutdown waits up to 20 s for updates in progress (`SHUTDOWN_DRAIN_SECONDS` in
 `src/api/endpoints/telegram.py`) because the webhook already answered Telegram 200 for them.
+A `successful_payment` message skips the gate middlewares (throttling, access mode, rules, channel:
+`__lets_payments_through__` in `src/bot/middlewares/base.py`); the 0.5 s throttle used to drop it silently. The charge
+record lives in `src/services/stars_charges.py`; the 5-minute nudge and the 15-minute 30% offer skip a payment that has
+one, so a user whose payment billing has not completed yet is never asked to pay again.
 
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
