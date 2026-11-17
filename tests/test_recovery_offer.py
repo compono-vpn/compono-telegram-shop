@@ -433,3 +433,20 @@ class TestCopy:
         root = Path("assets/translations/ru")
         text = "".join(p.read_text(encoding="utf-8") for p in root.glob("*.ftl"))
         assert "COMPONO30" not in text
+
+
+class TestChargedButNotYetCompletedOffer:
+    # The user paid, billing has not completed the payment yet: offering 30% off a new payment
+    # 15 minutes later makes them pay twice.
+    async def test_a_charged_payment_gets_no_offer(self):
+        redis = KvRedis()
+        payment_id = await _schedule(redis)
+        await redis.set(f"stars_charge:{payment_id}", "stx-1")
+        billing = _Billing("PENDING")
+        user_service, notification = _services()
+
+        sent = await _offers(redis, billing, user_service, notification, NOW + 901)
+
+        assert sent == 0
+        notification.notify_user.assert_not_awaited()
+        assert REF not in billing.claims

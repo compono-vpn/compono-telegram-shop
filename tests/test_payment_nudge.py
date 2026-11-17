@@ -364,3 +364,19 @@ class TestKeyboardAndCopy:
         for banned in ("банк", "другой способ", "₽", "карт"):
             assert banned not in text.lower()
         assert i18n.get("btn-payment-nudge-pay") == "⭐ Оплатить звёздами"
+
+
+class TestChargedButNotYetCompleted:
+    # Telegram took the stars, billing's Kafka consumer has not completed the payment yet (it can
+    # lag or stall). The payment is still PENDING, but the user has paid: «Оплата не завершена» with
+    # the same link would be wrong, and it invites a second payment.
+    async def test_a_charged_payment_gets_no_nudge(self):
+        redis = KvRedis()
+        payment_id = await _schedule(redis)
+        await redis.set(f"stars_charge:{payment_id}", "stx-1")
+        user_service, notification = _services()
+
+        sent = await _run(redis, _billing(), user_service, notification, NOW + 301)
+
+        assert sent == 0
+        notification.notify_user.assert_not_awaited()

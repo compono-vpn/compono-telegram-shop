@@ -25,6 +25,7 @@ from src.services.bot_payments import is_bot_payment_gateway
 from src.services.notification import NotificationService
 from src.services.recovery_offer import claim_offer, release_offer
 from src.services.reminder_delivery import can_receive_reminders
+from src.services.stars_charges import first_charge
 from src.services.user import UserService
 
 NUDGE_DELAY_SECONDS = 5 * 60
@@ -134,6 +135,9 @@ async def _eligible(
         logger.info(
             f"Payment nudge for '{payment_id}' skipped: '{transaction.GatewayType}' is not Stars"
         )
+        return None
+    if await first_charge(redis_client, payment_id) is not None:
+        logger.info(f"Payment nudge for '{payment_id}' skipped: paid, billing is completing it")
         return None
     if await _paid_since(billing, telegram_id, transaction.CreatedAt):
         return None
@@ -269,6 +273,10 @@ async def _offer_one(
         TransactionStatus.PENDING.value,
         TransactionStatus.CANCELED.value,
     ):
+        return False
+    if await first_charge(redis_client, payment_id) is not None:
+        # Paid: billing is still completing it, or it was refunded and the user knows why.
+        logger.info(f"Recovery offer for '{payment_id}' skipped: the payment was charged")
         return False
 
     user = await user_service.get(telegram_id)
