@@ -22,7 +22,12 @@ from src.bot.proxy_view import (
 from src.bot.states import Subscription
 from src.core.constants import PURCHASE_PREFIX, USER_KEY
 from src.core.crypto_assets import get_crypto_asset
-from src.core.enums import PaymentGatewayType, PurchaseType, SystemNotificationType
+from src.core.enums import (
+    PaymentGatewayType,
+    PurchaseType,
+    SystemNotificationType,
+    TransactionStatus,
+)
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
@@ -828,6 +833,19 @@ async def on_get_subscription(
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     payment_id = dialog_manager.dialog_data["payment_id"]
+    # handle-free completes any PENDING payment whatever its amount, and aiogram-dialog runs this
+    # handler even when `when` hides the button (an old message, a modified client). Only a
+    # 0-star pending payment of this user may be completed here.
+    transaction = await billing.get_transaction(UUID(payment_id))
+    if (
+        transaction is None
+        or transaction.UserTelegramID != user.telegram_id
+        or transaction.Status != TransactionStatus.PENDING.value
+        or transaction.Pricing is None
+        or Decimal(transaction.Pricing.final_amount or "0") != 0
+    ):
+        logger.warning(f"{log(user)} Refused free completion of payment '{payment_id}'")
+        return
     logger.info(f"{log(user)} Getted free subscription '{payment_id}'")
     await billing.handle_free_payment(UUID(payment_id))
 

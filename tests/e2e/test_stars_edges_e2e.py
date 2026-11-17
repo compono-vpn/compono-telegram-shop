@@ -119,3 +119,25 @@ async def test_tapping_the_same_duration_twice_reuses_one_invoice(shop: ShopE2E)
     await asyncio.sleep(0)
     assert first["payload"] in shop.billing.transactions
     assert not [s for s in user_screens(shop, 0, TAPS) if "₽" in (s.get("text") or "")]
+
+
+async def test_hidden_free_button_on_a_paid_order_completes_nothing(shop: ShopE2E) -> None:
+    # aiogram-dialog runs a button's handler even when `when` hides it. «Получить бесплатно»
+    # (purchase_get) pressed on the confirm screen of a paid order, from an older message or a
+    # modified client, must not get that order through handle-free without paying.
+    plans = await open_plans(shop, TAPS)
+    durations = await tap(shop, plans, "Макс")
+    invoices = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    invoice = stars_checkout(shop, confirm, invoices)
+    any_button = next(
+        b for b in confirm["reply_markup"]["inline_keyboard"][-1] if "callback_data" in b
+    )
+    intent = any_button["callback_data"].split("\x1d")[0]
+    message = _bot_message(
+        confirm["message_id"], confirm.get("text", ""), confirm.get("reply_markup"), TAPS
+    )
+    await send(shop, callback_update(f"{intent}\x1dpurchase_get", message))
+    await asyncio.sleep(3)
+    assert invoice["payload"] not in shop.billing.completed, "a paid order was completed for free"
+    assert shop.billing.transactions[invoice["payload"]]["Status"] == "PENDING"
