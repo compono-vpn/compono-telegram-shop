@@ -117,6 +117,15 @@ it; not built.
   `tests/test_payment_nudge.py::TestChargedButNotYetCompleted`,
   `tests/test_recovery_offer.py::TestChargedButNotYetCompletedOffer`.
 
+## QA round 3 (2026-11-18): one more money bug, fixed with a failing test first
+
+- A short billing outage (restart, deploy) when Telegram reported the payment: `UserMiddleware` loads the user from
+  billing (it writes the user back with a PUT on every update) before any handler runs. The failure skipped the payment
+  handler with its own retries, the #EventError named no payment and no charge, and the stars stayed taken with no
+  order. The load is now retried for a payment message (1 s, 3 s) and the final alert names the payment and the charge.
+  `tests/test_payment_user_load.py` (2 failed on the old code), e2e
+  `test_payment_while_billing_blips_still_reaches_billing` (fake billing answers 503 twice; failed on the old code).
+
 ## Release order
 
 1. Merge, stage sync, then walk the flows above on @compono_dev_bot.

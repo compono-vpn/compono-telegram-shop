@@ -31,7 +31,9 @@ button's handler too). Shutdown waits up to 20 s for updates in progress (`SHUTD
 A `successful_payment` message skips the gate middlewares (throttling, access mode, rules, channel:
 `__lets_payments_through__` in `src/bot/middlewares/base.py`); the 0.5 s throttle used to drop it silently. The charge
 record lives in `src/services/stars_charges.py`; the 5-minute nudge and the 15-minute 30% offer skip a payment that has
-one, so a user whose payment billing has not completed yet is never asked to pay again.
+one, so a user whose payment billing has not completed yet is never asked to pay again. `UserMiddleware` loads the user
+from billing (a PUT on every update) before any handler runs; for a `successful_payment` it retries that load (1 s, 3 s),
+and if billing stays down the #EventError names the payment and the charge id.
 
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
