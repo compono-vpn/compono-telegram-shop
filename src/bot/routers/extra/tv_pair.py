@@ -6,6 +6,7 @@ logged.
 """
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import DialogManager
 from dishka import FromDishka
@@ -27,8 +28,16 @@ router = Router(name=__name__)
 
 
 async def _edit(callback: CallbackQuery, text: str, reply_markup=None) -> None:  # noqa: ANN001
-    if isinstance(callback.message, Message):
+    if not isinstance(callback.message, Message):
+        return
+    try:
         await callback.message.edit_text(text=text, reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        # A repeated tap with the same outcome (tapping «Подключить» again while still
+        # without a subscription, or a double tap) leaves the message unchanged, and
+        # Telegram refuses the edit. The message already says the right thing.
+        if "message is not modified" not in str(e).lower():
+            raise
 
 
 @inject

@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message
 from fluentogram import TranslatorHub
 from fluentogram.storage import FileStorage
@@ -406,6 +407,66 @@ class TestConfirmHandler:
         # The Telegram ID sent to the API is the tapping user's, never one from the button.
         callback, api, _, _ = await _confirm(TvPairClaim.ATTACHED)
         assert api.claim_tv_pair.await_args.args == (CODE, TG)
+
+
+class TestUnchangedEdit:
+    """Regression: a repeated tap that leads to the same text and buttons (a second tap on
+    «Подключить» while still without a subscription, or a double tap) makes Telegram refuse
+    editMessageText with "message is not modified". That must not escape the handler: it would
+    reach the error middleware, page admins with #EventError and push the user to the main menu.
+    """
+
+    NOT_MODIFIED = (
+        "Telegram server says - Bad Request: message is not modified: specified new message "
+        "content and reply markup are exactly the same as a current content and reply markup "
+        "of the message"
+    )
+
+    def _failing_edit(self, message: str):
+        return AsyncMock(side_effect=TelegramBadRequest(method=MagicMock(), message=message))
+
+    @pytest.mark.parametrize("result", [TvPairClaim.ATTACHED, TvPairClaim.NO_SUBSCRIPTION])
+    async def test_not_modified_is_ignored_and_the_tap_is_answered(self, monkeypatch, result):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = self._failing_edit(self.NOT_MODIFIED)
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+        dm = make_dialog_manager()
+        dm.start = AsyncMock()
+        dm.update = AsyncMock()
+        await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=dm,
+            i18n=make_i18n(),
+            api_client=api,
+        )
+        callback.message.edit_text.assert_awaited_once()
+        callback.answer.assert_awaited_once_with()
+        if result is TvPairClaim.NO_SUBSCRIPTION:
+            dm.start.assert_awaited_once()
+
+    async def test_cancel_not_modified_is_ignored(self):
+        callback = _callback("tvx")
+        callback.message.edit_text = self._failing_edit(self.NOT_MODIFIED)
+        await unwrap_inject(on_tv_pair_cancel)(
+            callback=callback, user=make_user(), i18n=make_i18n()
+        )
+        callback.answer.assert_awaited_once_with()
+
+    async def test_other_bad_requests_still_raise(self):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = self._failing_edit("Bad Request: message to edit not found")
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=TvPairClaim.ATTACHED)
+        with pytest.raises(TelegramBadRequest):
+            await unwrap_inject(on_tv_pair_confirm)(
+                callback=callback,
+                user=make_user(telegram_id=TG),
+                dialog_manager=make_dialog_manager(),
+                i18n=make_i18n(),
+                api_client=api,
+            )
 
 
 class TestCancelHandler:
