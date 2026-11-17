@@ -1,0 +1,41 @@
+........................................................................ [  5%]
+........................................................................ [ 10%]
+........................................................................ [ 15%]
+........................................................................ [ 20%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 36%]
+........................................................................ [ 41%]
+........................................................................ [ 46%]
+........................................................................ [ 51%]
+........................................................................ [ 56%]
+........................................................................ [ 62%]
+........................................................................ [ 67%]
+........................................................................ [ 72%]
+........................................................................ [ 77%]
+........................................................................ [ 82%]
+........................................................................ [ 88%]
+........................................................................ [ 93%]
+........................................................................ [ 98%]
+......................                                                   [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: 22 warnings
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: DeprecationWarning: Behavior without patch module is deprecated, use patch_module = True
+    return _inject_wrapper(func, patch_module=patch_module)
+
+tests/test_lost_context_recovery.py::test_failed_restart_keeps_the_error_notice
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/src/bot/routers/extra/error.py:72: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    recovered = await _restart_main_menu(bot, bg_manager_factory, user)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1390 passed, 5 skipped, 28 warnings in 29.35s

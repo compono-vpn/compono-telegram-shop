@@ -19,10 +19,12 @@ from src.core.constants import TV_PAIR_CANCEL, TV_PAIR_CONFIRM_PREFIX, TV_PAIR_P
 # Crockford base32 upper case: no I, L, O, U.
 CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _CODE = f"[{CODE_ALPHABET}]{{8}}"
-START_PARAM_RE = re.compile(rf"^{re.escape(TV_PAIR_PREFIX)}{_CODE}$", re.IGNORECASE)
+# re.ASCII: without it IGNORECASE also folds KELVIN SIGN onto K and LONG S onto S, so a
+# typed look-alike passed as a code whose button the callback parser then refused (QA round 3).
+START_PARAM_RE = re.compile(rf"^{re.escape(TV_PAIR_PREFIX)}{_CODE}$", re.IGNORECASE | re.ASCII)
 # /start (optionally /start@bot) followed by exactly one tv-<CODE> payload.
 START_TEXT_RE = re.compile(
-    rf"^/start(?:@\w+)?\s+{re.escape(TV_PAIR_PREFIX)}{_CODE}\s*$", re.IGNORECASE
+    rf"^/start(?:@\w+)?\s+{re.escape(TV_PAIR_PREFIX)}{_CODE}\s*$", re.IGNORECASE | re.ASCII
 )
 _CODE_RE = re.compile(rf"^{_CODE}$")
 

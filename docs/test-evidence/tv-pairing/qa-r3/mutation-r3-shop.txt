@@ -1,0 +1,4 @@
+CAUGHT   a network error is reported as attached
+CAUGHT   a network error escapes the client
+CAUGHT   the failure alert edits the question instead
+CAUGHT   IGNORECASE without ASCII (round-3 bug back)

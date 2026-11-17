@@ -1,0 +1,78 @@
+FFF....                                                                  [100%]
+=================================== FAILURES ===================================
+_ TestNonAsciiLookalikes.test_lookalike_is_not_a_tv_code[/start tv-\u212a7M4QX9P] _
+
+self = <tests.test_tv_pair.TestNonAsciiLookalikes object at 0x11fee7470>
+text = '/start tv-K7M4QX9P'
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/start tv-K7M4QX9P",  # KELVIN SIGN instead of K
+            "/start tv-K7M4QX9ſ",  # LATIN SMALL LETTER LONG S instead of S
+            "/start tv-K7m4qx9p",
+        ],
+    )
+    def test_lookalike_is_not_a_tv_code(self, text):
+>       assert code_from_start_text(text) is None
+E       AssertionError: assert 'K7M4QX9P' is None
+E        +  where 'K7M4QX9P' = code_from_start_text('/start tv-K7M4QX9P')
+
+tests/test_tv_pair.py:204: AssertionError
+_ TestNonAsciiLookalikes.test_lookalike_is_not_a_tv_code[/start tv-K7M4QX9\u017f] _
+
+self = <tests.test_tv_pair.TestNonAsciiLookalikes object at 0x11fee75c0>
+text = '/start tv-K7M4QX9ſ'
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/start tv-K7M4QX9P",  # KELVIN SIGN instead of K
+            "/start tv-K7M4QX9ſ",  # LATIN SMALL LETTER LONG S instead of S
+            "/start tv-K7m4qx9p",
+        ],
+    )
+    def test_lookalike_is_not_a_tv_code(self, text):
+>       assert code_from_start_text(text) is None
+E       AssertionError: assert 'K7M4QX9S' is None
+E        +  where 'K7M4QX9S' = code_from_start_text('/start tv-K7M4QX9ſ')
+
+tests/test_tv_pair.py:204: AssertionError
+_ TestNonAsciiLookalikes.test_lookalike_is_not_a_tv_code[/start tv-\u212a7m4qx9p] _
+
+self = <tests.test_tv_pair.TestNonAsciiLookalikes object at 0x11fee7680>
+text = '/start tv-K7m4qx9p'
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "/start tv-K7M4QX9P",  # KELVIN SIGN instead of K
+            "/start tv-K7M4QX9ſ",  # LATIN SMALL LETTER LONG S instead of S
+            "/start tv-K7m4qx9p",
+        ],
+    )
+    def test_lookalike_is_not_a_tv_code(self, text):
+>       assert code_from_start_text(text) is None
+E       AssertionError: assert 'K7M4QX9P' is None
+E        +  where 'K7M4QX9P' = code_from_start_text('/start tv-K7m4qx9p')
+
+tests/test_tv_pair.py:204: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: 22 warnings
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa3-shop-tv-pairing/.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: DeprecationWarning: Behavior without patch module is deprecated, use patch_module = True
+    return _inject_wrapper(func, patch_module=patch_module)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_tv_pair.py::TestNonAsciiLookalikes::test_lookalike_is_not_a_tv_code[/start tv-\u212a7M4QX9P]
+FAILED tests/test_tv_pair.py::TestNonAsciiLookalikes::test_lookalike_is_not_a_tv_code[/start tv-K7M4QX9\u017f]
+FAILED tests/test_tv_pair.py::TestNonAsciiLookalikes::test_lookalike_is_not_a_tv_code[/start tv-\u212a7m4qx9p]
+3 failed, 4 passed, 103 deselected, 27 warnings in 0.48s
