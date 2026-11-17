@@ -34,6 +34,7 @@ def setup_routers(router: Router) -> None:
         extra.cancel_survey.router,
         extra.source_survey.router,
         extra.dedicated_ip.router,
+        extra.tv_pair.router,
         extra.setup_checkin.router,
         #
         menu.handlers.router,

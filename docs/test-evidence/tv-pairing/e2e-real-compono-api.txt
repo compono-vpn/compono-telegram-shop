@@ -1,0 +1,27 @@
+[tv e2e] TV side: real compono-api http://127.0.0.1:<port>
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>XXXX-XXXX</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:<code>'), ('Отмена', 'tvx')]
+[tap Подключить] editMessageText: ✅ Готово, телевизор подключится через несколько секунд.
+[tap Подключить] buttons: []
+[TV poll] 200 {'status': 'paired', 'subscriptionUrl': '<url>'}
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:<code>'), ('Отмена', 'tvx')]
+[no subscription] editMessageText: 📺 Для телевизора нужна активная подписка. |  | Оформите её и нажмите «Подключить» ещё раз. Код <code>XXXX-XXXX</code> действует 10 минут с момента появления на экране.
+[no subscription] buttons: [('📺 Подключить', 'tvp:<code>')]
+[no subscription] sendMessage: <b>📦 Выберите план</b> |  | ⚡️ Старт — 119 ₽/мес · 100 ГБ, 2 устройства | 🚀 Про — 239 ₽/мес · 300 ГБ, 6 устройств | 💎 Макс — 399 ₽/мес · 1 024 ГБ, 20 устройств
+[no subscription] buttons: [('⚡️ Старт', 'y8szF5\x1dpurchase_select_plan:1'), ('🚀 Про', 'y8szF5\x1dpurchase_select_plan:2'), ('💎 Макс', 'y8szF5\x1dpurchase_select_plan:3'), ('⬅️ Назад', 'y8szF5\x1dpurchase_back'), ('↩️ Вернуться в главное меню', 'y8szF5\x1dback_main_menu')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:<code>'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>XXXX-XXXX</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:<code>'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:<code>'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:<code>'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:<code>'), ('Отмена', 'tvx')]
+[new user] billing create_user bodies: [{'telegram_id': 730177004, 'username': None, 'referral_code': 'bjqkx5', 'name': 'TV', 'role': 'USER', 'language': 'ru', 'source': None, 'attribution': None}, {'telegram_id': 730177004, 'username': None, 'name': 'TV', 'source': None, 'attribution': None}]
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_source_link_still_attributes PASSED
+tests/e2e/test_tv_pair_e2e.py::test_plain_start_still_opens_main_menu PASSED
+======================== 8 passed, 5 warnings in 59.73s ========================

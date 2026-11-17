@@ -35,6 +35,11 @@ SOURCE_SURVEY_PREFIX: Final[str] = "sq:"
 PAYMENT_NUDGE_PREFIX: Final[str] = "pn:"
 RECOVERY_OFFER_PREFIX: Final[str] = "ro:"
 DEDICATED_IP_PREFIX: Final[str] = "dip:"
+# TV pairing (COM-202): /start tv-<CODE> deep link from the TV's QR code, then the
+# confirm button tvp:<CODE> and the cancel button tvx.
+TV_PAIR_PREFIX: Final[str] = "tv-"
+TV_PAIR_CONFIRM_PREFIX: Final[str] = "tvp:"
+TV_PAIR_CANCEL: Final[str] = "tvx"
 
 IMPORTED_TAG: Final[str] = "IMPORTED"
 

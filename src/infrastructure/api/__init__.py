@@ -4,6 +4,7 @@ from .client import (
     ConnectedActivityStats,
     ConnectedStats,
     ProvisionResult,
+    TvPairClaim,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "ConnectedActivityStats",
     "ConnectedStats",
     "ProvisionResult",
+    "TvPairClaim",
 ]

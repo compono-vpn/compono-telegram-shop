@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Any, Optional
 
 import httpx
@@ -70,6 +71,26 @@ class ConnectedActivityStats:
     nodes_fresh: int
     oldest_apply_ok_at: Optional[datetime]
     last_observation_at: Optional[datetime] = None
+
+
+class TvPairClaim(Enum):
+    """Outcome of POST /api/v1/internal/tv-pair/claim."""
+
+    ATTACHED = "attached"
+    NOT_FOUND = "code_not_found"  # 404: unknown, expired or used
+    ALREADY_CLAIMED = "code_already_claimed"  # 409: another Telegram user
+    NO_SUBSCRIPTION = "no_active_subscription"  # 422: code stays valid
+    RATE_LIMITED = "rate_limited"  # 429
+    FAILED = "failed"  # network, 400, 401, 502, 503, anything else
+
+
+_TV_PAIR_BY_STATUS: dict[int, TvPairClaim] = {
+    404: TvPairClaim.NOT_FOUND,
+    409: TvPairClaim.ALREADY_CLAIMED,
+    422: TvPairClaim.NO_SUBSCRIPTION,
+    429: TvPairClaim.RATE_LIMITED,
+}
+_TV_PAIR_EXPECTED: frozenset[int] = frozenset(_TV_PAIR_BY_STATUS)
 
 
 def _count(value: Any, name: str) -> int:
@@ -136,6 +157,7 @@ class ApiClient:
         *,
         json: Any = None,
         params: Optional[dict[str, Any]] = None,
+        expected_errors: frozenset[int] = frozenset(),
     ) -> Any:
         client = await self._get_client()
         url = f"{self._base_path}{path}"
@@ -153,7 +175,10 @@ class ApiClient:
                 error_body = error_data.get("error", error_body)
             except Exception:
                 pass
-            logger.error(f"API error: {method} {path} -> {response.status_code}: {error_body}")
+            if response.status_code in expected_errors:
+                logger.info(f"API answer: {method} {path} -> {response.status_code}: {error_body}")
+            else:
+                logger.error(f"API error: {method} {path} -> {response.status_code}: {error_body}")
             raise ApiClientError(response.status_code, error_body)
 
         if response.status_code == 204:
@@ -280,3 +305,22 @@ class ApiClient:
                 collection.get("last_observation_at"), "last_observation_at"
             ),
         )
+
+    async def claim_tv_pair(self, code: str, telegram_id: int) -> TvPairClaim:
+        """Attach a Telegram user to a TV pairing code (TV pairing contract v1).
+
+        Calls POST /api/v1/internal/tv-pair/claim. compono-api checks the user's
+        subscription itself; the bot never sends or sees a subscription URL.
+        Every answer maps to a ``TvPairClaim``; this never raises for an HTTP answer
+        or a network error.
+        """
+        try:
+            await self._request(
+                "POST",
+                "/tv-pair/claim",
+                json={"code": code, "telegramId": telegram_id},
+                expected_errors=_TV_PAIR_EXPECTED,
+            )
+        except ApiClientError as e:
+            return _TV_PAIR_BY_STATUS.get(e.status_code, TvPairClaim.FAILED)
+        return TvPairClaim.ATTACHED
