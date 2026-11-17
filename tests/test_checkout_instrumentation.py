@@ -242,8 +242,8 @@ async def test_payment_method_getter_passes_context_to_pricing():
     )
 
     prices = {item["gateway_type"]: item["price"] for item in result["payment_methods"]}
-    assert prices[PaymentGatewayType.YOOKASSA] == Decimal("12.00")
-    assert prices[PaymentGatewayType.TELEGRAM_STARS] == Decimal("12.00")
+    # Stars only: the YooKassa row billing returns is never offered by the bot.
+    assert prices == {PaymentGatewayType.TELEGRAM_STARS: Decimal("12.00")}
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,7 @@
 import traceback
+from decimal import Decimal
 from typing import Optional, TypedDict, cast
+from uuid import UUID
 
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.formatting import Text
@@ -14,7 +16,7 @@ from redis.asyncio import Redis
 from src.bot.keyboards import get_user_keyboard
 from src.bot.proxy_view import (
     PROXY_DURATION_DAYS,
-    STRIKETHROUGH_PRICE_RUB,
+    format_stars,
     load_proxy_view,
 )
 from src.bot.states import Subscription
@@ -34,6 +36,12 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey_check
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
+from src.services.bot_payments import (
+    BOT_CURRENCY,
+    bot_gateways,
+    gateway_value,
+    is_bot_payment_gateway,
+)
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.dedicated_ip import get_choice, send_country_prompt
 from src.services.experiment import ExperimentService
@@ -120,7 +128,17 @@ async def _create_payment_and_get_data(
         logger.error(f"{log(user)} Failed to find duration for payment creation")
         return None
 
-    gt_str = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
+    gt_str = gateway_value(gateway_type)
+    if not is_bot_payment_gateway(gt_str):
+        # Telegram bot terms 6.2: the bot sells only for Stars, whatever billing offers.
+        logger.error(
+            f"{log(user)} Refused to create a '{gt_str}' payment: the bot sells for Stars only"
+        )
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-subscription-payment-creation-failed"),
+        )
+        return None
     pt_str = purchase_type.value if hasattr(purchase_type, "value") else str(purchase_type)
     experiment_context = build_checkout_context(
         experiment_service,
@@ -269,7 +287,7 @@ async def on_buy_proxy(
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    gateway_type = PaymentGatewayType.PLATEGA.value
+    gateway_type = PaymentGatewayType.TELEGRAM_STARS.value
 
     try:
         view = await load_proxy_view(billing, user)
@@ -281,20 +299,34 @@ async def on_buy_proxy(
         if view.vpn_blocked or not view.has_price:
             raise ValueError("Proxy purchase is not available")
         billing_gateway = await billing.get_gateway_by_type(gateway_type)
-        if not billing_gateway:
-            raise ValueError(f"Gateway '{gateway_type}' not found")
+        if not billing_gateway or not bot_gateways([billing_gateway]):
+            raise ValueError(f"Gateway '{gateway_type}' is not available for the bot")
         purchase_type = PurchaseType.RENEW if view.can_renew else PurchaseType.NEW
         result = await billing.create_payment(
             telegram_id=user.telegram_id,
             plan_id=view.proxy_plan_id,
             duration_days=PROXY_DURATION_DAYS,
-            currency=billing_gateway.Currency,
+            currency=BOT_CURRENCY,
             gateway_type=gateway_type,
             purchase_type=purchase_type.value,
             is_test=user.is_dev,
         )
-        if not result.URL:
-            raise ValueError("Payment link is empty")
+        # Bill exactly what billing recorded for this payment (proxy prices skip user discounts).
+        transaction = await billing.get_transaction(UUID(str(result.ID)))
+        amount = (
+            Decimal(transaction.Pricing.final_amount)
+            if transaction and transaction.Pricing
+            else view.price_stars
+        )
+        if amount is None:
+            raise ValueError("Proxy price in stars is unknown")
+        payment_url = result.URL or await create_stars_invoice_link(
+            dialog_manager.middleware_data["bot"],
+            payment_id=UUID(str(result.ID)),
+            title="Pro-прокси для Telegram",
+            description=f"Pro-прокси для Telegram · {PROXY_DURATION_DAYS} дн.",
+            amount=amount,
+        )
     except BillingClientError as exception:
         logger.warning(f"{log(user)} Billing rejected proxy payment: {exception}")
         key = (
@@ -312,13 +344,12 @@ async def on_buy_proxy(
         )
         return
 
-    logger.info(f"{log(user)} Created proxy payment '{result.ID}'")
+    logger.info(f"{log(user)} Created proxy Stars payment '{result.ID}'")
     await dialog_manager.start(
         Subscription.PROXY_CONFIRM,
         data={
-            "payment_url": result.URL,
-            "price": view.price_text,
-            "original_price": STRIKETHROUGH_PRICE_RUB,
+            "payment_url": payment_url,
+            "price": format_stars(amount),
         },
     )
 
@@ -335,11 +366,7 @@ async def on_purchase_type_select(
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     billing_gateways = await billing.list_active_gateways()
-    gateways = [
-        billing_gateway_to_dto(g)
-        for g in billing_gateways
-        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
-    ]
+    gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
     dialog_manager.dialog_data["purchase_type"] = purchase_type
     dialog_manager.dialog_data.pop(CURRENT_DURATION_KEY, None)
 
@@ -417,11 +444,7 @@ async def on_subscription_plans(  # noqa: C901
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     billing_gateways = await billing.list_active_gateways()
-    gateways = [
-        billing_gateway_to_dto(g)
-        for g in billing_gateways
-        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
-    ]
+    gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
 
     if not callback.data:
         raise ValueError("Callback data is empty")
@@ -597,12 +620,8 @@ async def on_duration_select(
         raise ValueError("PlanDto not found in dialog data")
 
     billing_gateways = await billing.list_active_gateways()
-    gateways = [
-        billing_gateway_to_dto(g)
-        for g in billing_gateways
-        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
-    ]
-    default_currency = await billing.get_default_currency()
+    gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
+    default_currency = BOT_CURRENCY
     purchase_type: PurchaseType | None = dialog_manager.dialog_data.get("purchase_type")
     experiment_context = build_checkout_context(
         experiment_service,
@@ -633,6 +652,14 @@ async def on_duration_select(
     )
     pricing = billing_price_details_to_dto(price_details)
     dialog_manager.dialog_data["is_free"] = pricing.is_free
+
+    if not gateways:
+        logger.warning(f"{log(user)} No active payment gateways")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-subscription-gateways-not-available"),
+        )
+        return
 
     if len(gateways) == 1 or pricing.is_free:
         selected_payment_method = gateways[0].type
@@ -686,13 +713,14 @@ async def on_payment_method_select(
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected payment method '{selected_payment_method}'")
 
+    if not is_bot_payment_gateway(selected_payment_method):
+        logger.warning(
+            f"{log(user)} Ignored payment method '{selected_payment_method}': Stars only"
+        )
+        return
+
     selected_duration = dialog_manager.dialog_data[CURRENT_DURATION_KEY]
     dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
-
-    if selected_payment_method == PaymentGatewayType.PLAIDLY:
-        logger.info(f"{log(user)} Plaidly selected, choosing crypto asset")
-        await dialog_manager.switch_to(state=Subscription.CRYPTO_ASSET)
-        return
 
     cache = _load_payment_data(dialog_manager)
     cache_key = _get_cache_key(selected_duration, selected_payment_method)
@@ -743,6 +771,10 @@ async def on_crypto_asset_select(
     redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    if not is_bot_payment_gateway(PaymentGatewayType.PLAIDLY):
+        # Crypto (Plaidly) is not sold in the bot: Stars only, bot terms 6.2.
+        logger.warning(f"{log(user)} Ignored crypto asset '{selected_asset_id}': Stars only")
+        return
     asset = get_crypto_asset(selected_asset_id)
     logger.info(f"{log(user)} Selected crypto asset '{asset.id}' ({asset.chain}/{asset.token})")
 
@@ -794,8 +826,6 @@ async def on_get_subscription(
     dialog_manager: DialogManager,
     billing: FromDishka[BillingClient],
 ) -> None:
-    from uuid import UUID  # noqa: PLC0415
-
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     payment_id = dialog_manager.dialog_data["payment_id"]
     logger.info(f"{log(user)} Getted free subscription '{payment_id}'")
@@ -893,8 +923,7 @@ async def on_trial_monthly_upgrade(
     if plan is None:
         await dialog_manager.switch_to(state=Subscription.MAIN)
         return
-    gateways = await billing.list_active_gateways()
-    if not any(g.IsActive and g.Channel in ("BOT", "ALL") for g in gateways):
+    if not bot_gateways(await billing.list_active_gateways()):
         await dialog_manager.switch_to(state=Subscription.MAIN)
         return
     dialog_manager.dialog_data.clear()

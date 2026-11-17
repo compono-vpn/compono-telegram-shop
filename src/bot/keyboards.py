@@ -1,4 +1,3 @@
-import os
 from typing import Final
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -14,7 +13,6 @@ from src.core.constants import (
     CANCEL_SURVEY_PREFIX,
     DEDICATED_IP_PREFIX,
     GOTO_PREFIX,
-    PAYMENT_NUDGE_PREFIX,
     PURCHASE_PREFIX,
     RECOVERY_OFFER_PREFIX,
     REPOSITORY,
@@ -157,11 +155,7 @@ def get_contact_support_keyboard(username: str, text: str) -> InlineKeyboardMark
     return builder.as_markup()
 
 
-def get_remnashop_keyboard(donate_url: str = "") -> InlineKeyboardMarkup:
-    _donate_url = donate_url or os.getenv(
-        "APP_YOOKASSA_RECEIPT_URL", "https://yookassa.ru/my/i/Z8AkHJ_F9sO_/l"
-    )
-
+def get_remnashop_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     builder.row(
@@ -173,13 +167,6 @@ def get_remnashop_keyboard(donate_url: str = "") -> InlineKeyboardMarkup:
             text="btn-remnashop-telegram",
             url=f"{T_ME}remna_shop",
         ),
-    )
-
-    builder.row(
-        InlineKeyboardButton(
-            text="btn-remnashop-donate",
-            url=_donate_url,
-        )
     )
 
     return builder.as_markup()
@@ -232,15 +219,11 @@ def get_cancel_survey_keyboard(payment_id: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_payment_nudge_keyboard(payment_id: str, payment_url: str) -> InlineKeyboardMarkup:
+def get_payment_nudge_keyboard(payment_url: str) -> InlineKeyboardMarkup:
+    # Stars only: no "other method" button. Old messages that have it still work
+    # (routers/extra/payment_nudge.py opens the Stars-only checkout).
     builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="btn-payment-nudge-pay", url=payment_url),
-        InlineKeyboardButton(
-            text="btn-payment-nudge-other",
-            callback_data=f"{PAYMENT_NUDGE_PREFIX}{payment_id}",
-        ),
-    )
+    builder.row(InlineKeyboardButton(text="btn-payment-nudge-pay", url=payment_url))
     return builder.as_markup()
 
 

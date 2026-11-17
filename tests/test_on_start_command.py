@@ -1,8 +1,8 @@
 """Tests for on_start_command — verifies the web→Telegram claim/link flow has
-been removed and replaced with a neutral redirect message.
+been removed.
 
-After PR 4 of the Web/TG split, the bot:
-- Shows a neutral redirect message when a /start web_<token> deep link is used.
+The bot:
+- Opens the main menu, with no website message, when a /start web_<token> deep link is used.
 - Never calls billing or remnawave APIs to claim/link a web subscription.
 - Has no message handler that links pasted /api/sub/<token> URLs.
 """
@@ -45,7 +45,8 @@ def _setup(start_text: str) -> tuple:
 class TestOnStartCommandWebPayload:
     """A /start web_<token> payload no longer claims/links anything."""
 
-    async def test_web_payload_sends_neutral_redirect(self):
+    async def test_web_payload_opens_the_menu_without_naming_the_website(self):
+        # Stars only (bot terms 6.2): the bot never names the website as a way to pay.
         message, user, dm, i18n, channel_incentive_service, notification_service = _setup(
             "/start web_ABC123"
         )
@@ -53,11 +54,7 @@ class TestOnStartCommandWebPayload:
 
         await raw_fn(message, user, dm, i18n, channel_incentive_service, notification_service)
 
-        # The redirect message uses the dedicated i18n key.
-        i18n.get.assert_any_call("msg-web-purchase-redirect")
-        message.answer.assert_called_once_with("[msg-web-purchase-redirect]")
-
-        # Main menu still opens after the redirect.
+        message.answer.assert_not_called()
         dm.start.assert_called_once()
 
 

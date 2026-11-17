@@ -110,10 +110,8 @@ async def on_start_command(
     channel_incentive_service: FromDishka[ChannelIncentiveService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
-    # Web purchases are managed at the web portal — this bot is TG-native only.
-    # If the user arrives via a legacy /start web_<token> deep link, send a
-    # neutral redirect message instead of attempting to claim or link any
-    # subscription on the billing side.
+    # A legacy /start web_<token> deep link just opens the main menu. The bot sells only for
+    # Telegram Stars (bot terms 6.2) and never names the website as a way to pay.
     if message.text and len(message.text.split()) > 1:
         param = message.text.split()[1]
         if param in {"proxy", "source-channel_proxy"}:
@@ -124,11 +122,7 @@ async def on_start_command(
             )
             return
         if param.startswith("web_"):
-            logger.info(
-                f"{log(user)} Received legacy web deep link '{param}' — "
-                f"sending neutral redirect; web claim flow is removed"
-            )
-            await message.answer(i18n.get("msg-web-purchase-redirect"))
+            logger.info(f"{log(user)} Received legacy web deep link '{param}', opening the menu")
 
     await on_start_dialog(user, dialog_manager)
     await _maybe_prompt_channel_incentive(

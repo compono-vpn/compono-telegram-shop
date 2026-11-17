@@ -42,6 +42,8 @@ def _billing(plans, prices):
     billing.get_default_currency.return_value = "RUB"
 
     async def calculate(telegram_id, plan_id, duration_days, currency, **kwargs):
+        # The bot prices in Stars only, even though billing's default currency is RUB.
+        assert currency == "XTR"
         value = prices[(plan_id, duration_days)]
         if isinstance(value, Exception):
             raise value
@@ -71,8 +73,8 @@ async def test_every_plan_line_has_a_monthly_price():
 
     lines = await _summary(billing)
 
-    assert lines[0] == "⚡️ Старт — 119 ₽/мес · 100 ГБ, 2 устройства"
-    assert lines[1] == "🚀 Про — 239 ₽/мес · 300 ГБ, 6 устройств"
+    assert lines[0] == "⚡️ Старт — 119 ★/мес · 100 ГБ, 2 устройства"
+    assert lines[1] == "🚀 Про — 239 ★/мес · 300 ГБ, 6 устройств"
 
 
 async def test_a_personal_discount_shows_the_old_price_struck_through():
@@ -80,7 +82,7 @@ async def test_a_personal_discount_shows_the_old_price_struck_through():
 
     lines = await _summary(billing)
 
-    assert lines == ["⚡️ Старт — <s>119 ₽</s> 83 ₽/мес · 100 ГБ, 2 устройства"]
+    assert lines == ["⚡️ Старт — <s>119 ★</s> 83 ★/мес · 100 ГБ, 2 устройства"]
 
 
 async def test_the_month_price_is_taken_from_the_30_day_duration():
@@ -98,7 +100,7 @@ async def test_a_plan_without_a_30_day_duration_uses_its_shortest():
 
     lines = await _summary(billing)
 
-    assert lines == ["⚡️ Старт — 299 ₽ / 90 дн. · 100 ГБ, 2 устройства"]
+    assert lines == ["⚡️ Старт — 299 ★ / 90 дн. · 100 ГБ, 2 устройства"]
 
 
 async def test_a_price_lookup_failure_keeps_the_line_without_a_price():
@@ -108,7 +110,7 @@ async def test_a_price_lookup_failure_keeps_the_line_without_a_price():
     lines = await _summary(billing)
 
     assert lines[0] == "⚡️ Старт — 100 ГБ, 2 устройства"
-    assert lines[1] == "🚀 Про — 239 ₽/мес · 300 ГБ, 6 устройств"
+    assert lines[1] == "🚀 Про — 239 ★/мес · 300 ГБ, 6 устройств"
 
 
 async def test_buttons_still_list_the_plans():
@@ -131,8 +133,8 @@ async def test_ultra_line_names_the_dedicated_ip():
 
     lines = [line.replace("\u00a0", " ").replace("\u202f", " ") for line in await _summary(billing)]
 
-    assert lines[0] == "💎 Макс — 399 ₽/мес · 1 024 ГБ, 20 устройств"
+    assert lines[0] == "💎 Макс — 399 ★/мес · 1 024 ГБ, 20 устройств"
     assert (
         lines[1]
-        == "👑 Ультра — 799 ₽/мес · 1 024 ГБ, 20 устройств, 🌐 личный IP (Швеция или Нидерланды)"
+        == "👑 Ультра — 799 ★/мес · 1 024 ГБ, 20 устройств, 🌐 личный IP (Швеция или Нидерланды)"
     )

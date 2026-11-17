@@ -89,7 +89,7 @@ async def test_stars_payment_without_billing_url_gets_an_invoice_link():
 
 
 @pytest.mark.asyncio
-async def test_other_gateways_keep_the_billing_url():
+async def test_other_gateways_are_refused_before_billing():
     plan = PlanDto(id=1, name="⚡️ Старт", durations=[PlanDurationDto(id=1, days=30, prices=[])])
     dm, bot = _stars_dm()
     result = await _create_payment_and_get_data(
@@ -102,6 +102,5 @@ async def test_other_gateways_keep_the_billing_url():
         redis_client=AsyncMock(),
         experiment_service=None,
     )
-    assert result is not None
-    assert result["payment_url"] == "https://pay.example/1"
+    assert result is None
     bot.create_invoice_link.assert_not_awaited()

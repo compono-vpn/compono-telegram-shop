@@ -49,6 +49,8 @@ from src.core.enums import PlanType, SubscriptionStatus, UserRole, Locale
 from src.infrastructure.billing.models import (
     BillingPersonalProxies,
     BillingPlan,
+    BillingPlanDuration,
+    BillingPlanPrice,
     BillingSettings,
     BillingTGProxy,
 )
@@ -126,6 +128,26 @@ def make_user(
 # Mock billing client
 # ---------------------------------------------------------------------------
 
+def make_proxy_plan(plan_id: int, stars: str, rubles: str = "49") -> BillingPlan:
+    """The billing proxy plan with a 30-day duration priced in Stars and rubles."""
+    return BillingPlan(
+        ID=plan_id,
+        Name="Прокси",
+        Type="PROXY",
+        IsActive=True,
+        Durations=[
+            BillingPlanDuration(
+                ID=plan_id * 10,
+                Days=30,
+                Prices=[
+                    BillingPlanPrice(Currency="RUB", Price=rubles),
+                    BillingPlanPrice(Currency="XTR", Price=stars),
+                ],
+            )
+        ],
+    )
+
+
 def make_billing_client(
     trial_plan: Optional[BillingPlan] = None,
     has_used_trial: bool = True,
@@ -134,6 +156,7 @@ def make_billing_client(
     tg_proxies_error: Optional[Exception] = None,
     personal: Optional[BillingPersonalProxies] = None,
     personal_error: Optional[Exception] = None,
+    proxy_stars: Optional[str] = "49",
 ) -> AsyncMock:
     billing = AsyncMock()
     billing.get_trial_plan.return_value = trial_plan
@@ -147,6 +170,8 @@ def make_billing_client(
 
     if personal is not None:
         billing.get_personal_tg_proxies.return_value = personal
+        if proxy_stars is not None and personal.proxy_plan_id:
+            billing.get_plan.return_value = make_proxy_plan(personal.proxy_plan_id, proxy_stars)
     else:
         billing.get_personal_tg_proxies.side_effect = personal_error or Exception(
             "personal endpoint unavailable"

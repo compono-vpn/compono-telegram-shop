@@ -32,6 +32,7 @@ from tests.test_personal_proxy_plan import (
     _public_rows,
     _row,
     _shared_rows,
+    stars_invoice,  # noqa: F401  (autouse fixture: fake Stars invoice link)
 )
 
 PHONE_HTTPS = "https://t.me/proxy?server=me.compono.online&port=443&secret=cc"
@@ -111,12 +112,12 @@ class TestProViaProxyPlan:
         )
         assert result["can_renew_proxy"] is True
         assert result["can_buy_proxy"] is False
-        assert result["proxy_price"] == "25"
+        assert result["proxy_price"] == "49 ★"
 
-    async def test_no_renew_without_price(self):
+    async def test_no_renew_without_a_stars_price(self):
+        # A ruble price alone is not enough: the bot sells for Stars only.
         personal = _entitled("proxy_plan", EXPIRES)
-        personal.price_rub = None
-        result, _ = await _render(personal=personal)
+        result, _ = await _render(personal=personal, proxy_stars=None)
         assert result["can_renew_proxy"] is False
         assert result["desktop_url"] == PERSONAL_WEB
 
@@ -135,8 +136,7 @@ class TestNotEntitled:
             "📡 <b>Прокси для Telegram</b>\n"
             "Telegram работает без VPN.\n\n"
             "🆓 <b>Бесплатный</b> — общий, при нагрузке скорость снижается.\n"
-            "⭐ <b>Pro</b> — личный и быстрый, до 3 устройств."
-            " <s>49 ₽</s> <b>25 ₽/мес</b> до 31 октября.\n"
+            "⭐ <b>Pro</b> — личный и быстрый, до 3 устройств. <b>49 ★ в месяц</b>.\n"
             "🎁 С подпиской Compono VPN — Pro бесплатно.\n\n"
             f"{VPN_OFF}"
         )
@@ -152,12 +152,13 @@ class TestNotEntitled:
         assert result["has_phone"] is False and result["has_desktop"] is False
         assert "http" not in result["proxy_message"]
 
-    @pytest.mark.parametrize("plan_id,price", [(None, 25), (9, None), (None, None), (0, 25)])
-    async def test_no_pro_offer_when_plan_or_price_missing(self, plan_id, price):
+    @pytest.mark.parametrize(
+        "plan_id,stars", [(None, "49"), (9, None), (None, None), (0, "49"), (9, "0")]
+    )
+    async def test_no_pro_offer_when_plan_or_stars_price_missing(self, plan_id, stars):
         personal = _not_entitled()
         personal.proxy_plan_id = plan_id
-        personal.price_rub = price
-        result, _ = await _render(personal=personal)
+        result, _ = await _render(personal=personal, proxy_stars=stars)
 
         assert result["can_buy_proxy"] is False
         assert result["proxy_message"] == (
@@ -187,15 +188,12 @@ class TestNotEntitled:
         assert "Сейчас прокси недоступны. Попробуйте позже." in result["proxy_message"]
         assert result["has_free"] is False
 
-    @pytest.mark.parametrize(
-        "price,text", [(25, "25"), (25.0, "25"), (24.9, "24.9"), (30.25, "30.25")]
-    )
-    async def test_price_has_no_trailing_zero(self, price, text):
-        personal = _not_entitled()
-        personal.price_rub = price
-        result, _ = await _render(personal=personal)
-        assert f"<b>{text} ₽/мес</b>" in result["proxy_message"]
+    @pytest.mark.parametrize("stars,text", [("25", "25 ★"), ("25.00", "25 ★"), ("49", "49 ★")])
+    async def test_stars_price_has_no_trailing_zero(self, stars, text):
+        result, _ = await _render(personal=_not_entitled(), proxy_stars=stars)
+        assert f"<b>{text} в месяц</b>" in result["proxy_message"]
         assert result["proxy_price"] == text
+        assert "₽" not in result["proxy_message"]
 
 
 class TestSharedRows:
@@ -310,21 +308,13 @@ class TestSuccessScreen:
 class TestConfirmScreen:
     async def test_getter(self):
         dm = make_dialog_manager()
-        dm.start_data = {
-            "payment_url": "https://pay.example.invalid/x",
-            "price": "25",
-            "original_price": 49,
-        }
-        assert await proxy_confirm_getter(dm) == {
-            "url": "https://pay.example.invalid/x",
-            "price": "25",
-            "original_price": 49,
-        }
+        dm.start_data = {"payment_url": "https://t.me/$x", "price": "49 ★"}
+        assert await proxy_confirm_getter(dm) == {"url": "https://t.me/$x", "price": "49 ★"}
 
     async def test_buy_passes_formatted_price(self):
         _, dm, billing, notification = _buy_args(_not_entitled())
         await _buy(dm, billing, notification)
-        assert dm.start.await_args.kwargs["data"]["price"] == "25"
+        assert dm.start.await_args.kwargs["data"]["price"] == "49 ★"
 
 
 class TestButtonColors:

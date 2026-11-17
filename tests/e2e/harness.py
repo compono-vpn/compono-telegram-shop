@@ -64,9 +64,12 @@ class FailingTelegram(TelegramMockServer):
         self.calls: list[dict[str, Any]] = []
         # method -> (error_code, description); applied to every call of that method
         self.failures: dict[str, tuple[int, str]] = {}
+        # createInvoiceLink requests (Telegram Stars invoices) in order
+        self.invoices: list[dict[str, Any]] = []
 
     def build_app(self) -> web.Application:
         app = super().build_app()
+        app.router.add_post("/bot{token}/createInvoiceLink", self._create_invoice_link)
         # Catch-all for methods tgmock does not implement (setMyCommands variants, etc.).
         app.router.add_post("/bot{token}/{method}", self._catch_all)
 
@@ -110,6 +113,15 @@ class FailingTelegram(TelegramMockServer):
         else:
             body["result"][media_key] = media
         return web.json_response(body)
+
+    async def _create_invoice_link(self, request: web.Request) -> web.Response:
+        data = await read_telegram_request(request)
+        prices = data.get("prices")
+        if isinstance(prices, str):
+            prices = json.loads(prices)
+        invoice = {**data, "prices": prices, "link": f"https://t.me/$e2e-{len(self.invoices) + 1}"}
+        self.invoices.append(invoice)
+        return web.json_response({"ok": True, "result": invoice["link"]})
 
     async def _catch_all(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "result": True})

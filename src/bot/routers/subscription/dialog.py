@@ -22,6 +22,7 @@ from src.bot.states import MainMenu, Subscription
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import PURCHASE_PREFIX
 from src.core.enums import BannerName, PaymentGatewayType, PurchaseType
+from src.services.bot_payments import RUBLE_SUPPORT_URL
 
 from .getters import (
     confirm_getter,
@@ -194,6 +195,13 @@ payment_method = Window(
         ),
     ),
     Row(
+        Url(
+            text=I18nFormat("btn-ruble-support"),
+            url=Format(RUBLE_SUPPORT_URL),
+            id=f"{PURCHASE_PREFIX}ruble_support_method",
+        ),
+    ),
+    Row(
         SwitchTo(
             text=I18nFormat("btn-subscription-back-duration"),
             id=f"{PURCHASE_PREFIX}back",
@@ -254,6 +262,14 @@ confirm = Window(
             id=f"{PURCHASE_PREFIX}get",
             on_click=on_get_subscription,
             when=F["is_free"],
+        ),
+    ),
+    Row(
+        Url(
+            text=I18nFormat("btn-ruble-support"),
+            url=Format(RUBLE_SUPPORT_URL),
+            id=f"{PURCHASE_PREFIX}ruble_support_confirm",
+            when=~F["is_free"],
         ),
     ),
     Row(
@@ -332,6 +348,11 @@ proxy_confirm = Window(
         url=Format("{url}"),
         id=f"{PURCHASE_PREFIX}proxy_pay",
         style=PROXY_PAY_STYLE,
+    ),
+    Url(
+        text=I18nFormat("btn-ruble-support"),
+        url=Format(RUBLE_SUPPORT_URL),
+        id=f"{PURCHASE_PREFIX}ruble_support_proxy",
     ),
     Cancel(
         text=I18nFormat("btn-back"),

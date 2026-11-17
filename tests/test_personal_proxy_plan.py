@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -30,8 +31,10 @@ from src.infrastructure.billing.converters import (
     billing_transaction_to_dto,
 )
 from src.infrastructure.billing.models import (
+    BillingPaymentGateway,
     BillingPersonalProxies,
     BillingPlan,
+    BillingPriceDetails,
     BillingSubscription,
     BillingTGProxy,
     BillingTransaction,
@@ -51,7 +54,7 @@ PUBLIC_WEB = "https://t.me/webproxy?server=russia.compono.online&secret=aa"
 PERSONAL_WEB = "https://t.me/webproxy?server=me.compono.online&secret=bb"
 PERSONAL_PHONE = "tg://proxy?server=me.compono.online&port=443&secret=cc"
 PUBLIC_PHONE = "tg://proxy?server=pub.compono.online&port=443&secret=dd"
-PAY_URL = "https://pay.example.invalid/checkout"
+PAY_URL = "https://t.me/$proxy-stars-invoice"
 EXPIRES = datetime(2026, 11, 12, 9, 0, tzinfo=timezone.utc)
 
 
@@ -111,14 +114,29 @@ async def _render(personal=None, personal_error=None, user=None, **kwargs):
     return result, billing
 
 
-def _buy_args(personal, create_result=None, gateway=True):
+@pytest.fixture(autouse=True)
+def stars_invoice(monkeypatch):
+    link = AsyncMock(return_value=PAY_URL)
+    monkeypatch.setattr("src.bot.routers.subscription.handlers.create_stars_invoice_link", link)
+    return link
+
+
+def _buy_args(personal, create_result=None, gateway=True, recorded_stars="49"):
     user = make_user()
     dm = make_dialog_manager()
     dm.middleware_data[USER_KEY] = user
+    dm.middleware_data["bot"] = MagicMock()
     dm.start = AsyncMock()
     billing = make_billing_client(personal=personal)
-    billing.get_gateway_by_type.return_value = MagicMock(Currency="RUB") if gateway else None
-    billing.create_payment.return_value = create_result or MagicMock(ID=str(uuid4()), URL=PAY_URL)
+    billing.get_gateway_by_type.return_value = (
+        BillingPaymentGateway(Type="TELEGRAM_STARS", Channel="BOT", Currency="XTR", IsActive=True)
+        if gateway
+        else None
+    )
+    billing.create_payment.return_value = create_result or MagicMock(ID=str(uuid4()), URL=None)
+    billing.get_transaction.return_value = BillingTransaction(
+        Pricing=BillingPriceDetails(original_amount=recorded_stars, final_amount=recorded_stars)
+    )
     notification = AsyncMock()
     return user, dm, billing, notification
 
@@ -134,7 +152,7 @@ async def _buy(dm, billing, notification):
 
 
 class TestBuyProxy:
-    async def test_creates_platega_payment_for_proxy_plan_and_opens_confirm(self):
+    async def test_creates_stars_payment_for_proxy_plan_and_opens_confirm(self, stars_invoice):
         user, dm, billing, notification = _buy_args(_not_entitled())
 
         await _buy(dm, billing, notification)
@@ -143,20 +161,49 @@ class TestBuyProxy:
             telegram_id=user.telegram_id,
             plan_id=9,
             duration_days=30,
-            currency="RUB",
-            gateway_type="PLATEGA",
+            currency="XTR",
+            gateway_type="TELEGRAM_STARS",
             purchase_type="NEW",
             is_test=user.is_dev,
         )
-        billing.get_gateway_by_type.assert_awaited_once_with("PLATEGA")
+        billing.get_gateway_by_type.assert_awaited_once_with("TELEGRAM_STARS")
+        payment_id = billing.create_payment.return_value.ID
+        stars_invoice.assert_awaited_once()
+        assert stars_invoice.await_args.kwargs["payment_id"] == UUID(payment_id)
+        assert stars_invoice.await_args.kwargs["amount"] == Decimal("49")
         dm.start.assert_awaited_once()
         assert dm.start.await_args.args[0] == Subscription.PROXY_CONFIRM
-        assert dm.start.await_args.kwargs["data"] == {
-            "payment_url": PAY_URL,
-            "price": "25",
-            "original_price": 49,
-        }
+        assert dm.start.await_args.kwargs["data"] == {"payment_url": PAY_URL, "price": "49 ★"}
         notification.notify_user.assert_not_awaited()
+
+    async def test_invoice_charges_what_billing_recorded_for_the_payment(self, stars_invoice):
+        # Billing prices proxy payments without user discounts; the invoice must match it.
+        _, dm, billing, notification = _buy_args(_not_entitled(), recorded_stars="55")
+
+        await _buy(dm, billing, notification)
+
+        assert stars_invoice.await_args.kwargs["amount"] == Decimal("55")
+        assert dm.start.await_args.kwargs["data"]["price"] == "55 ★"
+
+    async def test_a_non_stars_gateway_row_is_never_used(self):
+        _, dm, billing, notification = _buy_args(_not_entitled())
+        billing.get_gateway_by_type.return_value = BillingPaymentGateway(
+            Type="PLATEGA", Channel="BOT", Currency="RUB", IsActive=True
+        )
+
+        await _buy(dm, billing, notification)
+
+        billing.create_payment.assert_not_awaited()
+        dm.start.assert_not_awaited()
+
+    async def test_no_stars_price_means_no_purchase(self):
+        user, dm, billing, notification = _buy_args(_not_entitled())
+        billing.get_plan.return_value = None
+
+        await _buy(dm, billing, notification)
+
+        billing.create_payment.assert_not_awaited()
+        dm.start.assert_not_awaited()
 
     async def test_renewal_uses_renew_purchase_type(self):
         _, dm, billing, notification = _buy_args(_entitled("proxy_plan", EXPIRES))
@@ -221,13 +268,9 @@ class TestDeepLinkToPurchase:
 class TestConfirmAndSuccess:
     async def test_confirm_getter_exposes_payment_data(self):
         dm = make_dialog_manager()
-        dm.start_data = {"payment_url": PAY_URL, "price": 25, "original_price": 49}
+        dm.start_data = {"payment_url": PAY_URL, "price": "49 ★"}
 
-        assert await proxy_confirm_getter(dm) == {
-            "url": PAY_URL,
-            "price": 25,
-            "original_price": 49,
-        }
+        assert await proxy_confirm_getter(dm) == {"url": PAY_URL, "price": "49 ★"}
 
 
 def _consumer() -> UserNotificationConsumer:

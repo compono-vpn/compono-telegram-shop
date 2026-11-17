@@ -50,7 +50,7 @@ def _trial(days=2, gb=5, devices=1):
     )
 
 
-def _paid(plan_id, price, *, kind="BOTH", availability="ALL", days=30, currency="RUB"):
+def _paid(plan_id, price, *, kind="BOTH", availability="ALL", days=30, currency="XTR"):
     return BillingPlan(
         ID=plan_id,
         Name=f"p{plan_id}",
@@ -82,7 +82,7 @@ async def test_terms_name_days_traffic_and_devices():
 
     terms = await first_screen_terms(billing, _i18n(), _trial(), 1)
 
-    assert terms == {"trial_terms": "2 дня, 5 ГБ, 1 устройство", "price_from": "119 ₽/мес"}
+    assert terms == {"trial_terms": "2 дня, 5 ГБ, 1 устройство", "price_from": "119 ★/мес"}
 
 
 async def test_the_cheapest_sellable_month_price_wins():
@@ -97,7 +97,16 @@ async def test_the_cheapest_sellable_month_price_wins():
 
     terms = await first_screen_terms(_billing(plans), _i18n(), _trial(), 1)
 
-    assert terms["price_from"] == "239 ₽/мес"
+    assert terms["price_from"] == "239 ★/мес"
+
+
+async def test_ruble_prices_are_never_shown_even_when_billing_defaults_to_rubles():
+    # Billing's default currency is RUB in prod; the bot reads only Stars prices.
+    plans = [_paid(1, "99.00", currency="RUB"), _paid(2, "239.00")]
+
+    terms = await first_screen_terms(_billing(plans), _i18n(), _trial(), 1)
+
+    assert terms["price_from"] == "239 ★/мес"
 
 
 async def test_without_a_trial_plan_there_are_no_terms():
@@ -142,7 +151,7 @@ async def test_menu_getter_passes_the_terms_to_a_new_user():
 
     assert data["trial_available"] is True
     assert data["trial_terms"] == "2 дня, 5 ГБ, 1 устройство"
-    assert data["price_from"] == "119 ₽/мес"
+    assert data["price_from"] == "119 ★/мес"
 
 
 async def test_menu_getter_skips_the_lookups_for_a_user_who_cannot_take_the_trial():
@@ -183,10 +192,10 @@ class TestMenuCopy:
         )
 
     def test_the_new_user_text_carries_terms_and_price(self):
-        text = self._text(trial_terms="2 дня, 5 ГБ, 1 устройство", price_from="119 ₽/мес")
+        text = self._text(trial_terms="2 дня, 5 ГБ, 1 устройство", price_from="119 ★/мес")
 
         assert "2 дня, 5 ГБ, 1 устройство" in text
-        assert "от 119 ₽/мес" in text
+        assert "от 119 ★/мес" in text
 
     def test_without_terms_the_old_sentence_stays(self):
         text = self._text(trial_terms=False, price_from=False)

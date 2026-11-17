@@ -195,15 +195,14 @@ btn-goto-user-profile = 👤 Перейти к пользователю
 
 # Cancel survey
 btn-cancel-survey-too-expensive = 💸 Дорого
-btn-cancel-survey-card-failed = 💳 Карта не прошла
+btn-cancel-survey-card-failed = ⭐ Оплата не прошла
 btn-cancel-survey-page-froze = 🌐 Страница зависла
 btn-cancel-survey-got-distracted = ⏳ Отвлёкся
 btn-cancel-survey-will-think = 🤔 Решил подумать
 btn-cancel-survey-other = ✍️ Другое
 
 
-btn-payment-nudge-pay = 💳 Оплатить
-btn-payment-nudge-other = 🔄 Другой способ
+btn-payment-nudge-pay = ⭐ Оплатить звёздами
 btn-recovery-offer-accept = 🎁 Купить со скидкой 30%
 
 # Source survey
@@ -449,7 +448,8 @@ btn-subscription-payment-method = { gateway-type } | { $has_discount ->
     [1] 🔥 { $price } { $currency }
     *[0] { $price } { $currency }
     }
-btn-subscription-pay = 💳 Оплатить
+btn-subscription-pay = ⭐ Оплатить звёздами
+btn-ruble-support = 💬 Написать в @compono_support
 btn-subscription-get = 🎁 Получить бесплатно
 btn-subscription-back-plans = ⬅️ Назад к выбору плана
 btn-subscription-back-duration = ⬅️ Изменить длительность
@@ -491,12 +491,12 @@ btn-menu-vpn-offer = 🌐 VPN для всего интернета
 btn-setup-checkin-yes = ✅ Да, работает
 btn-setup-checkin-no = ❌ Нет, не получилось
 btn-menu-proxy-plans = 💳 Тарифы VPN
-btn-menu-proxy-buy = ⭐ Pro за { $proxy_price } ₽
-btn-menu-proxy-renew = 🔄 Продлить за { $proxy_price } ₽
+btn-menu-proxy-buy = ⭐ Pro за { $proxy_price }
+btn-menu-proxy-renew = 🔄 Продлить за { $proxy_price }
 btn-proxy-pro = ⭐ Подключить Pro
 btn-proxy-stable = 🔗 Подключить стабильный
 btn-proxy-phone = 📱 Не подключается на телефоне?
 btn-proxy-free-backup = 🆓 Бесплатный (запасной)
 btn-proxy-free-connect = 🆓 Подключить бесплатный
-btn-proxy-pay = 💳 Оплатить { $price } ₽
+btn-proxy-pay = ⭐ Оплатить { $price }
 btn-proxy-to-menu = ⬅️ В меню

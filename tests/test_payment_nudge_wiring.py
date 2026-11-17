@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from src.bot.routers.subscription.handlers import _create_payment_and_get_data
 from src.core.constants import USER_KEY
 from src.core.enums import PaymentGatewayType, PurchaseType
@@ -41,7 +43,7 @@ def _dm() -> MagicMock:
     return dm
 
 
-def _billing(url="https://pay.example/1", currency="RUB", final="119") -> AsyncMock:
+def _billing(url="", currency="XTR", final="119") -> AsyncMock:
     billing = AsyncMock()
     billing.get_gateway_by_type.return_value = MagicMock(Currency=currency)
     billing.create_payment.return_value = MagicMock(ID=PAYMENT_ID, URL=url)
@@ -51,7 +53,14 @@ def _billing(url="https://pay.example/1", currency="RUB", final="119") -> AsyncM
     return billing
 
 
-async def _create(redis, billing, gateway=PaymentGatewayType.PLATEGA):
+@pytest.fixture(autouse=True)
+def _invoice(monkeypatch):
+    link = AsyncMock(return_value="https://t.me/$invoice")
+    monkeypatch.setattr("src.bot.routers.subscription.handlers.create_stars_invoice_link", link)
+    return link
+
+
+async def _create(redis, billing, gateway=PaymentGatewayType.TELEGRAM_STARS):
     return await _create_payment_and_get_data(
         dialog_manager=_dm(),
         plan=_plan(),
@@ -64,7 +73,7 @@ async def _create(redis, billing, gateway=PaymentGatewayType.PLATEGA):
     )
 
 
-async def test_payment_is_queued_with_its_link_and_price():
+async def test_stars_payment_is_queued_with_the_invoice_link():
     redis = _Redis()
 
     result = await _create(redis, _billing())
@@ -73,8 +82,8 @@ async def test_payment_is_queued_with_its_link_and_price():
     queue = redis.zsets[PendingPaymentNudgesKey().pack()]
     assert list(queue) == [f"{PAYMENT_ID}:777"]
     stored = redis.values[PaymentNudgeDataKey(payment_id=PAYMENT_ID).pack()]
-    assert "https://pay.example/1" in stored
-    assert "119 ₽" in stored
+    assert "https://t.me/$invoice" in stored
+    assert "119 ★" in stored
 
 
 async def test_a_redis_failure_does_not_break_payment_creation():
@@ -85,18 +94,26 @@ async def test_a_redis_failure_does_not_break_payment_creation():
     result = await _create(redis, _billing())
 
     assert result is not None
-    assert result["payment_url"] == "https://pay.example/1"
+    assert result["payment_url"] == "https://t.me/$invoice"
 
 
-async def test_stars_payment_is_queued_with_the_invoice_link(monkeypatch):
+@pytest.mark.parametrize(
+    "gateway",
+    [
+        PaymentGatewayType.PLATEGA,
+        PaymentGatewayType.PLATEGA_CRYPTO,
+        PaymentGatewayType.YOOKASSA,
+        PaymentGatewayType.TON,
+        PaymentGatewayType.PLAIDLY,
+        "PLATEGA",
+    ],
+)
+async def test_a_non_stars_gateway_never_reaches_billing_or_the_nudge(gateway):
     redis = _Redis()
-    monkeypatch.setattr(
-        "src.bot.routers.subscription.handlers.create_stars_invoice_link",
-        AsyncMock(return_value="https://t.me/$invoice"),
-    )
+    billing = _billing(url="https://pay.platega.io/x", currency="RUB")
 
-    await _create(redis, _billing(url="", currency="XTR"), PaymentGatewayType.TELEGRAM_STARS)
+    result = await _create(redis, billing, gateway)
 
-    stored = redis.values[PaymentNudgeDataKey(payment_id=PAYMENT_ID).pack()]
-    assert "https://t.me/$invoice" in stored
-    assert "119 ★" in stored
+    assert result is None
+    billing.create_payment.assert_not_awaited()
+    assert redis.zsets == {}

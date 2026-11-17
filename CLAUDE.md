@@ -3,6 +3,16 @@
 Python aiogram 3 + aiogram-dialog 2.6 + dishka bot. Checks before merge (CI runs on pull requests and on push to `main`):
 `ruff check src/`, `ruff format --check src/`, `pytest tests/`.
 
+## Stars only (Telegram bot terms 6.2, 2026-11-17)
+
+The bot sells only for Telegram Stars. It never shows or links a ruble, card, SBP, crypto or website payment.
+`src/services/bot_payments.py` `bot_gateways()` keeps only active BOT/ALL TELEGRAM_STARS rows, whatever else billing
+returns. `_create_payment_and_get_data` refuses any other gateway. Prices are read in XTR, not billing's
+`default_currency`. The proxy is bought with a Stars invoice. The widget plan card is off. Ruble payers see
+«Оплата в рублях сейчас недоступна… напишите в @compono_support». A human there answers with
+`docs/SUPPORT-RUBLE-PAYMENTS.md`. Never add a ruble gateway, a ₽ price or a website-payment link to a bot screen;
+`tests/test_stars_only.py` lints the user-facing texts. Details and test evidence: `docs/TESTING-stars-only.md`.
+
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
 `tests/e2e/` runs the real app (uvicorn webhook mode, aiogram, aiogram-dialog, dishka, Redis) against tgmock's fake

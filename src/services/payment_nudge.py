@@ -21,6 +21,7 @@ from src.core.storage.keys import (
 )
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
+from src.services.bot_payments import is_bot_payment_gateway
 from src.services.notification import NotificationService
 from src.services.recovery_offer import claim_offer, release_offer
 from src.services.reminder_delivery import can_receive_reminders
@@ -128,6 +129,12 @@ async def _eligible(
     transaction = await billing.get_transaction(UUID(payment_id))
     if not transaction or transaction.Status != TransactionStatus.PENDING.value:
         return None
+    if not is_bot_payment_gateway(transaction.GatewayType):
+        # A link queued before the Stars-only switch (e.g. Platega); never resend it from the bot.
+        logger.info(
+            f"Payment nudge for '{payment_id}' skipped: '{transaction.GatewayType}' is not Stars"
+        )
+        return None
     if await _paid_since(billing, telegram_id, transaction.CreatedAt):
         return None
     return json.loads(_text(raw)), transaction
@@ -186,7 +193,7 @@ async def _send_one(
             payload=MessagePayload(
                 i18n_key="ntf-payment-nudge",
                 i18n_kwargs={"plan": data["plan"], "price": data["price"]},
-                reply_markup=get_payment_nudge_keyboard(payment_id, data["url"]),
+                reply_markup=get_payment_nudge_keyboard(data["url"]),
                 auto_delete_after=None,
                 add_close_button=False,
             ),

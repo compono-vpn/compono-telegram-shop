@@ -17,7 +17,7 @@ from redis.asyncio import Redis
 
 from src.bot.states import Subscription
 from src.core.config import AppConfig
-from src.core.enums import PaymentGatewayType, PlanAvailability, PlanType, PurchaseType
+from src.core.enums import PlanAvailability, PlanType, PurchaseType
 from src.core.utils.time import datetime_now
 from src.infrastructure.billing.client import BillingClient
 from src.infrastructure.billing.converters import billing_plan_to_dto, billing_price_details_to_dto
@@ -25,6 +25,7 @@ from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey
 from src.models.dto.plan import PlanDto
 from src.models.dto.subscription import BaseSubscriptionDto
 from src.models.dto.user import BaseUserDto, UserDto
+from src.services.bot_payments import bot_gateways
 from src.services.remnawave import RemnawaveService
 from src.services.stars_invoice import create_stars_invoice_link
 from src.services.subscription import SubscriptionService
@@ -191,19 +192,16 @@ def purchase_type(subscription: Optional[BaseSubscriptionDto], plan_id: int) -> 
     return PurchaseType.RENEW if subscription.plan.id == plan_id else PurchaseType.CHANGE
 
 
+# The plan card shows ruble prices and ruble/TON buttons, so it stays off while the bot sells for
+# Stars only (bot terms 6.2). The subscription menu then opens the ordinary Stars checkout.
+PLAN_CARD_ENABLED = False
+
+
 def pick_gateway(gateways: list[Any], kind: str) -> Optional[Any]:
-    """ "star", "ton", or "pay" for the first active ruble gateway (Platega, else e.g. YooKassa)."""
-    usable = [g for g in gateways if g.IsActive and g.Channel in ("BOT", "ALL")]
-    by_type = {
-        "star": PaymentGatewayType.TELEGRAM_STARS.value,
-        "ton": PaymentGatewayType.TON.value,
-    }
-    if kind in by_type:
-        return next((g for g in usable if g.Type == by_type[kind]), None)
-    special = {PaymentGatewayType.TELEGRAM_STARS.value, PaymentGatewayType.TON.value}
-    rubles = [g for g in usable if g.Currency == "RUB" and g.Type not in special]
-    rubles.sort(key=lambda g: (g.Type != PaymentGatewayType.PLATEGA.value, g.OrderIndex))
-    return rubles[0] if rubles else None
+    """Only "star" can pay: the bot sells for Telegram Stars only; "pay" and "ton" get None."""
+    if kind != "star":
+        return None
+    return next(iter(bot_gateways(gateways)), None)
 
 
 class WidgetService:
@@ -295,6 +293,8 @@ class WidgetService:
         return [billing_plan_to_dto(p) for p in await self.billing.get_available_plans(telegram_id)]
 
     async def send_plans(self, user: BaseUserDto) -> Optional[Message]:
+        if not PLAN_CARD_ENABLED:
+            return None
         plans = await self._plans(user.telegram_id)
         subscription = await self.subscription_service.get_current(user.telegram_id)
         selected = subscription.plan.id if subscription and not subscription.is_trial else None
@@ -328,6 +328,10 @@ class WidgetService:
             reply = {"m": "Не получилось. Попробуйте ещё раз."}
         await self.bot(AnswerWidgetQuery(widget_query_id=query.id, data=pack(reply, ANSWER_LIMIT)))
 
+    async def _open_subscription_menu(self, telegram_id: int) -> None:
+        manager = self.bg_manager_factory.bg(bot=self.bot, user_id=telegram_id, chat_id=telegram_id)
+        await manager.start(Subscription.MAIN, mode=StartMode.RESET_STACK, show_mode=ShowMode.SEND)
+
     async def _answer(self, query: WidgetQuery) -> dict[str, Any]:
         action, _, rest = query.data.partition(":")
         user = await self.user_service.get(query.user_id)
@@ -341,16 +345,10 @@ class WidgetService:
                 return {}
             used = await self._used_bytes(subscription)
             return {"s": status_state(subscription, used, datetime_now())}
-        if action == "buy":
-            await self.send_plans(user)
+        if action == "buy" and await self.send_plans(user):
             return {"m": "Тарифы ниже"}
-        if action == "menu":
-            manager = self.bg_manager_factory.bg(
-                bot=self.bot, user_id=user.telegram_id, chat_id=user.telegram_id
-            )
-            await manager.start(
-                Subscription.MAIN, mode=StartMode.RESET_STACK, show_mode=ShowMode.SEND
-            )
+        if action in ("buy", "menu"):
+            await self._open_subscription_menu(user.telegram_id)
             return {}
         if query.kind == "sent_transaction" and action == "tp":
             return await self._ton_sent(rest)
@@ -466,6 +464,4 @@ class WidgetService:
                 amount=pricing.final_amount,
             )
             return {"t": link, "a": f"{amount} ⭐"}
-        if not result.URL:
-            return {"m": "Не получилось создать платёж. Попробуйте ещё раз."}
-        return {"u": result.URL, "a": f"{amount} ₽"}
+        return {"m": "Этот способ оплаты сейчас недоступен."}

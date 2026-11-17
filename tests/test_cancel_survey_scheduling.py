@@ -30,8 +30,8 @@ def _dm(plan: PlanDto, telegram_id: int = 777) -> MagicMock:
 
 def _make_billing(payment_id: str = "3fa85f64-5717-4562-b3fc-2c963f66afa6") -> AsyncMock:
     billing = AsyncMock()
-    billing.get_gateway_by_type.return_value = MagicMock(Currency="RUB")
-    billing.create_payment.return_value = MagicMock(ID=payment_id, URL="https://pay.example/1")
+    billing.get_gateway_by_type.return_value = MagicMock(Currency="XTR")
+    billing.create_payment.return_value = MagicMock(ID=payment_id, URL="https://t.me/$stars")
     billing.calculate_price.return_value = MagicMock(
         original_amount="119", discount_percent=0, final_amount="119"
     )
@@ -50,7 +50,7 @@ class TestCreatePaymentSchedulesCancelSurveyCheck:
             dialog_manager=dm,
             plan=plan,
             duration_days=30,
-            gateway_type=PaymentGatewayType.PLATEGA,
+            gateway_type=PaymentGatewayType.TELEGRAM_STARS,
             billing=billing,
             notification_service=notification_service,
             redis_client=redis_client,
@@ -65,7 +65,7 @@ class TestCreatePaymentSchedulesCancelSurveyCheck:
         ]
         assert len(survey_calls) == 1
         (member,) = survey_calls[0].args[1].keys()
-        assert member.startswith("3fa85f64-5717-4562-b3fc-2c963f66afa6:777:PLATEGA:")
+        assert member.startswith("3fa85f64-5717-4562-b3fc-2c963f66afa6:777:TELEGRAM_STARS:")
 
     async def test_does_not_schedule_when_duration_is_missing(self):
         plan = _plan_with_duration(days=30)
@@ -78,7 +78,7 @@ class TestCreatePaymentSchedulesCancelSurveyCheck:
             dialog_manager=dm,
             plan=plan,
             duration_days=9999,
-            gateway_type=PaymentGatewayType.PLATEGA,
+            gateway_type=PaymentGatewayType.TELEGRAM_STARS,
             billing=billing,
             notification_service=notification_service,
             redis_client=redis_client,
