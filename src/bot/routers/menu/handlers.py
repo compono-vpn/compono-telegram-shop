@@ -13,6 +13,7 @@ from src.bot.states import Dashboard, MainMenu, Subscription
 from src.core.constants import USER_KEY
 from src.core.enums import MediaType
 from src.core.i18n.translator import get_translated_kwargs
+from src.core.metrics import TV_PAIR_TOTAL
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
@@ -23,6 +24,8 @@ from src.services.experiment import TRIAL_EXPERIMENT_KEY, ExperimentService
 from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.remnawave import BetaTesterEnrollmentResult, RemnawaveService
+from src.services.tv_pair import code_from_start_text, confirm_keyboard, display_code
+from src.services.tv_pair import log_code as log_tv_code
 from src.services.widgets import WidgetService
 
 router = Router(name=__name__)
@@ -109,6 +112,31 @@ async def on_beta_testers_start_command(
     }[result]
     await message.answer(i18n.get(message_key))
     await on_start_dialog(user, dialog_manager)
+
+
+def _is_tv_pair_start(message: Message) -> bool:
+    return code_from_start_text(message.text) is not None
+
+
+@inject
+@router.message(CommandStart(ignore_case=True), _is_tv_pair_start)
+async def on_tv_pair_start_command(
+    message: Message,
+    user: UserDto,
+    i18n: FromDishka[TranslatorRunner],
+) -> None:
+    """/start tv-<CODE> from the TV's QR code: ask before claiming (anti-phishing)."""
+    code = code_from_start_text(message.text)
+    if code is None:  # the filter already matched; keeps type checkers happy
+        return
+    TV_PAIR_TOTAL.labels(result="offered").inc()
+    logger.info(f"{log(user)} Opened a TV pairing link code={log_tv_code(code)}")
+    await message.answer(
+        i18n.get("msg-tv-pair-confirm", code=display_code(code)),
+        reply_markup=confirm_keyboard(
+            code, i18n.get("btn-tv-pair-confirm"), i18n.get("btn-tv-pair-cancel")
+        ),
+    )
 
 
 @inject

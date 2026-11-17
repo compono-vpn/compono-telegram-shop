@@ -79,6 +79,28 @@ nor redis): `uv pip install -e ../../tgmock` (from the repo root: the path to tg
 `SHOP_E2E=1 SHOP_E2E_REDIS_SERVER=<redis-server> uv run pytest tests/e2e -v -s`. On this Mac `/usr/local/bin/redis-server`
 is an x86 build that does not run, and the default docker context is a remote host, so build redis from source.
 
+## TV pairing (COM-202, needs compono-api `feat/tv-pairing` deployed first)
+
+The Android TV app shows a QR code for `t.me/compono_bot?start=tv-<CODE>` (8 Crockford base32
+characters, shown on the TV as `K7M4-QX9P`). `on_tv_pair_start_command` (`src/bot/routers/menu/handlers.py`,
+registered before the generic `/start`) does **not** claim: it asks «Подключить телевизор? Код … Нажмите,
+только если этот код сейчас на экране вашего телевизора.» with «📺 Подключить» (`tvp:<CODE>`) and «Отмена»
+(`tvx`), so a stranger cannot pair their TV to a victim's subscription by sending the victim a QR.
+`src/bot/routers/extra/tv_pair.py` handles the buttons: `ApiClient.claim_tv_pair` →
+`POST {APP_API_URL}/api/v1/internal/tv-pair/claim` `{"code","telegramId"}` with `X-Internal-Secret`.
+compono-api checks the subscription (ACTIVE, not expired, trials count, LIMITED does not); the bot never
+sees the subscription URL. Results: attached → «Готово…»; 422 → «нужна активная подписка» with a retry
+button and the plan list (the code stays valid for its 10 minutes); 404 → «Код устарел»; 409 → «уже
+использован»; 429 and errors → alert, buttons kept. 404/409/422/429 are logged at info, not error. The full
+code is never logged (first 2 characters only). Metric `bot_tv_pair_total{result}` (offered, cancelled,
+attached, code_not_found, code_already_claimed, no_active_subscription, rate_limited, failed).
+
+A `tv-` payload is not attribution: `decode_start_param` returns None, so a new user from a TV QR gets
+`source=None` (and may get the source survey after paying). Mapping `tv-` to a source such as `androidtv`
+is an open owner decision. Tests: `tests/test_tv_pair.py`, e2e `tests/e2e/test_tv_pair_e2e.py` (set
+`SHOP_E2E_API_BIN` to a built compono-api to run it against the real API); matrix in
+`docs/TESTING-tv-pairing.md`.
+
 ## Stale callback answers (2026-11-17)
 
 `answerCallbackQuery` that Telegram refuses with "query is too old and response timeout expired or query ID is

@@ -12,6 +12,7 @@ from . import (
     setup_checkin,
     source_survey,
     test,
+    tv_pair,
 )
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "recovery_offer",
     "setup_checkin",
     "source_survey",
+    "tv_pair",
     "test",
 ]

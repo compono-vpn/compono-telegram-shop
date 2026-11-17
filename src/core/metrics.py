@@ -182,6 +182,12 @@ DEDICATED_IP_CHOSEN_TOTAL = Counter(
     ["country"],
 )
 
+TV_PAIR_TOTAL = Counter(
+    "bot_tv_pair_total",
+    "TV pairing steps in the bot: offered (/start tv-), cancelled, and each claim result",
+    ["result"],
+)
+
 
 def start_metrics_server(port: int) -> None:
     """Expose the process-local Prometheus registry over HTTP.

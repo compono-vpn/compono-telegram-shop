@@ -443,6 +443,10 @@ btn-subscription-renew = 🔄 Продлить
 btn-subscription-change = 🔃 Изменить
 btn-subscription-promocode = 🎟 Активировать промокод
 btn-subscription-dedicated-ip = 🌐 Выделенный IP
+btn-tv-pair-confirm = 📺 Подключить
+btn-tv-pair-cancel = Отмена
+btn-tv-pair-retry = 📺 Подключить
+
 btn-dedicated-ip-lt = 🇱🇹 Литва
 btn-dedicated-ip-se = 🇸🇪 Швеция
 btn-dedicated-ip-nl = 🇳🇱 Нидерланды

@@ -15,7 +15,7 @@ from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 from typing import Any
 
-from aiohttp import web
+from aiohttp import ClientSession, web
 
 PREFIX = "/api/v1/internal"
 # Real stage responses (plans, trial plan, active gateways with Settings removed), 2026-11-17.
@@ -49,6 +49,13 @@ class FakeBilling:
         self.completion_delay = 0.7  # seconds until the "consumer" completes a handle-free payment
         # "<METHOD> <path>" -> how many next requests answer 503 (billing restarting).
         self.fail_next: dict[str, int] = {}
+        # JSON bodies of POST/PUT calls, in order: (method, path, body).
+        self.bodies: list[tuple[str, str, Any]] = []
+        # TV pairing (compono-api internal claim). With ``tv_pair_api`` set, the claim
+        # is forwarded to a real compono-api; otherwise an in-memory model of the
+        # contract answers it from ``tv_codes`` (code -> {"tg": id or None}).
+        self.tv_pair_api: str | None = None
+        self.tv_codes: dict[str, dict[str, Any]] = {}
         self.port = 0
         self._runner: web.AppRunner | None = None
 
@@ -267,7 +274,11 @@ class FakeBilling:
                 body = await request.json()
             except json.JSONDecodeError:
                 body = None
+        if method in ("POST", "PUT"):
+            self.bodies.append((method, route, body))
 
+        if method == "POST" and route == "/tv-pair/claim":
+            return await self._tv_pair_claim(request, body or {})
         if method == "GET" and route == "/settings":
             return web.json_response(self._settings())
         if method == "GET" and route == "/settings/default-currency":
@@ -275,11 +286,17 @@ class FakeBilling:
         if m := re.fullmatch(r"/users/(\d+)", route):
             tid = int(m.group(1))
             if method == "GET":
-                return (
-                    web.json_response(self.users[tid]) if tid in self.users else self._not_found()
-                )
+                # Real billing answers 200 null for an unknown user (InternalHandler.GetUser).
+                return web.json_response(self.users.get(tid))
             if method == "PUT" and tid in self.users:
                 return web.json_response(self.users[tid])
+        if method == "POST" and route == "/users" and isinstance(body, dict):
+            # New bot user (UserService.create, then the middleware's sync call).
+            tid = int(body["telegram_id"])
+            if tid not in self.users:
+                self.add_user(tid, str(body.get("name") or tid), role=body.get("role") or "USER")
+                self.users[tid]["Source"] = body.get("source")
+            return web.json_response(self.users[tid])
         if method == "GET" and route == "/users":
             role = request.query.get("role")
             if role:
@@ -343,6 +360,40 @@ class FakeBilling:
 
         self.unknown.append((method, request.path_qs))
         return self._not_found()
+
+    def _eligible(self, telegram_id: int) -> bool:
+        sub = self.subscriptions.get(telegram_id)
+        if not sub or sub.get("Status") != "ACTIVE" or not sub.get("URL"):
+            return False
+        return datetime.fromisoformat(sub["ExpireAt"]) > datetime.now(timezone.utc)
+
+    async def _tv_pair_claim(self, request: web.Request, body: dict[str, Any]) -> web.Response:
+        if self.tv_pair_api:
+            async with ClientSession() as s:
+                async with s.post(
+                    f"{self.tv_pair_api}{PREFIX}/tv-pair/claim",
+                    json=body,
+                    headers={"X-Internal-Secret": request.headers.get("X-Internal-Secret", "")},
+                ) as resp:
+                    return web.Response(
+                        status=resp.status,
+                        body=await resp.read(),
+                        content_type="application/json",
+                    )
+        # In-memory model of TV pairing contract v1 (claim side only).
+        code = str(body.get("code", "")).upper().replace("-", "")
+        tg = body.get("telegramId")
+        entry = self.tv_codes.get(code)
+        if entry is None:
+            return web.json_response({"error": "code_not_found"}, status=404)
+        if entry["tg"] is not None:
+            if entry["tg"] == tg:
+                return web.json_response({"status": "attached", "expiresAt": entry["expiresAt"]})
+            return web.json_response({"error": "code_already_claimed"}, status=409)
+        if not self._eligible(int(tg)):
+            return web.json_response({"error": "no_active_subscription"}, status=422)
+        entry["tg"] = tg
+        return web.json_response({"status": "attached", "expiresAt": entry["expiresAt"]})
 
     async def start(self) -> None:
         app = web.Application()
