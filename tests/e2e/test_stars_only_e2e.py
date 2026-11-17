@@ -32,6 +32,7 @@ from .test_stale_callback_e2e import (  # noqa: E402
     send,
     show,
     tap,
+    user_screens,
     wait_screen,
 )
 
@@ -395,6 +396,50 @@ async def test_paid_or_cancelled_invoice_cannot_be_paid_again(shop: ShopE2E) -> 
     answer = await _pre_checkout(shop, BUYER, invoice)
     print("[pre-checkout cancelled invoice]", answer)
     assert not _ok(answer)
+
+
+async def test_charge_for_a_payment_billing_cancelled_is_refunded(shop: ShopE2E) -> None:
+    # Billing's 30 min timeout can cancel the payment after Telegram accepted the pre-checkout
+    # answer. handle-free then answers 200 and skips it, so the bot must give the stars back.
+    plans = await open_plans(shop, BUYER)
+    durations = await tap(shop, plans, "Макс")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    invoice = stars_checkout(shop, confirm, before)
+    shop.billing.transactions[invoice["payload"]]["Status"] = "CANCELED"
+    since = time.time()
+    update_id = _next_update_id()
+    charge = f"stxe2e{update_id}"
+    await send(
+        shop,
+        {
+            "update_id": update_id,
+            "message": {
+                "message_id": update_id,
+                "from": _user(BUYER),
+                "chat": {"id": BUYER, "type": "private"},
+                "date": int(time.time()),
+                "successful_payment": {
+                    "currency": "XTR",
+                    "total_amount": invoice["prices"][0]["amount"],
+                    "invoice_payload": invoice["payload"],
+                    "telegram_payment_charge_id": charge,
+                    "provider_payment_charge_id": "",
+                },
+            },
+        },
+    )
+    assert await shop.wait_for(lambda: shop.tg.calls_of("refundStarPayment", since), timeout=10)
+    refund = shop.tg.calls_of("refundStarPayment", since)[0]["data"]
+    assert str(refund["user_id"]) == str(BUYER)
+    assert refund["telegram_payment_charge_id"] == charge
+    assert await shop.wait_for(
+        lambda: any(
+            "Звёзды вернули" in (s.get("text") or "") for s in user_screens(shop, since, BUYER)
+        ),
+        timeout=10,
+    )
+    assert shop.billing.transactions[invoice["payload"]]["Status"] == "CANCELED"
 
 
 async def test_no_ruble_payment_was_ever_created(shop: ShopE2E) -> None:

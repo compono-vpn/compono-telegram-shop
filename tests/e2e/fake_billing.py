@@ -284,8 +284,10 @@ class FakeBilling:
             return web.json_response(self._create_payment(body or {}))
         if method == "POST" and route == "/payment/handle-free":
             payment_id = (body or {}).get("payment_id", "")
-            if payment_id in self.transactions:
-                self.transactions[payment_id]["Status"] = "COMPLETED"
+            # Like billing's TransitionStatus: only a PENDING payment completes; others are skipped.
+            tx = self.transactions.get(payment_id)
+            if tx is not None and tx.get("Status") == "PENDING":
+                tx["Status"] = "COMPLETED"
             self.completed.append(payment_id)
             return web.json_response({})
         if method == "POST" and route == "/promocode/activate":

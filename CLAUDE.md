@@ -13,6 +13,13 @@ returns. `_create_payment_and_get_data` refuses any other gateway. Prices are re
 `docs/SUPPORT-RUBLE-PAYMENTS.md`. Never add a ruble gateway, a ₽ price or a website-payment link to a bot screen;
 `tests/test_stars_only.py` lints the user-facing texts. Details and test evidence: `docs/TESTING-stars-only.md`.
 
+Paying a Stars invoice (`src/bot/routers/extra/payment.py`): `pre_checkout_query` says ok only for this user's PENDING
+Stars payment in billing. `successful_payment` (the stars are already taken) calls billing `/payment/handle-free` up to
+3 times (waits 1 s, 3 s), then reads the payment back; if billing does not have it COMPLETED (billing's 30-minute
+timeout cancelled it meanwhile, or it is unknown) the bot refunds the stars with `refundStarPayment` and tells the user.
+If billing cannot be reached at all, the handler raises, so `#EventError` reaches the admins; nothing is refunded then,
+complete the payment by hand once billing is back (`/payment/handle-free` with the payment id from the log).
+
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
 `tests/e2e/` runs the real app (uvicorn webhook mode, aiogram, aiogram-dialog, dishka, Redis) against tgmock's fake

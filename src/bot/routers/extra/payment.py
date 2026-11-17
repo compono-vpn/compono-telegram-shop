@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from aiogram import Bot, F, Router
@@ -19,6 +20,12 @@ STALE_INVOICE_ERROR = (
     "Этот счёт уже оплачен или устарел. Откройте оплату заново: меню «Подписка» → «Купить»."
 )
 RETRY_ERROR = "Не получилось проверить счёт. Попробуйте ещё раз через минуту."
+UNCOMPLETED_PAYMENT_TEXT = (
+    "Этот счёт уже был закрыт, поэтому подписку оформить не получилось. Звёзды вернули на ваш "
+    "счёт. Откройте оплату заново: меню «Подписка» → «Купить»."
+)
+# Waits between billing retries after a successful Stars payment (3 attempts in all).
+HANDLE_FREE_RETRY_DELAYS = (1, 3)
 
 
 @router.pre_checkout_query()
@@ -79,11 +86,48 @@ async def on_successful_payment(
     if not payment:
         return
 
+    refunded = False
     if user.is_dev:
         logger.info(f"{log(user)} Refunding test payment '{payment.telegram_payment_charge_id}'")
         await bot.refund_star_payment(
             user_id=user.telegram_id,
             telegram_payment_charge_id=payment.telegram_payment_charge_id,
         )
+        refunded = True
 
-    await billing.handle_free_payment(payment_id=UUID(payment.invoice_payload))
+    # Telegram has already taken the stars: a failed billing call must not lose the order.
+    payment_id = UUID(payment.invoice_payload)
+    await _complete_in_billing(billing, payment_id, user)
+
+    # Billing completes only PENDING payments and answers 200 for any other one (its 30-minute
+    # timeout can cancel the payment between our pre-checkout answer and this message).
+    transaction = await billing.get_transaction(payment_id)
+    if transaction is not None and transaction.Status == TransactionStatus.COMPLETED.value:
+        return
+
+    status = transaction.Status if transaction else "not found"
+    logger.error(
+        f"{log(user)} Stars payment '{payment_id}' was charged but billing has it {status}; "
+        f"refunding charge '{payment.telegram_payment_charge_id}'"
+    )
+    if not refunded:
+        await bot.refund_star_payment(
+            user_id=user.telegram_id,
+            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+        )
+    await message.answer(UNCOMPLETED_PAYMENT_TEXT)
+
+
+async def _complete_in_billing(billing: BillingClient, payment_id: UUID, user: UserDto) -> None:
+    for attempt, delay in enumerate((*HANDLE_FREE_RETRY_DELAYS, None), start=1):
+        try:
+            await billing.handle_free_payment(payment_id=payment_id)
+            return
+        except Exception:
+            if delay is None:
+                raise
+            logger.opt(exception=True).warning(
+                f"{log(user)} Billing could not complete Stars payment '{payment_id}' "
+                f"(attempt {attempt}), retrying in {delay}s"
+            )
+            await asyncio.sleep(delay)
