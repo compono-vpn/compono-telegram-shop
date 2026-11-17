@@ -284,7 +284,11 @@ async def test_renewal_from_the_expiry_notice_goes_to_stars(shop: ShopE2E) -> No
     notice = _bot_message(
         7001,
         "⚠️ Внимание! Ваша подписка закончится через 1 день.",
-        {"inline_keyboard": [[{"text": "🔄 Продлить подписку", "callback_data": "gt_purchase_RENEW"}]]},
+        {
+            "inline_keyboard": [
+                [{"text": "🔄 Продлить подписку", "callback_data": "gt_purchase_RENEW"}]
+            ]
+        },
         RENEW,
     )
     since = await send(shop, callback_update("gt_purchase_RENEW", notice))
@@ -349,8 +353,55 @@ async def test_ultra_owner_gets_the_country_prompt(shop: ShopE2E) -> None:
     assert any("Швеция" in t for t in labels) and any("Нидерланды" in t for t in labels)
 
 
+async def _pre_checkout(shop: ShopE2E, uid: int, invoice: dict[str, Any]) -> dict[str, Any]:
+    since = time.time()
+    update_id = _next_update_id()
+    await send(
+        shop,
+        {
+            "update_id": update_id,
+            "pre_checkout_query": {
+                "id": f"pcq-{update_id}",
+                "from": _user(uid),
+                "currency": "XTR",
+                "total_amount": invoice["prices"][0]["amount"],
+                "invoice_payload": invoice["payload"],
+            },
+        },
+    )
+    assert await shop.wait_for(lambda: shop.tg.calls_of("answerPreCheckoutQuery", since), 10)
+    return shop.tg.calls_of("answerPreCheckoutQuery", since)[-1]["data"]
+
+
+def _ok(answer: dict[str, Any]) -> bool:
+    return str(answer.get("ok")).lower() in ("true", "1")
+
+
+async def test_paid_or_cancelled_invoice_cannot_be_paid_again(shop: ShopE2E) -> None:
+    # A Stars invoice link stays payable after billing cancels the payment (30 min) and after it
+    # was paid once; billing completes only PENDING payments, so Telegram must refuse it.
+    paid = next(i for i in shop.tg.invoices if i["payload"] in shop.billing.completed)
+    answer = await _pre_checkout(shop, BUYER, paid)
+    print("\n[pre-checkout paid invoice]", answer)
+    assert not _ok(answer) and answer.get("error_message")
+
+    plans = await open_plans(shop, BUYER)
+    durations = await tap(shop, plans, "Про")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    invoice = stars_checkout(shop, confirm, before)
+    assert _ok(await _pre_checkout(shop, BUYER, invoice))
+    shop.billing.transactions[invoice["payload"]]["Status"] = "CANCELED"  # billing's 30 min timeout
+    answer = await _pre_checkout(shop, BUYER, invoice)
+    print("[pre-checkout cancelled invoice]", answer)
+    assert not _ok(answer)
+
+
 async def test_no_ruble_payment_was_ever_created(shop: ShopE2E) -> None:
-    print("\n[billing] payments created:", [(c["gateway_type"], c["plan_id"]) for c in shop.billing.created])
+    print(
+        "\n[billing] payments created:",
+        [(c["gateway_type"], c["plan_id"]) for c in shop.billing.created],
+    )
     print("[billing] routes the fake does not model:", sorted(set(shop.billing.unknown)))
     assert shop.billing.created
     assert {c["gateway_type"] for c in shop.billing.created} == {"TELEGRAM_STARS"}
