@@ -51,6 +51,7 @@ BLIP = 820000005  # pays while billing cannot answer for a moment (restart, depl
 SLOW = 820000006  # pays while billing's Kafka consumer is slower than the bot waits
 REFUSED = 820000007  # billing cancelled the payment and Telegram refuses the refund
 FORGE = 820000008  # presses a plan button carrying the id of a plan not offered to them
+INTRUDER = 820000009  # an ordinary user pressing admin buttons
 
 HIDDEN_PLAN_ID = 77  # an archived plan: in billing, not offered to anyone, cheaper than Старт
 OLD_PLATEGA_PAYMENT = "3d0c8f62-6a52-4a8e-9a55-6d1b2b0c1a01"
@@ -61,7 +62,7 @@ async def shop():
     e2e = ShopE2E()
     e2e.billing.gateways.extend(PROD_ROWS)
     e2e.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED, FORGE):
+    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED, FORGE, INTRUDER):
         e2e.billing.add_user(uid, f"u{uid}")
     e2e.billing.discounts[FREE] = 100
     hidden = copy.deepcopy(STAGE["plans_available"][0])
@@ -380,6 +381,42 @@ async def test_refund_telegram_refuses_alerts_admins_with_the_charge(shop: ShopE
         print("\n[admin alert]", [a for a in alerts() if "stxe2e-refused" in a][0][:400])
     finally:
         shop.tg.failures.pop("refundStarPayment", None)
+
+
+ADMIN_SCREEN_MARKERS = ("Панель управления", "Информация о пользователе", "Пользователи")
+
+
+async def test_ordinary_user_cannot_open_the_admin_dialogs(shop: ShopE2E) -> None:
+    # The admin dialogs can change a user's role (a DEV gets every Stars payment refunded while the
+    # order still completes) and grant subscriptions. Nothing checked who opened them: «Перейти к
+    # пользователю» (gt_DashboardUser:MAIN:<id>, sent in admin alerts) and the main menu's hidden
+    # «dashboard» button (aiogram-dialog runs a hidden button's handler) worked for anyone.
+    since = await send(shop, _text_update(INTRUDER, "/start"))
+    menu = await wait_screen(shop, since, INTRUDER)
+    intent = next(b for b in buttons(menu) if "\x1d" in b.get("callback_data", ""))[
+        "callback_data"
+    ].split("\x1d")[0]
+    message = _bot_message(
+        menu["message_id"], menu.get("text", ""), menu.get("reply_markup"), INTRUDER
+    )
+    since = await send(shop, callback_update(f"gt_DashboardUser:MAIN:{INTRUDER}", message))
+    await send(shop, callback_update("gt_Dashboard:MAIN", message))
+    await send(shop, callback_update(f"{intent}\x1ddashboard", message))
+    await asyncio.sleep(3)
+    shown = [
+        (s.get("text") or s.get("caption") or "")[:80]
+        for s in user_screens(shop, since, INTRUDER)
+        if any(m in (s.get("text") or s.get("caption") or "") for m in ADMIN_SCREEN_MARKERS)
+    ]
+    assert not shown, f"an ordinary user opened an admin dialog: {shown}"
+
+    # The owner still opens the dashboard and works inside it.
+    since = await send(shop, _text_update(DEV_ID, "/start"))
+    menu = await wait_screen(shop, since, DEV_ID)
+    dashboard = await tap(shop, menu, "Панель управления")
+    assert "Панель управления" in (dashboard.get("text") or dashboard.get("caption") or "")
+    users_screen = await tap(shop, dashboard, "Пользователи")
+    assert "Пользователи" in (users_screen.get("text") or users_screen.get("caption") or "")
 
 
 def _ok(answer: dict) -> bool:

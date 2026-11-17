@@ -7,6 +7,7 @@ from aiogram_dialog.api.exceptions import (
     UnknownState,
 )
 
+from src.bot.filters import PrivilegedFilter
 from src.bot.routers.extra.error import on_lost_context
 
 from . import dashboard, extra, menu, subscription
@@ -49,6 +50,17 @@ def setup_routers(router: Router) -> None:
         users.dialog.router,
         users.user.dialog.router,
     ]
+
+    # The admin dialogs change roles and grant subscriptions: only ADMIN/DEV updates reach them,
+    # whatever callback data arrives.
+    for admin_router in (
+        dashboard.dialog.router,
+        statistics.dialog.router,
+        users.dialog.router,
+        users.user.dialog.router,
+    ):
+        admin_router.message.filter(PrivilegedFilter())
+        admin_router.callback_query.filter(PrivilegedFilter())
 
     router.include_routers(*routers)
 

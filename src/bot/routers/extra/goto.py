@@ -1,4 +1,5 @@
 from aiogram import F, Router
+from aiogram.fsm.state import State
 from aiogram.types import CallbackQuery
 from aiogram_dialog import DialogManager, ShowMode, StartMode
 from loguru import logger
@@ -9,6 +10,10 @@ from src.core.utils.formatters import format_user_log as log
 from src.models.dto import UserDto
 
 router = Router(name=__name__)
+
+
+def is_admin_state(state: State) -> bool:
+    return (state.group.__name__ if state.group else "").startswith("Dashboard")
 
 
 @router.callback_query(F.data.startswith(GOTO_PREFIX))
@@ -34,6 +39,12 @@ async def on_goto(callback: CallbackQuery, dialog_manager: DialogManager, user: 
 
     if not state:
         logger.warning(f"{log(user)} Trying go to not exist state '{data}'")
+        await callback.answer()
+        return
+
+    if is_admin_state(state) and not user.is_privileged:
+        # The button is sent only in admin alerts; anyone else sending this data is refused.
+        logger.warning(f"{log(user)} Refused go to admin state '{data}'")
         await callback.answer()
         return
 

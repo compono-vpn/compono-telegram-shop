@@ -153,6 +153,16 @@ it; not built.
 - The fake billing now behaves like billing in two more ways: a 0-price payment completes by itself at creation, and
   `/pricing/calculate` applies the user's discount to the proxy plan too (only the recorded proxy payment is
   undiscounted).
+- Any user could open the admin dialogs. `goto` (`gt_DashboardUser:MAIN:<id>`, the «Перейти к пользователю» button of
+  admin alerts) started any state without a role check, the main menu's «dashboard» button was only hidden by `when`
+  (aiogram-dialog still runs it), and nothing inside the dialogs checked the role. From there a user could set their
+  own role to DEV (every Stars payment of a DEV is refunded at once while billing still completes the order) or grant
+  subscription time. Present on forgejo/main too, not added by this PR. Now `goto` refuses Dashboard states,
+  the menu button checks the role (`on_open_dashboard`), and `PrivilegedFilter` sits on the message and callback
+  observers of the four admin dialog routers. `tests/test_admin_dialog_access.py` (failed to import on the old code),
+  e2e `test_ordinary_user_cannot_open_the_admin_dialogs` (failed on the old code: the user saw «Информация о
+  пользователе» and «Панель управления»; the owner still opens the dashboard and «Пользователи»). Needs callback data
+  that was never on the user's buttons; whether Telegram delivers such data is unverified, so treat it as reachable.
 - Known and left alone: picking a plan with a single duration from the plan list fails with `TypeError: on_duration_select()
   got multiple values for keyword argument 'billing'` (the injected handler is called with explicit dependencies). No plan
   in the prod list has a single duration (checked `componovpn.com/api/v1/plans` 2026-11-18: 1, 2, 3, 38 all have several).

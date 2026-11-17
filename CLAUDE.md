@@ -37,7 +37,8 @@ and if billing stays down the #EventError names the payment and the charge id. E
 if Telegram refuses it, the #EventError names the payment, the charge and the user (refund it by hand). If billing is
 still completing the payment after the wait, the user is told the payment arrived and not to pay again.
 Never trust an id from callback data: aiogram-dialog `Select` passes any item id, so `on_plan_select` takes the plan only
-from `/plans/available` (billing's payment creation would sell the trial, the proxy or a hidden plan by id).
+from `/plans/available` (billing's payment creation would sell the trial, the proxy or a hidden plan by id), and the
+admin dialogs check the role themselves (`PrivilegedFilter` on their routers, `goto`, `on_open_dashboard`).
 
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 

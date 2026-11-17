@@ -1,5 +1,5 @@
 from aiogram.enums import ButtonStyle
-from aiogram_dialog import Dialog, StartMode, Window
+from aiogram_dialog import Dialog, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import (
     Button,
@@ -17,7 +17,7 @@ from magic_filter import F
 
 from src.bot.routers.dashboard.users.handlers import on_user_search
 from src.bot.routers.subscription.handlers import on_buy_proxy
-from src.bot.states import Dashboard, MainMenu, Subscription
+from src.bot.states import MainMenu, Subscription
 from src.bot.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.core.constants import MIDDLEWARE_DATA_KEY, PURCHASE_PREFIX, USER_KEY
 from src.core.enums import BannerName
@@ -37,6 +37,7 @@ from .handlers import (
     on_device_delete,
     on_get_trial,
     on_invite,
+    on_open_dashboard,
     on_show_qr,
     on_subscription_open,
     on_withdraw_points,
@@ -130,11 +131,10 @@ menu = Window(
         ),
     ),
     Row(
-        Start(
+        Button(
             text=I18nFormat("btn-menu-dashboard"),
             id="dashboard",
-            state=Dashboard.MAIN,
-            mode=StartMode.RESET_STACK,
+            on_click=on_open_dashboard,
             when=F[MIDDLEWARE_DATA_KEY][USER_KEY].is_privileged,
         ),
     ),
