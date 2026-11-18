@@ -222,3 +222,42 @@ round-3 regex bug put back).
   already handled as a stale callback (no `#EventError`).
 - Still open from round 2: the owner's real subscription token in `tests/test_menu_getter.py` and
   `tests/test_subscription_service.py` on main (not changed here).
+
+## QA round 4 (2026-11-18, separate QA worktree from a7e2f78)
+
+### Bug: a slow claim left the user with no answer at all
+
+The claim can take longer than Telegram keeps a callback query answerable: compono-api waits up to
+15 s for billing, the bot's client waits up to 30 s for the API, and a hung Redis adds about 12 s
+per API call. Telegram then refuses `answerCallbackQuery` with "query is too old and response
+timeout expired or query ID is invalid". The error middleware (shop v0.61.4) treats that as
+benign, which round 3 counted as handled, but two TV paths depended on the answer:
+
+- 429 and errors (502 billing, 503, network) were shown only as that alert. Refused, the user saw
+  nothing after waiting, and did not know to tap again.
+- On 422 the answer came before `open_checkout`; the refusal stopped the handler, so the plan list
+  never opened (the explanation message had already been sent).
+
+Fix (`src/bot/routers/extra/tv_pair.py` `_answer`): every answer in the confirm handler goes
+through one helper. A stale refusal is logged as a warning; a late alert is sent as a chat
+message instead (`message.answer`, or `bot.send_message` to the user when the message is
+inaccessible); any other `TelegramBadRequest` still raises.
+
+Tests: `TestSlowClaimStaleAnswer` in `tests/test_tv_pair.py` (8 cases, 7 failed before the fix:
+`qa-r4/stale-answer-unit-before-fix.txt`). E2E `tests/e2e/test_tv_pair_qa4_e2e.py` (real bot,
+tgmock with `answerCallbackQuery` refused as too old, claim delayed 1.5 s): late 502 reaches the user
+as a message and the next tap pairs; late 422 still opens the plan list; late attach sends no extra
+message. The first two failed on the old handler (`qa-r4/qa4-e2e-before-fix.txt`) and pass after the
+fix. Telegram's exact answer window is not documented; tgmock has no clock, so the refusal is
+injected rather than timed.
+
+Also fixed: the one `PLC0415` ruff finding in `tests/test_tv_pair.py` (an import inside a test).
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `ruff check src/`, `ruff format --check src/` | pass, 202 files formatted |
+| `ruff check` / `ruff format --check` on the changed test files | pass (the new e2e module has `print` like the other e2e modules) |
+| `pytest tests/` | 1398 passed, 6 skipped (opt-in e2e), 0 failed |
+| whole `tests/e2e` with tgmock, Redis 7.4.1 and the real compono-api binary from QA round 4 (API commit with the constant-time secret check) | 50 passed, 0 failed (`qa-r4/e2e-all-real-api.txt`; round 3: 47) |

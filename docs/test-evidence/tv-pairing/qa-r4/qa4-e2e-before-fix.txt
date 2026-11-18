@@ -1,0 +1,12 @@
+[late failure] screens after the tap: []
+FAILED
+[late 422] screens after the tap: ['📺 Для телевизора нужна активная подписка']
+FAILED
+PASSED
+E       AssertionError: []
+tests/e2e/test_tv_pair_qa4_e2e.py:140: AssertionError
+E       AssertionError: the plan list was not opened
+tests/e2e/test_tv_pair_qa4_e2e.py:164: AssertionError
+FAILED tests/e2e/test_tv_pair_qa4_e2e.py::test_late_failure_reaches_the_user_as_a_message
+FAILED tests/e2e/test_tv_pair_qa4_e2e.py::test_late_no_subscription_still_opens_the_plan_list
+========================= 2 failed, 1 passed in 33.98s =========================

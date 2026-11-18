@@ -1,0 +1,138 @@
+[/start] sendMessage: <b>👤 Профиль:</b> | <blockquote>• <b>ID</b>: <code>730166164</code> | • <b>Имя</b>: Vitaliy• 🧪 <b>Бета-тестер</b>: Нет</blockquote> |  | <b>💳 Подписка:</b> | <blockquote>• У вас нет оформленной подписки. |  | <i>↘️ Для покупки доступа перейдите в меню «Подписка».</i></blockquote>
+[/start] buttons: ['💳 Подписка', '📱 Приложение для iPhone', '👥 Пригласить', '🆘 Поддержка', 'ℹ️ Информация']
+PASSED
+[Подписка] editMessageText: <b>💳 Подписка</b>
+[Подписка] buttons: ['💸 Купить подписку', '🎟 Активировать промокод', '↩️ Вернуться в главное меню']
+[Купить] editMessageText: <b>📦 Выберите план</b> |  | ⚡️ Старт — 119 ₽/мес · 100 ГБ, 2 устройства | 🚀 Про — 239 ₽/мес · 300 ГБ, 6 устройств | 💎 Макс — 399 ₽/мес · 1 024 ГБ, 20 устройств
+[Купить] buttons: ['⚡️ Старт', '🚀 Про', '💎 Макс', '⬅️ Назад', '↩️ Вернуться в главное меню']
+[Старт] editMessageText: <b>⏳ Выберите длительность</b> |  | <b>⚡️ Старт:</b> | <blockquote>100 ГБ в месяц. Для лёгкого использования — мессенджеры, соцсети, новости. Два устройства. |  | • <b>Лимит трафика</b>: 100 ГБ | • <b>Лимит устройств</b>: 2</blockquote>
+[Старт] buttons: ['1 месяц | 119₽', '3 месяца | 319₽', '6 месяцев | 579₽', '1 год | 999₽', '⬅️ Назад к выбору плана', '↩️ Вернуться в главное меню']
+[1 месяц] editMessageText: <b>💳 Выберите способ оплаты</b> |  | <b>⚡️ Старт:</b> | <blockquote>100 ГБ в месяц. Для лёгкого использования — мессенджеры, соцсети, новости. Два устройства. |  | • <b>Лимит трафика</b>: 100 ГБ | • <b>Лимит устройств</b>: 2 | • <b>Длительность</b>: 1 месяц</blockquote>
+[1 месяц] buttons: ['Telegram Stars | 119 ★', 'ЮKassa | 119 ₽', '⬅️ Изменить длительность', '↩️ Вернуться в главное меню']
+PASSED
+[/start paid] sendMessage: <b>👤 Профиль:</b> | <blockquote>• <b>ID</b>: <code>730166165</code> | • <b>Имя</b>: Vitaliy• 🧪 <b>Бета-тестер</b>: Нет</blockquote> |  | <b>💳 Подписка:</b> | <blockquote>• <b>Лимит трафика</b>: 100 ГБ | • <b>Лимит устройств</b>: 2 | • <b>Осталось</b>: 19 дней 23 часа 59 минут</blockquote>
+[/start paid] buttons: ['🚀 Подключиться', '📱 Мои устройства', '💳 Подписка', '📱 Приложение для iPhone', '👥 Пригласить', '🆘 Поддержка', 'ℹ️ Информация']
+[Подключиться] editMessageText: <b>🚀 Подключиться</b> |  | Выберите, что вам нужно: | • пошаговая инструкция с настройкой приложения; | • или сразу ссылка на подписку, если вы уже знаете, что с ней делать.
+[Подключиться] buttons: ['📖 Пошаговая инструкция по подключению', '🔗 Просто дай ссылку', '⬅️ Назад']
+[Подключиться] guide url: https://componovpn.com/connect/e2e730166165
+[Просто дай ссылку] sendMessage: 🔗 Ваша ссылка на подписку: |  | <code>https://componovpn.com/api/sub/e2e730166165</code> |  | Вставьте её в приложение VPN (например, Hiddify или v2rayNG), чтобы подключиться.
+[Просто дай ссылку] buttons: ['❌ Закрыть']
+PASSED
+[stale] fake API: answerCallbackQuery -> 400 Bad Request: query is too old and response timeout expired or query ID is invalid
+[stale] stored answer -> {'telegram_id': '730166164', 'gateway': 'PLATEGA', 'reason': 'WILL_THINK', 'answered_at': '1794967052.977953'}
+[stale] screens -> ['🙏 Спасибо за ответ! Учтём это.']
+[stale] answerCallbackQuery calls -> 1
+[stale] admin alerts -> 0 | main-menu redirects -> 0
+PASSED
+[control] fake API: answerCallbackQuery -> 400 Bad Request: chat not found
+[control] stored answer -> {'telegram_id': '730166164', 'gateway': 'TELEGRAM_STARS', 'reason': 'WILL_THINK', 'answered_at': '1794967059.2238588'}
+[control] admin alerts -> [('sendDocument', '#EventError\n\n<b>🔅 Событие: Произошла ошибка!</b>\n\n<b>👤 Пользователь:</b>\n<blockquote>• <b>ID</b>: <code>730166164</code>\n• <b>Имя</b>: Vitaliy</blockquote>\n\n<b>')]
+[control] main-menu redirects -> 1
+PASSED
+[/start again] sendMessage: <b>👤 Профиль:</b> | <blockquote>• <b>ID</b>: <code>730166164</code> | • <b>Имя</b>: Vitaliy• 🧪 <b>Бета-тестер</b>: Нет</blockquote> |  | <b>💳 Подписка:</b> | <blockquote>• У вас нет оформленной подписки. |  | <i>↘️ Для покупки доступа перейдите в меню «Подписка».</i></blockquote>
+[/start again] buttons: ['💳 Подписка', '📱 Приложение для iPhone', '👥 Пригласить', '🆘 Поддержка', 'ℹ️ Информация']
+[billing] routes the fake does not model: [('GET', '/remnawave/api/internal-squads'), ('GET', '/remnawave/api/system/stats')]
+PASSED
+[tv e2e] TV side: real compono-api http://127.0.0.1:64068
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>T7VY-JR37</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:T7VYJR37'), ('Отмена', 'tvx')]
+[tap Подключить] editMessageText: ✅ Готово, телевизор подключится через несколько секунд.
+[tap Подключить] buttons: []
+[TV poll] 200 {'status': 'paired', 'subscriptionUrl': '<url>'}
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:G0BAAQT3'), ('Отмена', 'tvx')]
+[no subscription] sendMessage: 📺 Для телевизора нужна активная подписка. |  | Оформите её и нажмите «Подключить» ещё раз. Код <code>G0BA-AQT3</code> действует 10 минут с момента появления на экране.
+[no subscription] buttons: [('📺 Подключить', 'tvp:G0BAAQT3')]
+[no subscription] sendMessage: <b>📦 Выберите план</b> |  | ⚡️ Старт — 119 ₽/мес · 100 ГБ, 2 устройства | 🚀 Про — 239 ₽/мес · 300 ГБ, 6 устройств | 💎 Макс — 399 ₽/мес · 1 024 ГБ, 20 устройств
+[no subscription] buttons: [('⚡️ Старт', 'RmUHQ1\x1dpurchase_select_plan:1'), ('🚀 Про', 'RmUHQ1\x1dpurchase_select_plan:2'), ('💎 Макс', 'RmUHQ1\x1dpurchase_select_plan:3'), ('⬅️ Назад', 'RmUHQ1\x1dpurchase_back'), ('↩️ Вернуться в главное меню', 'RmUHQ1\x1dback_main_menu')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:JHQZTNCX'), ('Отмена', 'tvx')]
+[second tap] answers=1 alerts=0
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:EAANJPJC'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>EAAN-JPJC</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:EAANJPJC'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0000'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:9QNTGKSP'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:W6FP46WX'), ('Отмена', 'tvx')]
+[new user] billing create_user bodies: [{'telegram_id': 730177004, 'username': None, 'referral_code': 'bjqkx5', 'name': 'TV', 'role': 'USER', 'language': 'ru', 'source': None, 'attribution': None}, {'telegram_id': 730177004, 'username': None, 'name': 'TV', 'source': None, 'attribution': None}]
+PASSED
+tests/e2e/test_tv_pair_e2e.py::test_source_link_still_attributes PASSED
+tests/e2e/test_tv_pair_e2e.py::test_plain_start_still_opens_main_menu PASSED
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>1JXT-2C20</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:1JXT2C20'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:6H90GQ8T'), ('Отмена', 'tvx')]
+[spam] explanations after 3 taps: 3
+[spam] last answer: {'callback_query_id': 'cq-940000038', 'text': 'Слишком много попыток, подождите несколько минут.', 'show_alert': 'true'}
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:VMB4YV30'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:87Z8DM6W'), ('Отмена', 'tvx')]
+[stale retry] after the TV paired: ['⌛ Код устарел. Обновите его на телевизоре и отсканируйте снова.']
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:DZEVJ8J2'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>5SSQ-3XWH</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:5SSQ3XWH'), ('Отмена', 'tvx')]
+PASSED
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:DRJP2Z48'), ('Отмена', 'tvx')]
+[lost answer] alert: 'Не получилось подключить телевизор. Попробуйте ещё раз.', screens: []
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:TAQBH4JZ'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:RS3K3N3F'), ('Отмена', 'tvx')]
+PASSED
+PASSED
+PASSED
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:JZDWEX42'), ('Отмена', 'tvx')]
+[late failure] screens after the tap: ['Не получилось подключить телевизор. Попробуйте ещё']
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:7MZY0RMD'), ('Отмена', 'tvx')]
+[late 422] screens after the tap: ['📺 Для телевизора нужна активная подписка', '<b>📦 Выберите план</b>\n\n⚡️ Старт — 119 ₽']
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:FKREB7DW'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:11ATTT39'), ('Отмена', 'tvx')]
+[no sub] deleted ids after the tap: {3}; retry messages: [4, 4]
+PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_lower_case_payload PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ILOU1234] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABC] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABCDEFGH9] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv_ABCDEFGH] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABCD-EFGH] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[xtv-ABCDEFGH] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ABC] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ILOU1234] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:abcdefgh] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ABCDEFGH1] PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:../../x] PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:S6VH3B47'), ('Отмена', 'tvx')]
+[api down] answer: {'callback_query_id': 'cq-940000089', 'text': 'Не получилось подключить телевизор. Попробуйте ещё раз.', 'show_alert': 'true'}
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0000'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0010</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0010'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0020</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0020'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0030</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0030'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>ZZZZ-0040</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:ZZZZ0040'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>DY58-C593</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:DY58C593'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:P32C8FTK'), ('Отмена', 'tvx')]
+PASSED
+[/start tv-] buttons: [('📺 Подключить', 'tvp:3KR43EST'), ('Отмена', 'tvx')]
+[logs] api log 4484 bytes, bot log 103892 bytes, 0 secrets
+PASSED
+tests/e2e/test_tv_pair_qa_e2e.py::test_main_menu_still_works_after_tv_question PASSED
+======================== 50 passed in 361.73s (0:06:01) ========================

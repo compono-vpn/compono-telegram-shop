@@ -3,6 +3,7 @@ compono-api claim client."""
 
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -357,8 +358,6 @@ class TestStartHandler:
 
     async def test_does_not_call_the_api_on_start(self):
         # The start handler has no API dependency at all: claiming needs a tap.
-        import inspect
-
         params = inspect.signature(unwrap_inject(on_tv_pair_start_command)).parameters
         assert "api_client" not in params
 
@@ -614,3 +613,81 @@ class TestCopy:
     def test_alert_texts_fit_telegram_limit(self, ru):
         for key in ("msg-tv-pair-rate-limited", "msg-tv-pair-failed"):
             assert len(ru.get(key)) <= 200  # answerCallbackQuery text limit
+
+
+class TestSlowClaimStaleAnswer:
+    """QA round 4 regression: the claim can take longer than Telegram keeps a callback query
+    answerable (compono-api waits up to 15 s for billing, the bot waits up to 30 s for the API,
+    and a hung Redis adds about 12 s per call). Telegram then refuses answerCallbackQuery with
+    "query is too old". The failure answers (rate limit, error) were shown ONLY as that alert,
+    so the user saw nothing at all; and on 422 the refusal came before the plan list opened,
+    so the plan list never opened. A late answer must fall back to a chat message and must
+    never stop the rest of the handler.
+    """
+
+    STALE = "Bad Request: query is too old and response timeout expired or query ID is invalid"
+
+    def _stale_callback(self, message: str | None = None):
+        callback = _callback(f"tvp:{CODE}")
+        callback.answer = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=message or self.STALE)
+        )
+        return callback
+
+    async def _run(self, callback, result):
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+        dm = make_dialog_manager()
+        dm.start = AsyncMock()
+        dm.update = AsyncMock()
+        await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=dm,
+            i18n=make_i18n(),
+            api_client=api,
+        )
+        return dm
+
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.RATE_LIMITED, "msg-tv-pair-rate-limited"),
+            (TvPairClaim.FAILED, "msg-tv-pair-failed"),
+        ],
+    )
+    async def test_late_failure_is_sent_as_a_message(self, result, key):
+        callback = self._stale_callback()
+        await self._run(callback, result)
+        callback.message.answer.assert_awaited_once_with(text=f"[{key}]")
+        # The question and its buttons stay, so the user can tap again.
+        callback.message.edit_text.assert_not_called()
+
+    async def test_late_failure_on_an_inaccessible_message_goes_to_the_chat(self):
+        callback = self._stale_callback()
+        callback.message = None
+        callback.bot = MagicMock()
+        callback.bot.send_message = AsyncMock()
+        await self._run(callback, TvPairClaim.FAILED)
+        callback.bot.send_message.assert_awaited_once_with(chat_id=TG, text="[msg-tv-pair-failed]")
+
+    async def test_late_answer_on_no_subscription_still_opens_the_plan_list(self):
+        callback = self._stale_callback()
+        dm = await self._run(callback, TvPairClaim.NO_SUBSCRIPTION)
+        callback.message.answer.assert_awaited_once()  # the explanation with its retry button
+        dm.start.assert_awaited_once()
+        assert dm.start.await_args.args[0] == Subscription.PLANS
+
+    @pytest.mark.parametrize(
+        "result", [TvPairClaim.ATTACHED, TvPairClaim.NOT_FOUND, TvPairClaim.ALREADY_CLAIMED]
+    )
+    async def test_late_answer_after_an_edit_is_quiet(self, result):
+        callback = self._stale_callback()
+        await self._run(callback, result)
+        callback.message.edit_text.assert_awaited_once()
+        callback.message.answer.assert_not_called()
+
+    async def test_other_answer_errors_still_raise(self):
+        callback = self._stale_callback("Bad Request: chat not found")
+        with pytest.raises(TelegramBadRequest):
+            await self._run(callback, TvPairClaim.FAILED)

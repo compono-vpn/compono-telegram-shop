@@ -93,13 +93,15 @@ sees the subscription URL. Results: attached → «Готово…»; 422 → «
 button, sent as a NEW message, then the plan list (the code stays valid for its 10 minutes). Never edit the
 tapped message there: the plan list opens with DELETE_AND_SEND and aiogram-dialog deletes the message the
 callback came from, retry button included (QA round 1); 404 → «Код устарел»; 409 → «уже
-использован»; 429 and errors → alert, buttons kept. 404/409/422/429 are logged at info, not error. The full
+использован»; 429 and errors → alert, buttons kept. A slow claim can outlast Telegram's callback window
+("query is too old"): `_answer` then sends the alert text as a chat message and never stops the handler, so the
+plan list still opens on 422 (QA round 4). 404/409/422/429 are logged at info, not error. The full
 code is never logged (first 2 characters only). Metric `bot_tv_pair_total{result}` (offered, cancelled,
 attached, code_not_found, code_already_claimed, no_active_subscription, rate_limited, failed).
 
 A `tv-` payload is not attribution: `decode_start_param` returns None, so a new user from a TV QR gets
 `source=None` (and may get the source survey after paying). Mapping `tv-` to a source such as `androidtv`
-is an open owner decision. Tests: `tests/test_tv_pair.py`, e2e `tests/e2e/test_tv_pair_e2e.py` and `tests/e2e/test_tv_pair_qa_e2e.py` (set
+is an open owner decision. Tests: `tests/test_tv_pair.py`, e2e `tests/e2e/test_tv_pair_e2e.py` and `tests/e2e/test_tv_pair_qa*_e2e.py` (set
 `SHOP_E2E_API_BIN` to a built compono-api to run it against the real API); matrix in
 `docs/TESTING-tv-pairing.md`.
 

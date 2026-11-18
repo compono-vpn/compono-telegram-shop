@@ -1,0 +1,18 @@
+            (TvPairClaim.FAILED, "msg-tv-pair-failed"),
+_ TestSlowClaimStaleAnswer.test_late_failure_is_sent_as_a_message[TvPairClaim.FAILED-msg-tv-pair-failed] _
+result = <TvPairClaim.FAILED: 'failed'>, key = 'msg-tv-pair-failed'
+            (TvPairClaim.FAILED, "msg-tv-pair-failed"),
+    await callback.answer(text=i18n.get("msg-tv-pair-failed"), show_alert=True)
+kwargs = {'show_alert': True, 'text': '[msg-tv-pair-failed]'}
+_call = call(text='[msg-tv-pair-failed]', show_alert=True)
+    await callback.answer(text=i18n.get("msg-tv-pair-failed"), show_alert=True)
+kwargs = {'show_alert': True, 'text': '[msg-tv-pair-failed]'}
+_call = call(text='[msg-tv-pair-failed]', show_alert=True)
+FAILED tests/test_tv_pair.py::TestSlowClaimStaleAnswer::test_late_failure_is_sent_as_a_message[TvPairClaim.RATE_LIMITED-msg-tv-pair-rate-limited]
+FAILED tests/test_tv_pair.py::TestSlowClaimStaleAnswer::test_late_failure_is_sent_as_a_message[TvPairClaim.FAILED-msg-tv-pair-failed]
+FAILED tests/test_tv_pair.py::TestSlowClaimStaleAnswer::test_late_failure_on_an_inaccessible_message_goes_to_the_chat
+FAILED tests/test_tv_pair.py::TestSlowClaimStaleAnswer::test_late_answer_on_no_subscription_still_opens_the_plan_list
+FAILED tests/test_tv_pair.py::TestSlowClaimStaleAnswer::test_late_answer_after_an_edit_is_quiet[TvPairClaim.ATTACHED]
+FAILED tests/test_tv_pair.py::TestSlowClaimStaleAnswer::test_late_answer_after_an_edit_is_quiet[TvPairClaim.NOT_FOUND]
+FAILED tests/test_tv_pair.py::TestSlowClaimStaleAnswer::test_late_answer_after_an_edit_is_quiet[TvPairClaim.ALREADY_CLAIMED]
+7 failed, 1 passed, 110 deselected in 0.42s
