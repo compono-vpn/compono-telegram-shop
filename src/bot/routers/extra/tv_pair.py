@@ -14,6 +14,7 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 from loguru import logger
 
+from src.bot.middlewares.error import is_stale_callback_error
 from src.bot.routers.extra.checkout_entry import open_checkout
 from src.bot.states import Subscription
 from src.core.constants import TV_PAIR_CANCEL, TV_PAIR_CONFIRM_PREFIX
@@ -40,6 +41,30 @@ async def _edit(callback: CallbackQuery, text: str, reply_markup=None) -> None: 
             raise
 
 
+async def _answer(callback: CallbackQuery, user: UserDto, alert: str | None = None) -> None:
+    """Answer the tap. The claim can outlast the time Telegram keeps a callback query
+    answerable (compono-api waits up to 15 s for billing, the bot up to 30 s for the API),
+    and then Telegram refuses the answer as "query is too old". A late answer must not stop
+    the handler (the plan list still has to open), and a late alert must still reach the
+    user, as a chat message (QA round 4).
+    """
+    try:
+        if alert is None:
+            await callback.answer()
+        else:
+            await callback.answer(text=alert, show_alert=True)
+    except TelegramBadRequest as e:
+        if not is_stale_callback_error(e):
+            raise
+        logger.warning(f"{log(user)} TV pairing: tap answered too late for Telegram")
+        if alert is None:
+            return
+        if isinstance(callback.message, Message):
+            await callback.message.answer(text=alert)
+        elif callback.bot is not None:
+            await callback.bot.send_message(chat_id=user.telegram_id, text=alert)
+
+
 async def _send_no_subscription(
     callback: CallbackQuery, user: UserDto, code: str, i18n: TranslatorRunner
 ) -> None:
@@ -64,7 +89,7 @@ async def on_tv_pair_confirm(
     code = code_from_callback(callback.data)
     if code is None:
         logger.warning(f"{log(user)} Malformed TV pairing button")
-        await callback.answer()
+        await _answer(callback, user)
         return
 
     result = await api_client.claim_tv_pair(code, user.telegram_id)
@@ -73,7 +98,7 @@ async def on_tv_pair_confirm(
 
     if result is TvPairClaim.ATTACHED:
         await _edit(callback, i18n.get("msg-tv-pair-attached"))
-        await callback.answer()
+        await _answer(callback, user)
         return
     if result is TvPairClaim.NO_SUBSCRIPTION:
         # The code stays valid until it expires: send the explanation with a retry button
@@ -82,24 +107,24 @@ async def on_tv_pair_confirm(
         # DELETE_AND_SEND, and aiogram-dialog deletes the message the callback came from,
         # which would take the explanation and the retry button with it (QA round 1).
         await _send_no_subscription(callback, user, code, i18n)
-        await callback.answer()
+        await _answer(callback, user)
         await open_checkout(
             dialog_manager, state=Subscription.PLANS, purchase_type=PurchaseType.NEW
         )
         return
     if result is TvPairClaim.NOT_FOUND:
         await _edit(callback, i18n.get("msg-tv-pair-expired"))
-        await callback.answer()
+        await _answer(callback, user)
         return
     if result is TvPairClaim.ALREADY_CLAIMED:
         await _edit(callback, i18n.get("msg-tv-pair-used"))
-        await callback.answer()
+        await _answer(callback, user)
         return
     if result is TvPairClaim.RATE_LIMITED:
-        await callback.answer(text=i18n.get("msg-tv-pair-rate-limited"), show_alert=True)
+        await _answer(callback, user, i18n.get("msg-tv-pair-rate-limited"))
         return
     # Network error, 5xx, 401...: keep the buttons so the user can try again.
-    await callback.answer(text=i18n.get("msg-tv-pair-failed"), show_alert=True)
+    await _answer(callback, user, i18n.get("msg-tv-pair-failed"))
 
 
 @inject
