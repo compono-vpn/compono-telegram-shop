@@ -6,6 +6,7 @@ PENDING -> COMPLETED, so paying such a link would take the user's stars and gran
 bot sells only for Stars, the pre-checkout answer is the one place to stop that.
 """
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -102,3 +103,49 @@ async def test_invoice_already_charged_once_is_refused_while_billing_completes_i
 async def test_redis_down_does_not_block_a_payment():
     ok, _ = await _answer(_tx(), redis=FakeRedis(fail=True))
     assert ok is True
+
+
+class TestNewPurchaseSupersededBySubscription:
+    """Billing's PurchaseSubscription skips a NEW purchase when the user's current subscription
+    was created after the payment (idempotency guard): a trial taken, or another order bought, in
+    the meantime. Paying such an invoice (from the 5-minute «Оплата не завершена» reminder, say)
+    completed the payment and bought nothing: stars taken, no refund, no alert."""
+
+    def _new_tx(self, created: datetime) -> MagicMock:
+        tx = _tx()
+        tx.PurchaseType = "NEW"
+        tx.CreatedAt = created
+        return tx
+
+    async def _answer_with_sub(self, tx, sub) -> tuple[bool, MagicMock]:
+        billing = AsyncMock()
+        billing.get_transaction.return_value = tx
+        if isinstance(sub, Exception):
+            billing.get_current_subscription.side_effect = sub
+        else:
+            billing.get_current_subscription.return_value = sub
+        query = _query(str(uuid4()))
+        await on_pre_checkout(query, make_user(telegram_id=UID), billing, FakeRedis())
+        return query.answer.await_args.kwargs["ok"], query
+
+    async def test_trial_taken_after_the_payment_refuses_the_invoice(self):
+        paid_at = datetime.now(timezone.utc) - timedelta(minutes=6)
+        trial = MagicMock(IsTrial=True, CreatedAt=paid_at + timedelta(minutes=2))
+        ok, query = await self._answer_with_sub(self._new_tx(paid_at), trial)
+        assert ok is False
+        assert query.answer.await_args.kwargs.get("error_message")
+
+    async def test_subscription_older_than_the_payment_is_fine(self):
+        paid_at = datetime.now(timezone.utc) - timedelta(minutes=6)
+        old = MagicMock(IsTrial=True, CreatedAt=paid_at - timedelta(days=3))
+        ok, _ = await self._answer_with_sub(self._new_tx(paid_at), old)
+        assert ok is True
+
+    async def test_no_subscription_is_fine(self):
+        ok, _ = await self._answer_with_sub(self._new_tx(datetime.now(timezone.utc)), None)
+        assert ok is True
+
+    async def test_subscription_lookup_failure_refuses(self):
+        tx = self._new_tx(datetime.now(timezone.utc))
+        ok, _ = await self._answer_with_sub(tx, RuntimeError("billing down"))
+        assert ok is False

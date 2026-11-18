@@ -8,7 +8,7 @@ from dishka import FromDishka
 from loguru import logger
 from redis.asyncio import Redis
 
-from src.core.enums import TransactionStatus
+from src.core.enums import PurchaseType, TransactionStatus
 from src.core.utils.formatters import format_user_log as log
 from src.infrastructure.billing import BillingClient
 from src.models.dto import UserDto
@@ -67,14 +67,24 @@ async def on_pre_checkout(
         return
 
     try:
-        transaction = await billing.get_transaction(payment_id)
+        error = await _pre_checkout_error(billing, redis_client, user, payment_id)
     except Exception:
         logger.opt(exception=True).warning(
             f"{log(user)} Pre-checkout query for '{payment_id}' rejected: billing lookup failed"
         )
-        await pre_checkout_query.answer(ok=False, error_message=RETRY_ERROR)
+        error = RETRY_ERROR
+    if error:
+        await pre_checkout_query.answer(ok=False, error_message=error)
         return
 
+    await pre_checkout_query.answer(ok=True)
+
+
+async def _pre_checkout_error(
+    billing: BillingClient, redis_client: Redis, user: UserDto, payment_id: UUID
+) -> Optional[str]:
+    """Why this invoice must not be paid (the text Telegram shows), or None to accept it."""
+    transaction = await billing.get_transaction(payment_id)
     reason = None
     if transaction is None:
         reason = "payment not found"
@@ -89,14 +99,25 @@ async def on_pre_checkout(
             f"{log(user)} Pre-checkout query for '{payment_id}' rejected: already charged, "
             f"billing is still completing it"
         )
-        await pre_checkout_query.answer(ok=False, error_message=ALREADY_PAID_ERROR)
-        return
+        return ALREADY_PAID_ERROR
+    elif await _new_purchase_superseded(billing, transaction):
+        reason = "a subscription was created after this NEW payment"
     if reason:
         logger.warning(f"{log(user)} Pre-checkout query for '{payment_id}' rejected: {reason}")
-        await pre_checkout_query.answer(ok=False, error_message=STALE_INVOICE_ERROR)
-        return
+        return STALE_INVOICE_ERROR
+    return None
 
-    await pre_checkout_query.answer(ok=True)
+
+async def _new_purchase_superseded(billing: BillingClient, transaction: Any) -> bool:
+    """True when billing would complete this NEW payment and buy nothing.
+
+    Billing skips a NEW purchase when the user's current subscription was created after the
+    payment (its retry guard in PurchaseSubscription): a trial taken or another order bought since.
+    """
+    if transaction.PurchaseType != PurchaseType.NEW.value or transaction.CreatedAt is None:
+        return False
+    current = await billing.get_current_subscription(transaction.UserTelegramID)
+    return bool(current and current.CreatedAt and current.CreatedAt > transaction.CreatedAt)
 
 
 @router.message(F.successful_payment)

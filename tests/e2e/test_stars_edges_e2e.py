@@ -29,6 +29,7 @@ from .test_stale_callback_e2e import (  # noqa: E402
     wait_screen,
 )
 from .test_stars_only_e2e import (  # noqa: E402
+    pay_with_stars,
     PROD_ROWS,
     RUBLE_NOTE,
     _pre_checkout,
@@ -54,6 +55,8 @@ FORGE = 820000008  # presses a plan button carrying the id of a plan not offered
 INTRUDER = 820000009  # an ordinary user pressing admin buttons
 WRONG = 820000010  # billing cannot create the payment for a new choice
 LATE = 820000011  # comes back to a checkout after billing cancelled its payment
+SWITCH = 820000012  # has Старт; starts «Изменить» to Макс, goes back and renews Старт instead
+TRIALED = 820000013  # makes a payment, takes the trial, then pays the payment's invoice
 
 HIDDEN_PLAN_ID = 77  # an archived plan: in billing, not offered to anyone, cheaper than Старт
 OLD_PLATEGA_PAYMENT = "3d0c8f62-6a52-4a8e-9a55-6d1b2b0c1a01"
@@ -64,8 +67,23 @@ async def shop():
     e2e = ShopE2E()
     e2e.billing.gateways.extend(PROD_ROWS)
     e2e.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED, FORGE, INTRUDER, WRONG, LATE):
+    for uid in (
+        FREE,
+        NUDGE,
+        TAPS,
+        BUSY,
+        BLIP,
+        SLOW,
+        REFUSED,
+        FORGE,
+        INTRUDER,
+        WRONG,
+        LATE,
+        SWITCH,
+        TRIALED,
+    ):
         e2e.billing.add_user(uid, f"u{uid}")
+    e2e.billing.add_active_subscription(SWITCH)
     e2e.billing.discounts[FREE] = 100
     hidden = copy.deepcopy(STAGE["plans_available"][0])
     hidden.update(ID=HIDDEN_PLAN_ID, Name="Архив", IsActive=False, Availability="ALLOWED")
@@ -492,3 +510,52 @@ async def test_checkout_after_billing_cancelled_the_payment_makes_a_new_invoice(
     invoice = stars_checkout(shop, confirm, before)
     assert shop.billing.transactions[invoice["payload"]]["Status"] == "PENDING"
     assert _ok(await _pre_checkout(shop, LATE, invoice))
+
+
+async def test_renew_after_starting_a_change_sells_the_renewal(shop: ShopE2E) -> None:
+    # The dialog reused a payment by duration and method only. «Изменить» → Макс → 1 месяц made a
+    # Макс CHANGE payment; back on the subscription screen, «Продлить» → 1 месяц reused it, so the
+    # screen said «Старт» and the invoice bought Макс as a plan change.
+    since = await send(shop, _text_update(SWITCH, "/start"))
+    menu = await wait_screen(shop, since, SWITCH)
+    sub = await tap(shop, menu, "Подписк")
+    plans = await tap(shop, sub, "Изменить")
+    durations = await tap(shop, plans, "Макс")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    change = stars_checkout(shop, confirm, before)
+    assert shop.billing.transactions[change["payload"]]["PurchaseType"] == "CHANGE"
+
+    durations = await tap(shop, confirm, "Изменить длительность")
+    plans = await tap(shop, durations, "Назад к выбору плана")
+    sub = await tap(shop, plans, "⬅️ Назад")
+    durations = await tap(shop, sub, "Продлить")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    show("renew confirm", confirm)
+    offered = _pay_links([confirm])
+    assert change["link"] not in offered, "the Макс change invoice was offered for the renewal"
+    renew = stars_checkout(shop, confirm, before)
+    tx = shop.billing.transactions[renew["payload"]]
+    assert (tx["Plan"]["id"], tx["PurchaseType"]) == (1, "RENEW")
+
+
+async def test_invoice_made_before_the_trial_cannot_be_paid(shop: ShopE2E) -> None:
+    # Billing skips a NEW purchase when the current subscription was created after the payment.
+    # A payment made, then the trial taken, then the old invoice paid (the 5-minute «Оплата не
+    # завершена» reminder carries its link): the payment completed and bought nothing.
+    plans = await open_plans(shop, TRIALED)
+    durations = await tap(shop, plans, "Старт")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    invoice = stars_checkout(shop, confirm, before)
+    await asyncio.sleep(0.05)
+    shop.billing.add_active_subscription(TRIALED, days_left=2, is_trial=True)  # trial taken
+
+    answer = await _pre_checkout(shop, TRIALED, invoice)
+    if _ok(answer):
+        await pay_with_stars(shop, TRIALED, invoice)
+        await shop.wait_for(lambda: invoice["payload"] in shop.billing.skipped_purchases, 10)
+        print("\n[skipped purchases]", shop.billing.skipped_purchases)
+    assert not _ok(answer), "an invoice billing would complete for nothing was accepted"
+    assert invoice["payload"] not in shop.billing.skipped_purchases

@@ -45,6 +45,7 @@ class FakeBilling:
         self.personal_proxies: dict[int, dict[str, Any]] = {}
         self.created: list[dict[str, Any]] = []  # POST /payment/create bodies + the result
         self.completed: list[str] = []  # payment ids sent to /payment/handle-free
+        self.skipped_purchases: list[str] = []  # COMPLETED, but billing bought nothing
         self.completion_delay = 0.7  # seconds until the "consumer" completes a handle-free payment
         # "<METHOD> <path>" -> how many next requests answer 503 (billing restarting).
         self.fail_next: dict[str, int] = {}
@@ -77,15 +78,16 @@ class FakeBilling:
         plan_name: str = "⚡️ Старт",
         tag: str | None = None,
         days_left: int = 20,
+        is_trial: bool = False,
     ) -> None:
-        """Paid subscription, shaped like stage GET /subscription/{id}/current."""
+        """Paid (or trial) subscription, shaped like stage GET /subscription/{id}/current."""
         sub_id = 100 + len(self.subscriptions)
         self.subscriptions[telegram_id] = {
             "ID": sub_id,
             "UserRemnaID": str(uuid.UUID(int=telegram_id)),
             "UserTelegramID": telegram_id,
             "Status": "ACTIVE",
-            "IsTrial": False,
+            "IsTrial": is_trial,
             "TrafficLimit": 100,
             "DeviceLimit": 2,
             "TrafficLimitStrategy": "MONTH",
@@ -231,6 +233,11 @@ class FakeBilling:
             tx = self.transactions.get(payment_id)
             if tx is not None and tx.get("Status") == "PENDING":
                 tx["Status"] = "COMPLETED"
+                # Like PurchaseSubscription: a NEW purchase is skipped when the current
+                # subscription was created after the payment (its retry guard).
+                sub = self.subscriptions.get(int(tx.get("UserTelegramID", 0)))
+                if tx.get("PurchaseType") == "NEW" and sub and sub["CreatedAt"] > tx["CreatedAt"]:
+                    self.skipped_purchases.append(payment_id)
 
         asyncio.get_running_loop().call_later(self.completion_delay, _complete)
 
