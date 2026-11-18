@@ -1,0 +1,12 @@
+tests/e2e/test_tv_pair_qa6_e2e.py::test_inaccessible_question_still_gets_the_outcome FAILED [ 33%]
+tests/e2e/test_tv_pair_qa6_e2e.py::test_inaccessible_question_used_code_is_told FAILED [ 66%]
+tests/e2e/test_tv_pair_qa6_e2e.py::test_inaccessible_question_cancel_is_told FAILED [100%]
+E       AssertionError: []
+tests/e2e/test_tv_pair_qa6_e2e.py:130: AssertionError
+E       AssertionError: []
+tests/e2e/test_tv_pair_qa6_e2e.py:147: AssertionError
+E       AssertionError: []
+tests/e2e/test_tv_pair_qa6_e2e.py:156: AssertionError
+FAILED tests/e2e/test_tv_pair_qa6_e2e.py::test_inaccessible_question_still_gets_the_outcome
+FAILED tests/e2e/test_tv_pair_qa6_e2e.py::test_inaccessible_question_used_code_is_told
+FAILED tests/e2e/test_tv_pair_qa6_e2e.py::test_inaccessible_question_cancel_is_told

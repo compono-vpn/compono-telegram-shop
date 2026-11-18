@@ -76,7 +76,7 @@ callback came from, retry button included (QA round 1); 404 → «Код уст�
 использован»; 429 and errors → alert, buttons kept. A slow claim can outlast Telegram's callback window
 ("query is too old"): `_answer` then sends the alert text as a chat message and never stops the handler, so the
 plan list still opens on 422 (QA round 4). If the user deleted the question while the claim ran, Telegram refuses the edit with "message to edit not
-found"; `_edit` then sends the outcome as a new message, because the claim already happened (QA round 5). 404/409/422/429 are logged at info, not error. The full
+found"; `_edit` then sends the outcome as a new message, because the claim already happened (QA round 5). The same goes for a tap that arrives with an InaccessibleMessage (Bot API 7.0: deleted or too old), where `_edit` sends the outcome with `bot.send_message` (QA round 6). 404/409/422/429 are logged at info, not error. The full
 code is never logged (first 2 characters only). Metric `bot_tv_pair_total{result}` (offered, cancelled,
 attached, code_not_found, code_already_claimed, no_active_subscription, rate_limited, failed).
 

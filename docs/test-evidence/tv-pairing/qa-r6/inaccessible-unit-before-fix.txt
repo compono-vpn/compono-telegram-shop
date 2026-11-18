@@ -1,0 +1,17 @@
+>           raise AssertionError(msg)
+E           AssertionError: Expected send_message to have been awaited once. Awaited 0 times.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2333: AssertionError
+>           raise AssertionError(msg)
+E           AssertionError: Expected send_message to have been awaited once. Awaited 0 times.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2333: AssertionError
+>           raise AssertionError(msg)
+E           AssertionError: Expected send_message to have been awaited once. Awaited 0 times.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2333: AssertionError
+>           raise AssertionError(msg)
+E           AssertionError: Expected send_message to have been awaited once. Awaited 0 times.
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2333: AssertionError
+FAILED tests/test_tv_pair.py::TestInaccessibleQuestion::test_outcome_is_sent_as_a_new_message[TvPairClaim.ATTACHED-msg-tv-pair-attached]
+FAILED tests/test_tv_pair.py::TestInaccessibleQuestion::test_outcome_is_sent_as_a_new_message[TvPairClaim.NOT_FOUND-msg-tv-pair-expired]
+FAILED tests/test_tv_pair.py::TestInaccessibleQuestion::test_outcome_is_sent_as_a_new_message[TvPairClaim.ALREADY_CLAIMED-msg-tv-pair-used]
+FAILED tests/test_tv_pair.py::TestInaccessibleQuestion::test_cancel_is_told
+4 failed, 125 deselected in 0.42s

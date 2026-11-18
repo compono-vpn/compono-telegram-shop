@@ -1,0 +1,6 @@
+[inaccessible] screens after the tap: ['✅ Готово, телевизор подключится через несколько се']
+PASSED
+PASSED
+PASSED
+PASSED
+============================== 4 passed in 35.86s ==============================
