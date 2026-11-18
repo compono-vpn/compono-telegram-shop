@@ -261,3 +261,39 @@ Also fixed: the one `PLC0415` ruff finding in `tests/test_tv_pair.py` (an import
 | `ruff check` / `ruff format --check` on the changed test files | pass (the new e2e module has `print` like the other e2e modules) |
 | `pytest tests/` | 1398 passed, 6 skipped (opt-in e2e), 0 failed |
 | whole `tests/e2e` with tgmock, Redis 7.4.1 and the real compono-api binary from QA round 4 (API commit with the constant-time secret check) | 50 passed, 0 failed (`qa-r4/e2e-all-real-api.txt`; round 3: 47) |
+
+## QA round 5 (2026-11-18, separate QA worktree from cdf4867)
+
+### The branch no longer merged into main
+
+`main` moved 25 commits ahead (the Stars-only payments work, up to 92a204c) and both sides had
+changed `FakeBilling.__init__` in `tests/e2e/fake_billing.py`, so PR #13 had a merge conflict.
+`main` was merged into the branch (a normal merge commit, no rebase, no force-push); the conflict
+was resolved by keeping both sets of fields. The merge also brings main's Stars-only e2e modules into
+this branch's e2e run, including the button crawl that checks no screen names rubles, cards, SBP
+or the website; the TV pairing texts name none of them.
+
+### Fixed: the question deleted while the claim runs
+
+The claim can take many seconds (round 4). If the user deletes the «Подключить телевизор?»
+message meanwhile, Telegram refuses `editMessageText` with "message to edit not found" (or "message
+can't be edited"). The claim had already happened, so the TV pairs, but that refusal escaped
+`_edit`: the tap was never answered and the user saw nothing (on the real bot with tgmock, no
+screen at all after the tap). Fix (`src/bot/routers/extra/tv_pair.py` `_edit`): for those two
+refusals the outcome is sent as a new message; "message is not modified" is still ignored; any
+other `TelegramBadRequest` still raises (the round 1 test that pinned "message to edit not found"
+as raising now uses a "can't parse entities" error).
+
+Tests: `TestQuestionGoneDuringClaim` in `tests/test_tv_pair.py` (7 cases: attached, expired and
+used, each with both refusals, plus cancel), all 7 failed before the fix
+(`qa-r5/deleted-question-unit-before-fix.txt`). E2E `tests/e2e/test_tv_pair_qa5_e2e.py` (real bot,
+tgmock with `editMessageText` refused, real compono-api binary with the round 5 API fix): both
+cases failed on the old handler (`qa-r5/qa5-e2e-before-fix.txt`: no screen after the tap) and pass
+after the fix (`qa-r5/qa5-e2e-after-fix.txt`: «Готово…» arrives as a new message, the TV poll
+returns `paired`, no `#EventError`). tgmock does not track deleted messages, so the refusal is
+injected.
+
+Not changed, noted: with `rules_required` or `channel_required` switched on, a new user's
+`/start tv-<CODE>` is answered with the rules or channel prompt and the code is not asked about
+again after accepting. Every deep link behaves this way, and both settings are off in prod.
+

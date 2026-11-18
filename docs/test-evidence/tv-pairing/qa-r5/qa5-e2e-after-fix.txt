@@ -1,0 +1,31 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.3, pytest-8.4.2, pluggy-1.6.0 -- /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/bin/python
+rootdir: /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.3.0, tgmock-0.2.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_still_gets_the_outcome [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>7M46-BT65</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:7M46BT65'), ('Отмена', 'tvx')]
+[deleted question] screens after the tap: ['✅ Готово, телевизор подключится через несколько се']
+PASSED
+tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_used_code_is_told [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>EH4H-TSC8</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:EH4HTSC8'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>EH4H-TSC8</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:EH4HTSC8'), ('Отмена', 'tvx')]
+PASSED
+--- shop log: /var/folders/05/2x3fnz1x7ls0bzcr_qjncy100000gs/T/shop-e2e-p23lltsg/shop.log
+
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 2 passed, 5 warnings in 27.62s ========================

@@ -1,0 +1,86 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.3, pytest-8.4.2, pluggy-1.6.0 -- /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/bin/python
+rootdir: /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-red
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.3.0, tgmock-0.2.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_still_gets_the_outcome [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>V3ZJ-XWEH</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:V3ZJXWEH'), ('Отмена', 'tvx')]
+[deleted question] screens after the tap: []
+FAILED
+tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_used_code_is_told [/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>G3SY-74SF</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:G3SY74SF'), ('Отмена', 'tvx')]
+[/start tv-] sendMessage: 📺 <b>Подключить телевизор?</b> |  | Код <code>G3SY-74SF</code>. Нажмите, только если этот код сейчас на экране вашего телевизора.
+[/start tv-] buttons: [('📺 Подключить', 'tvp:G3SY74SF'), ('Отмена', 'tvx')]
+FAILED
+--- shop log: /var/folders/05/2x3fnz1x7ls0bzcr_qjncy100000gs/T/shop-e2e-98e63l3u/shop.log
+
+
+=================================== FAILURES ===================================
+_________________ test_deleted_question_still_gets_the_outcome _________________
+
+env = (<tests.e2e.harness.ShopE2E object at 0x11d27b860>, <tests.e2e.test_tv_pair_e2e.TV object at 0x11d134a10>)
+
+    async def test_deleted_question_still_gets_the_outcome(env) -> None:
+        shop, tv = env
+        t0 = time.time()
+        code, token = await tv.create()
+        question = await open_link(shop, GONE_OK, code)
+        since = time.time()
+        shop.tg.failures["editMessageText"] = (400, NOT_FOUND)
+        try:
+            await tap(shop, GONE_OK, question, f"tvp:{code}")
+        finally:
+            shop.tg.failures.pop("editMessageText", None)
+        shown = screens(shop, GONE_OK, since)
+        texts = [s.get("text") or "" for s in shown]
+        print(f"[deleted question] screens after the tap: {[t[:50] for t in texts]}")
+>       assert any(
+            s["method"] == "sendMessage" and "телевизор подключится" in (s.get("text") or "")
+            for s in shown
+        ), texts
+E       AssertionError: []
+E       assert False
+E        +  where False = any(<generator object test_deleted_question_still_gets_the_outcome.<locals>.<genexpr> at 0x11d297d80>)
+
+tests/e2e/test_tv_pair_qa5_e2e.py:100: AssertionError
+___________________ test_deleted_question_used_code_is_told ____________________
+
+env = (<tests.e2e.harness.ShopE2E object at 0x11d27b860>, <tests.e2e.test_tv_pair_e2e.TV object at 0x11d134a10>)
+
+    async def test_deleted_question_used_code_is_told(env) -> None:
+        shop, tv = env
+        code, _ = await tv.create()
+        first = await open_link(shop, GONE_OK, code)
+        await tap(shop, GONE_OK, first, f"tvp:{code}")
+        t0 = time.time()
+        question = await open_link(shop, GONE_USED, code)
+        since = time.time()
+        shop.tg.failures["editMessageText"] = (400, NOT_FOUND)
+        try:
+            await tap(shop, GONE_USED, question, f"tvp:{code}")
+        finally:
+            shop.tg.failures.pop("editMessageText", None)
+        shown = screens(shop, GONE_USED, since)
+>       assert any("уже использован" in (s.get("text") or "") for s in shown), shown
+E       AssertionError: []
+E       assert False
+E        +  where False = any(<generator object test_deleted_question_used_code_is_told.<locals>.<genexpr> at 0x11d545000>)
+
+tests/e2e/test_tv_pair_qa5_e2e.py:125: AssertionError
+=============================== warnings summary ===============================
+../qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+../qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+../qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+../qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+../qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_still_gets_the_outcome
+FAILED tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_used_code_is_told
+======================== 2 failed, 5 warnings in 55.43s ========================
