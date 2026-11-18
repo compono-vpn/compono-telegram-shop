@@ -46,6 +46,11 @@ class AwaitingCancelSurveyText(BaseFilter):
     async def __call__(self, message: Message, **data: Any) -> Union[bool, dict[str, str]]:
         if not message.from_user:
             return False
+        # A command is never the free-text answer. Without this, /start tv-<CODE> from the
+        # TV's QR code (or a plain /start) sent within 30 minutes of «Другое» was swallowed
+        # and stored as the answer, full pairing code included (QA round 8, COM-202).
+        if isinstance(message.text, str) and message.text.lstrip().startswith("/"):
+            return False
 
         container = data[CONTAINER_KEY]
         redis_client: Redis = await container.get(Redis)

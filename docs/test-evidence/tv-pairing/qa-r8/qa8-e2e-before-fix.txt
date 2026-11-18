@@ -1,0 +1,16 @@
+tests/e2e/test_tv_pair_qa8_e2e.py::test_tv_link_after_survey_other_still_pairs FAILED [ 33%]
+tests/e2e/test_tv_pair_qa8_e2e.py::test_plain_start_after_survey_other_opens_menu FAILED [ 66%]
+tests/e2e/test_tv_pair_qa8_e2e.py::test_typed_answer_is_still_taken PASSED [100%]
+>       question = await open_link(shop, SURVEY_TV, code)  # asserts the confirmation question
+        assert question["method"] == "sendMessage"
+>       assert f"{code[:4]}-{code[4:]}" in question["text"]
+E       AssertionError: assert 'XXXX-XXXX' in '🙏 Спасибо за ответ! Учтём это.'
+tests/e2e/test_tv_pair_e2e.py:277: AssertionError
+        assert shown, "plain /start was swallowed by the survey"
+>       assert not any("Спасибо" in (s.get("text") or "") for s in shown), shown
+E       AssertionError: [{'_at': 1794977842.145198, 'chat_id': 730899002, 'message_id': 6, 'method': 'sendMessage', ...}]
+E       assert not True
+tests/e2e/test_tv_pair_qa8_e2e.py:152: AssertionError
+FAILED tests/e2e/test_tv_pair_qa8_e2e.py::test_tv_link_after_survey_other_still_pairs
+FAILED tests/e2e/test_tv_pair_qa8_e2e.py::test_plain_start_after_survey_other_opens_menu
+========================= 2 failed, 1 passed in 18.05s =========================

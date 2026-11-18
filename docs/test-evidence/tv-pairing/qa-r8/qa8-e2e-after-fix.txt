@@ -1,0 +1,4 @@
+tests/e2e/test_tv_pair_qa8_e2e.py::test_tv_link_after_survey_other_still_pairs PASSED [ 33%]
+tests/e2e/test_tv_pair_qa8_e2e.py::test_plain_start_after_survey_other_opens_menu PASSED [ 66%]
+tests/e2e/test_tv_pair_qa8_e2e.py::test_typed_answer_is_still_taken PASSED [100%]
+============================== 3 passed in 22.39s ==============================

@@ -1,0 +1,20 @@
+>       assert result is False
+E       AssertionError: assert {'cancel_survey_payment_id': '7552587a-98ca-42ac-9a03-fac658596cde'} is False
+tests/test_cancel_survey_router.py:444: AssertionError
+_ TestAwaitingCancelSurveyTextSkipsCommands.test_other_command_is_not_an_answer _
+self = <tests.test_cancel_survey_router.TestAwaitingCancelSurveyTextSkipsCommands object at 0x1230c8050>
+    async def test_other_command_is_not_an_answer(self):
+        container = self._container(str(uuid4()))
+    
+        result = await AwaitingCancelSurveyText()(
+            self._message("  /help"), **{CONTAINER_KEY: container}
+        )
+    
+>       assert result is False
+E       AssertionError: assert {'cancel_survey_payment_id': '2716e707-55a8-4cfd-bf92-440c7c175323'} is False
+tests/test_cancel_survey_router.py:453: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cancel_survey_router.py::TestAwaitingCancelSurveyTextSkipsCommands::test_tv_pairing_deep_link_is_not_an_answer
+FAILED tests/test_cancel_survey_router.py::TestAwaitingCancelSurveyTextSkipsCommands::test_plain_start_is_not_an_answer
+FAILED tests/test_cancel_survey_router.py::TestAwaitingCancelSurveyTextSkipsCommands::test_other_command_is_not_an_answer
+3 failed, 15 passed in 0.31s
