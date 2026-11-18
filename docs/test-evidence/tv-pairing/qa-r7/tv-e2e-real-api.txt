@@ -1,0 +1,12 @@
+..................................................                       [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa7-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+50 passed, 5 warnings in 388.42s (0:06:28)
