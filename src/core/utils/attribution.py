@@ -4,8 +4,14 @@ import html
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+from src.services.tv_pair import code_from_start_param
+
 START_PREFIX = "source-"
 START_VERSION_TAG = "a1"
+# /start tv-<CODE> from the Android TV app's QR code (COM-202, owner default 2026-11-18).
+# Attributed to a fixed source; the pairing code itself is a short-lived secret and is
+# never stored.
+TV_SOURCE = "androidtv"
 
 CHANNEL_CODES = {
     "g": "google",
@@ -77,11 +83,15 @@ _SEGMENT_PARSERS: dict[str, tuple[str, Callable[[str], Any]]] = {
 def decode_start_param(param: Optional[str]) -> Optional[DecodedStart]:
     """Decode a `/start` payload produced by the landing (see compono-landing
     src/lib/attribution-core.ts). Legacy payloads (`source-home-hero`) decode
-    to version 0 with the whole tag as the slot. Anything not starting with
-    `source-` is not an attribution payload and returns None."""
+    to version 0 with the whole tag as the slot. A TV pairing payload
+    (`tv-<CODE>`) decodes to version 0 with the slot `androidtv`; the code is
+    dropped. Anything else not starting with `source-` is not an attribution
+    payload and returns None."""
     if not param:
         return None
     raw = param.strip()
+    if code_from_start_param(raw) is not None:
+        return DecodedStart(version=0, slot=TV_SOURCE)
     if not raw.startswith(START_PREFIX):
         return None
     body = raw[len(START_PREFIX) :]

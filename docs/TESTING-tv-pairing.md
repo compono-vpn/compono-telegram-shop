@@ -26,7 +26,7 @@ it receives the subscription URL (the fake billing's URL for that user), and the
 | `/start tv-<CODE>` asks first, shows `K7M4-QX9P`, buttons `tvp:<CODE>` and `tvx`, no claim on /start | unit + e2e (both modes) | pass | `TestStartHandler`; e2e `open_link` asserts no claim request was made |
 | Payload parsing: lower/upper case, `/start@bot`, extra spaces; rejects 7/9 chars, dash, I/L/O/U, `tv_`, Cyrillic, extra words | unit | pass | `TestStartPayload`, `TestStartText` |
 | No collision with `source-`, `ref_`, `aff-`, `web_`, `proxy`, `beta_testers`, `rs_`, `purchase_`, `gt_`, `enc_` | unit | pass | `test_other_payloads_are_not_tv`, `test_prefix_collides_with_no_existing_payload` |
-| Attribution unchanged: `tv-` decodes to None (source None, admin card "Прямой заход"); `source-` legacy and v1 still decode; a new user from a TV link is created with source/attribution None; a new user from `source-a1_site-header_lios_ry` still gets source `site-header` and the attribution touch | unit + e2e | pass | `TestAttributionIsUntouched`; e2e `test_new_user_via_tv_link_has_no_source`, `test_source_link_still_attributes`; existing `tests/test_attribution.py` still passes |
+| Attribution (changed 2026-11-18, see the end of this file): `tv-` used to decode to None (source None, admin card "Прямой заход"); `source-` legacy and v1 still decode; a new user from a TV link is created with source/attribution None; a new user from `source-a1_site-header_lios_ry` still gets source `site-header` and the attribution touch | unit + e2e | pass | `TestAttributionIsUntouched`; e2e `test_new_user_via_tv_link_has_no_source`, `test_source_link_still_attributes`; existing `tests/test_attribution.py` still passes |
 | Paid user taps «Подключить» → claim `{"code","telegramId"}` for the tapping user → «Готово…», buttons removed → TV receives the URL once, 410 after | unit + e2e (real API) | pass | `TestConfirmHandler.test_attached`; e2e `test_paid_user_pairs_tv` |
 | No subscription → «нужна активная подписка» with a retry button as a NEW message (see QA round 1), plan list opened; the code stays pending; after buying, the retry attaches | unit + e2e (real API) | pass | `test_no_subscription_opens_plans_and_keeps_a_retry`; e2e `test_user_without_subscription_gets_plans_then_retries` |
 | Code already claimed by someone else → «Этот код уже использован» | unit + e2e | pass | `test_final_answers_remove_the_buttons`; e2e `test_code_used_by_someone_else` |
@@ -434,3 +434,17 @@ sent to the admin chat (`ntf-event-cancel-survey-other`). A plain `/start` was s
 | `pytest tests/` | 1537 passed, 12 skipped (opt-in e2e), 0 failed |
 | the eight TV e2e modules plus `test_stale_callback_e2e.py`, tgmock, Redis 7.4.1, real compono-api built from ebfeaf8 with go1.26.10 | 59 passed, 0 failed in 7 min 26 s (`qa-r8/tv-e2e-real-api.txt`); 0 subscription URLs or full codes in the output |
 | compono-api ebfeaf8: `go vet ./...`, `go test -race` on tvpair, usecase, domain, adapter/redis, middleware | clean; all ok |
+
+## Owner defaults, 2026-11-18
+
+Branch `feat/tv-pairing` on top of 4ab66c2 (shop main v0.61.5 is already in it, no rebase needed).
+
+| Default | Tests | Result |
+|---|---|---|
+| A valid `/start tv-<CODE>` is attributed to `androidtv`; the code never reaches `users.source`, the touch or the admin line; malformed `tv-` payloads stay unattributed; a returning user gets `{"ref":"androidtv"}` as last touch | `tests/test_attribution.py::TestAndroidTvDeepLinkAttribution`, `TestAttributionIsUntouched::test_tv_payload_decodes_to_androidtv_without_the_code`; e2e `test_new_user_via_tv_link_is_attributed_to_androidtv` (billing `POST /users` body has source `androidtv`, first and last touch `{"ref":"androidtv"}`, no code) | pass |
+| After a claim: «✅ Готово. Телевизор попросит подтвердить подключение — подтвердите его пультом.» (no "через несколько секунд") | `TestCopy::test_result_texts`, `TestCopy::test_attached_text_does_not_promise_an_automatic_connection`; every e2e that checked the old text now checks the new one | pass |
+| compono-api per-IP create limit 30 / 10 min | compono-api PR #3 | see that PR |
+
+The new unit tests failed before the change (`test-evidence/tv-pairing/defaults-2026-11-18/unit-before-fix.txt`) and pass
+after it (`unit-after-fix.txt`). Full e2e with the real compono-api binary built from compono-api `feat/tv-pairing` 1f66744
+(limit 30): `e2e-all-real-api.txt`, 91 passed, 0 failed in 29 min; `e2e-androidtv-real-api.txt` shows the billing create-user body for a new TV user. Unit suite: 1542 passed, 12 skipped; ruff check and format clean.

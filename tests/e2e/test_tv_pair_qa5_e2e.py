@@ -98,7 +98,7 @@ async def test_deleted_question_still_gets_the_outcome(env) -> None:
     texts = [s.get("text") or "" for s in shown]
     print(f"[deleted question] screens after the tap: {[t[:50] for t in texts]}")
     assert any(
-        s["method"] == "sendMessage" and "телевизор подключится" in (s.get("text") or "")
+        s["method"] == "sendMessage" and "Телевизор попросит подтвердить" in (s.get("text") or "")
         for s in shown
     ), texts
     assert not any("ошибка" in t.lower() for t in texts), texts

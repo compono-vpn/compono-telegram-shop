@@ -132,7 +132,7 @@ async def test_inaccessible_question_still_gets_the_outcome(env) -> None:
     texts = [s.get("text") or "" for s in shown]
     print(f"[inaccessible] screens after the tap: {[t[:50] for t in texts]}")
     assert any(
-        s["method"] == "sendMessage" and "телевизор подключится" in (s.get("text") or "")
+        s["method"] == "sendMessage" and "Телевизор попросит подтвердить" in (s.get("text") or "")
         for s in shown
     ), texts
     assert not alerts(shop, t0), "an inaccessible question must not page admins"

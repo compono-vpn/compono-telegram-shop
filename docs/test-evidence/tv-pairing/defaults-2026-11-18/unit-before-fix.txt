@@ -1,0 +1,17 @@
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/defaults-shop-tv/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: 22 warnings
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/defaults-shop-tv/.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: DeprecationWarning: Behavior without patch module is deprecated, use patch_module = True
+    return _inject_wrapper(func, patch_module=patch_module)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_attribution.py::TestAndroidTvDeepLinkAttribution::test_tv_payload_decodes_to_androidtv
+FAILED tests/test_attribution.py::TestAndroidTvDeepLinkAttribution::test_new_user_source_and_admin_line
+FAILED tests/test_attribution.py::TestAndroidTvDeepLinkAttribution::test_returning_user_gets_an_androidtv_last_touch
+FAILED tests/test_tv_pair.py::TestCopy::test_result_texts[msg-tv-pair-attached-\u0422\u0435\u043b\u0435\u0432\u0438\u0437\u043e\u0440 \u043f\u043e\u043f\u0440\u043e\u0441\u0438\u0442 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435]
+FAILED tests/test_tv_pair.py::TestCopy::test_attached_text_does_not_promise_an_automatic_connection
+5 failed, 12 passed, 157 deselected, 27 warnings in 5.27s
+FAILED tests/test_attribution.py::TestAndroidTvDeepLinkAttribution::test_other_payloads_are_unchanged
+1 failed, 43 passed, 27 warnings in 0.32s
