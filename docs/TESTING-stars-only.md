@@ -167,6 +167,24 @@ it; not built.
   got multiple values for keyword argument 'billing'` (the injected handler is called with explicit dependencies). No plan
   in the prod list has a single duration (checked `componovpn.com/api/v1/plans` 2026-11-18: 1, 2, 3, 38 all have several).
 
+## QA round 5 (2026-11-18)
+
+- The confirm screen could sell a different order than it showed. It reads the invoice link and price from dialog data,
+  and a failed payment creation left the previous choice's payment there: pick Макс 1 месяц (confirm, invoice), go back,
+  pick Старт 3 месяца while billing fails twice, and the confirm screen said «Старт, 3 месяца, 399★» with the Макс
+  1-month invoice behind «Оплатить звёздами». Now `_create_payment_and_get_data` forgets the current payment first
+  (`_drop_current_payment`), and the method screen opens the confirm screen only when the new payment exists.
+  `tests/test_checkout_payment_state.py::TestFailedCreation`, e2e
+  `test_failed_payment_creation_never_offers_the_previous_order` (failed on the old code: the old invoice was offered).
+- A payment billing had cancelled was offered again and again. The dialog reuses the payment made earlier for the same
+  duration; after billing's 30-60 minute timeout cancelled it, every new pick of that duration gave the same dead
+  invoice, which pre-checkout refuses («счёт устарел»), so the user could not pay without leaving the dialog. Now a
+  cached payment is reused only while billing says PENDING (`_reusable_payment`); CANCELED, COMPLETED, FAILED or not
+  found make a new payment. A PENDING one is kept even when it was already charged, and so is the cached one when
+  billing cannot be read, so a new payment never opens a second charge. `TestReuse` (5 failed on the old code), e2e
+  `test_checkout_after_billing_cancelled_the_payment_makes_a_new_invoice` (failed on the old code: the cancelled
+  invoice was offered again).
+
 ## Release order
 
 1. Merge, stage sync, then walk the flows above on @compono_dev_bot.

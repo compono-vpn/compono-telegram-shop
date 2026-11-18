@@ -82,6 +82,46 @@ def _load_payment_data(dialog_manager: DialogManager) -> dict[str, CachedPayment
     return cast(dict[str, CachedPaymentData], dialog_manager.dialog_data[PAYMENT_CACHE_KEY])
 
 
+CURRENT_PAYMENT_KEYS = ("payment_id", "payment_url", "final_pricing")
+
+
+def _drop_current_payment(dialog_manager: DialogManager) -> None:
+    """Forget the payment the confirm screen shows, before a new one is made for a new choice.
+
+    The confirm screen reads the payment from dialog data; a failed creation must never leave the
+    previous choice's invoice there (it showed one plan and sold another).
+    """
+    for key in CURRENT_PAYMENT_KEYS:
+        dialog_manager.dialog_data.pop(key, None)
+
+
+async def _reusable_payment(
+    dialog_manager: DialogManager, billing: BillingClient, cache_key: str
+) -> Optional[CachedPaymentData]:
+    """The payment made earlier in this dialog for the same choice, while billing can complete it.
+
+    Billing cancels a PENDING payment after 30-60 minutes; its invoice is then refused at
+    pre-checkout, so a new payment is needed. A PENDING one is kept, also when it was already
+    charged (billing is completing it): a new payment then could be paid a second time.
+    """
+    cache = _load_payment_data(dialog_manager)
+    cached = cache.get(cache_key)
+    if cached is None:
+        return None
+    try:
+        transaction = await billing.get_transaction(UUID(cached["payment_id"]))
+    except Exception:
+        logger.opt(exception=True).warning(
+            f"Could not check cached payment '{cached['payment_id']}', reusing it"
+        )
+        return cached
+    if transaction is not None and transaction.Status == TransactionStatus.PENDING.value:
+        return cached
+    logger.info(f"Cached payment '{cached['payment_id']}' can no longer be paid, making a new one")
+    cache.pop(cache_key, None)
+    return None
+
+
 def _save_payment_data(dialog_manager: DialogManager, payment_data: CachedPaymentData) -> None:
     dialog_manager.dialog_data["payment_id"] = payment_data["payment_id"]
     dialog_manager.dialog_data["payment_url"] = payment_data["payment_url"]
@@ -126,6 +166,7 @@ async def _create_payment_and_get_data(
     gateway_metadata: Optional[dict[str, str]] = None,
 ) -> Optional[CachedPaymentData]:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    _drop_current_payment(dialog_manager)
     duration = plan.get_duration(duration_days)
     purchase_type: PurchaseType = dialog_manager.dialog_data["purchase_type"]
 
@@ -534,9 +575,8 @@ async def on_subscription_plans(  # noqa: C901
 
                 if payment_data:
                     _save_payment_data(dialog_manager, payment_data)
-
-                await dialog_manager.switch_to(state=Subscription.CONFIRM)
-                return
+                    await dialog_manager.switch_to(state=Subscription.CONFIRM)
+                    return
 
             await dialog_manager.switch_to(state=Subscription.PAYMENT_METHOD)
             return
@@ -677,10 +717,11 @@ async def on_duration_select(
 
         cache = _load_payment_data(dialog_manager)
         cache_key = _get_cache_key(selected_duration, selected_payment_method)
+        cached = await _reusable_payment(dialog_manager, billing, cache_key)
 
-        if cache_key in cache:
+        if cached:
             logger.info(f"{log(user)} Re-selected same duration and single gateway")
-            _save_payment_data(dialog_manager, cache[cache_key])
+            _save_payment_data(dialog_manager, cached)
             await dialog_manager.switch_to(state=Subscription.CONFIRM)
             return
 
@@ -734,10 +775,11 @@ async def on_payment_method_select(
 
     cache = _load_payment_data(dialog_manager)
     cache_key = _get_cache_key(selected_duration, selected_payment_method)
+    cached = await _reusable_payment(dialog_manager, billing, cache_key)
 
-    if cache_key in cache:
+    if cached:
         logger.info(f"{log(user)} Re-selected same method and duration")
-        _save_payment_data(dialog_manager, cache[cache_key])
+        _save_payment_data(dialog_manager, cached)
         await dialog_manager.switch_to(state=Subscription.CONFIRM)
         return
 
@@ -761,10 +803,11 @@ async def on_payment_method_select(
         channel_incentive_service=channel_incentive_service,
     )
 
-    if payment_data:
-        cache[cache_key] = payment_data
-        _save_payment_data(dialog_manager, payment_data)
-
+    if not payment_data:
+        # The user was told it failed; the confirm screen has no payment to show.
+        return
+    cache[cache_key] = payment_data
+    _save_payment_data(dialog_manager, payment_data)
     await dialog_manager.switch_to(state=Subscription.CONFIRM)
 
 
@@ -822,10 +865,10 @@ async def on_crypto_asset_select(
         gateway_metadata={"chain": asset.chain, "token": asset.token},
     )
 
-    if payment_data:
-        cache[cache_key] = payment_data
-        _save_payment_data(dialog_manager, payment_data)
-
+    if not payment_data:
+        return
+    cache[cache_key] = payment_data
+    _save_payment_data(dialog_manager, payment_data)
     await dialog_manager.switch_to(state=Subscription.CONFIRM)
 
 
@@ -837,7 +880,9 @@ async def on_get_subscription(
     billing: FromDishka[BillingClient],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    payment_id = dialog_manager.dialog_data["payment_id"]
+    payment_id = dialog_manager.dialog_data.get("payment_id")
+    if not payment_id:
+        return
     # handle-free completes any PENDING payment whatever its amount, and aiogram-dialog runs this
     # handler even when `when` hides the button (an old message, a modified client). Only a
     # 0-star pending payment of this user may be completed here.

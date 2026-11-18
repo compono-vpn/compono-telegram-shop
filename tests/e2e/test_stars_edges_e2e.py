@@ -52,6 +52,8 @@ SLOW = 820000006  # pays while billing's Kafka consumer is slower than the bot w
 REFUSED = 820000007  # billing cancelled the payment and Telegram refuses the refund
 FORGE = 820000008  # presses a plan button carrying the id of a plan not offered to them
 INTRUDER = 820000009  # an ordinary user pressing admin buttons
+WRONG = 820000010  # billing cannot create the payment for a new choice
+LATE = 820000011  # comes back to a checkout after billing cancelled its payment
 
 HIDDEN_PLAN_ID = 77  # an archived plan: in billing, not offered to anyone, cheaper than Старт
 OLD_PLATEGA_PAYMENT = "3d0c8f62-6a52-4a8e-9a55-6d1b2b0c1a01"
@@ -62,7 +64,7 @@ async def shop():
     e2e = ShopE2E()
     e2e.billing.gateways.extend(PROD_ROWS)
     e2e.billing.add_user(DEV_ID, "Owner", role="DEV")
-    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED, FORGE, INTRUDER):
+    for uid in (FREE, NUDGE, TAPS, BUSY, BLIP, SLOW, REFUSED, FORGE, INTRUDER, WRONG, LATE):
         e2e.billing.add_user(uid, f"u{uid}")
     e2e.billing.discounts[FREE] = 100
     hidden = copy.deepcopy(STAGE["plans_available"][0])
@@ -421,3 +423,72 @@ async def test_ordinary_user_cannot_open_the_admin_dialogs(shop: ShopE2E) -> Non
 
 def _ok(answer: dict) -> bool:
     return str(answer.get("ok")).lower() in ("true", "1")
+
+
+def _pay_links(screens: list[dict]) -> list[str]:
+    return [
+        b["url"]
+        for s in screens
+        for b in buttons(s)
+        if "Оплатить" in b.get("text", "") and b.get("url")
+    ]
+
+
+async def test_failed_payment_creation_never_offers_the_previous_order(shop: ShopE2E) -> None:
+    # The confirm screen reads the payment from dialog data. When billing could not create the
+    # payment for a new choice, the screen still opened with the previous choice's invoice: the
+    # user picked Старт for 3 months and was offered Макс for 1 month (its price, its link).
+    plans = await open_plans(shop, WRONG)
+    durations = await tap(shop, plans, "Макс")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    old = stars_checkout(shop, confirm, before)
+    durations = await tap(shop, confirm, "Изменить длительность")
+    plans = await tap(shop, durations, "Назад к выбору плана")
+    durations = await tap(shop, plans, "Старт")
+
+    shop.billing.fail_next["POST /payment/create"] = 2
+    since = time.time()
+    screen = await tap(shop, durations, "3 месяца")
+    method = next(
+        (
+            s
+            for s in reversed(user_screens(shop, since, WRONG))
+            if any("Telegram Stars" in b.get("text", "") for b in buttons(s))
+        ),
+        None,
+    )
+    if method:
+        await tap(shop, method, "Telegram Stars")
+    await asyncio.sleep(2)
+    screens = user_screens(shop, since, WRONG)
+    for s in screens:
+        show("after failed creation", s)
+    offered = _pay_links(screens)
+    print("[pay links after the failures]", offered, "old:", old["link"])
+    assert old["link"] not in offered, "the previous order was offered for the new choice"
+    assert screen is not None
+
+
+async def test_checkout_after_billing_cancelled_the_payment_makes_a_new_invoice(
+    shop: ShopE2E,
+) -> None:
+    # The dialog keeps each created payment and reuses it when the same duration is picked again.
+    # Billing cancels a PENDING payment after 30-60 minutes; the reused invoice is then refused at
+    # pre-checkout («счёт устарел»), and picking the duration again gave the same dead invoice.
+    plans = await open_plans(shop, LATE)
+    durations = await tap(shop, plans, "Старт")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    old = stars_checkout(shop, confirm, before)
+    shop.billing.transactions[old["payload"]]["Status"] = "CANCELED"  # CancelStale ran
+
+    durations = await tap(shop, confirm, "Изменить длительность")
+    before = len(shop.tg.invoices)
+    confirm = await tap(shop, durations, "1 месяц")
+    show("confirm after the cancel", confirm)
+    offered = _pay_links([confirm])
+    assert offered and old["link"] not in offered, "a cancelled payment's invoice was offered again"
+    invoice = stars_checkout(shop, confirm, before)
+    assert shop.billing.transactions[invoice["payload"]]["Status"] == "PENDING"
+    assert _ok(await _pre_checkout(shop, LATE, invoice))
