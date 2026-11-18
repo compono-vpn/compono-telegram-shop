@@ -185,6 +185,27 @@ it; not built.
   `test_checkout_after_billing_cancelled_the_payment_makes_a_new_invoice` (failed on the old code: the cancelled
   invoice was offered again).
 
+## QA round 6 (2026-11-18)
+
+- A renewal could sell a plan change. The reuse cache was keyed by duration and method only, and only a plan pick
+  cleared it. «Изменить» → Макс → 1 месяц made a Макс CHANGE payment; back on the subscription screen, «Продлить» →
+  1 месяц reused it: the screen said «Старт … будет продлена … 399★» and the invoice bought Макс as a plan change. The
+  key now holds plan, purchase type, duration and method (`_get_cache_key`). `TestOtherChoiceSameDuration`, e2e
+  `test_renew_after_starting_a_change_sells_the_renewal` (failed on the old code: the Макс invoice was offered).
+- Stars taken for nothing after a trial. Billing's `PurchaseSubscription` skips a NEW purchase when the current
+  subscription was created after the payment (its retry guard). A payment made, then the trial taken, then the invoice
+  paid (the 5-minute «Оплата не завершена» reminder carries the link): billing completed the payment and bought nothing,
+  and the bot saw COMPLETED, so no refund and no alert. Pre-checkout now refuses a NEW payment whose user has a
+  subscription created after it, and refuses when that lookup fails. `TestNewPurchaseSupersededBySubscription`, e2e
+  `test_invoice_made_before_the_trial_cannot_be_paid` (failed on the old code: accepted, paid, purchase skipped). The
+  fake billing now skips such purchases like billing (`skipped_purchases`).
+- The «Другой способ» reminder button and the 30% offer took the plan of the user's own payment with `get_plan`, so a
+  proxy, archived or trial plan payment could reopen checkout for that plan (the proxy invoice carries the user's
+  discount, billing records the full price). Both now use `offered_plan`, the plan-list check `on_plan_select` already
+  had. Unit tests in `tests/test_payment_nudge_router.py` and `tests/test_recovery_offer.py` (failed on the old code).
+  Reaching it needs an old reminder for a plan archived since, or forged callback data (unverified whether Telegram
+  delivers that).
+
 ## Release order
 
 1. Merge, stage sync, then walk the flows above on @compono_dev_bot.

@@ -38,10 +38,14 @@ if Telegram refuses it, the #EventError names the payment, the charge and the us
 still completing the payment after the wait, the user is told the payment arrived and not to pay again.
 The confirm screen offers only the payment made for the current choice: a payment creation first forgets the shown
 payment (a failure used to leave the previous choice's invoice behind a new choice's text), and a payment cached for the
-same duration is reused only while billing says PENDING (a cancelled one used to be offered again and again).
-Never trust an id from callback data: aiogram-dialog `Select` passes any item id, so `on_plan_select` takes the plan only
-from `/plans/available` (billing's payment creation would sell the trial, the proxy or a hidden plan by id), and the
-admin dialogs check the role themselves (`PrivilegedFilter` on their routers, `goto`, `on_open_dashboard`).
+same plan, purchase type, duration and method is reused only while billing says PENDING (a cancelled one used to be
+offered again and again; a key without plan and purchase type sold a Макс change under «Старт, продление»).
+Pre-checkout also refuses a NEW payment once the user's current subscription was created after it (a trial taken or
+another order bought since): billing's `PurchaseSubscription` skips such a NEW purchase, so the stars would buy nothing.
+Never trust an id from callback data: aiogram-dialog `Select` passes any item id, so every checkout entry (plan list,
+«Другой способ» reminder, 30% offer) takes the plan only from `/plans/available` (`offered_plan` in
+`src/services/bot_payments.py`; billing's payment creation would sell the trial, the proxy or a hidden plan by id), and
+the admin dialogs check the role themselves (`PrivilegedFilter` on their routers, `goto`, `on_open_dashboard`).
 
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
