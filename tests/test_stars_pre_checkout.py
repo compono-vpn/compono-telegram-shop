@@ -149,3 +149,15 @@ class TestNewPurchaseSupersededBySubscription:
         tx = self._new_tx(datetime.now(timezone.utc))
         ok, _ = await self._answer_with_sub(tx, RuntimeError("billing down"))
         assert ok is False
+
+    async def test_proxy_invoice_is_not_refused_by_a_newer_vpn_subscription(self):
+        # Billing completes a proxy payment in HandlePaymentSucceeded (finishProxyPurchase) and
+        # never runs PurchaseSubscription's NEW guard for it, so a VPN subscription created after
+        # the proxy invoice (a trial taken meanwhile) does not stop the proxy from being granted.
+        # Prod sold the proxy through Platega with no such check; refusing here loses the sale.
+        paid_at = datetime.now(timezone.utc) - timedelta(minutes=6)
+        tx = self._new_tx(paid_at)
+        tx.Plan = MagicMock(type="PROXY")
+        trial = MagicMock(IsTrial=True, CreatedAt=paid_at + timedelta(minutes=2))
+        ok, _ = await self._answer_with_sub(tx, trial)
+        assert ok is True

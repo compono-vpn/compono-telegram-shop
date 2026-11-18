@@ -8,7 +8,7 @@ from dishka import FromDishka
 from loguru import logger
 from redis.asyncio import Redis
 
-from src.core.enums import PurchaseType, TransactionStatus
+from src.core.enums import PlanType, PurchaseType, TransactionStatus
 from src.core.utils.formatters import format_user_log as log
 from src.infrastructure.billing import BillingClient
 from src.models.dto import UserDto
@@ -113,8 +113,12 @@ async def _new_purchase_superseded(billing: BillingClient, transaction: Any) -> 
 
     Billing skips a NEW purchase when the user's current subscription was created after the
     payment (its retry guard in PurchaseSubscription): a trial taken or another order bought since.
+    A proxy payment never reaches that guard (billing grants it in HandlePaymentSucceeded), so a
+    newer VPN subscription does not stop it.
     """
     if transaction.PurchaseType != PurchaseType.NEW.value or transaction.CreatedAt is None:
+        return False
+    if getattr(transaction.Plan, "type", None) == PlanType.PROXY.value:
         return False
     current = await billing.get_current_subscription(transaction.UserTelegramID)
     return bool(current and current.CreatedAt and current.CreatedAt > transaction.CreatedAt)
