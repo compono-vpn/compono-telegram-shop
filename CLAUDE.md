@@ -100,9 +100,15 @@ found"; `_edit` then sends the outcome as a new message, because the claim alrea
 code is never logged (first 2 characters only). Metric `bot_tv_pair_total{result}` (offered, cancelled,
 attached, code_not_found, code_already_claimed, no_active_subscription, rate_limited, failed).
 
-A `tv-` payload is not attribution: `decode_start_param` returns None, so a new user from a TV QR gets
-`source=None` (and may get the source survey after paying). Mapping `tv-` to a source such as `androidtv`
-is an open owner decision.
+Owner defaults (2026-11-18, the owner may change them):
+- A valid `tv-<CODE>` payload is attributed to the source `androidtv`: `decode_start_param` returns a version 0
+  touch with slot `androidtv` (the code is dropped), so a new user from a TV QR gets `source=androidtv` and the
+  attribution `{"ref":"androidtv"}` (no source survey), a returning user gets that as the last touch, and the
+  admin card says «Метка → androidtv». A malformed `tv-` payload stays unattributed.
+- After a claim the bot says «✅ Готово. Телевизор попросит подтвердить подключение — подтвердите его пультом.»,
+  not that the TV connects by itself in a few seconds.
+- Trial subscriptions may pair, `LIMITED` may not (checked by compono-api). compono-api PR #3 raised the
+  per-IP create limit to 30 codes per 10 minutes.
 
 Routers that take free text sit before `menu.handlers` and see `/start` first. The cancel survey's
 «Другое» waits 30 minutes for a free-text answer (`AwaitingCancelSurveyText`); it used to take any message,

@@ -134,13 +134,14 @@ class TestStartPayload:
 
 
 class TestAttributionIsUntouched:
-    """A tv- payload is not attribution: new users get source None, the admin card says
-    "Прямой заход", and source- payloads still decode exactly as before."""
+    """Owner default 2026-11-18: a tv- payload is attributed to the fixed source
+    ``androidtv`` (never the code), and source- payloads still decode exactly as before."""
 
-    def test_tv_payload_decodes_to_nothing(self):
-        assert decode_start_param(f"tv-{CODE}") is None
-        assert source_tag(decode_start_param(f"tv-{CODE}")) is None
-        assert source_line_for_start(f"tv-{CODE}") == source_line_for_start(None)
+    def test_tv_payload_decodes_to_androidtv_without_the_code(self):
+        decoded = decode_start_param(f"tv-{CODE}")
+        assert decoded is not None and decoded.version == 0
+        assert source_tag(decoded) == "androidtv"
+        assert CODE not in source_line_for_start(f"tv-{CODE}").upper()
 
     def test_source_payloads_still_decode(self):
         legacy = decode_start_param("source-home-hero")
@@ -596,7 +597,7 @@ class TestCopy:
     @pytest.mark.parametrize(
         "key,phrase",
         [
-            ("msg-tv-pair-attached", "телевизор подключится через несколько секунд"),
+            ("msg-tv-pair-attached", "Телевизор попросит подтвердить подключение"),
             ("msg-tv-pair-expired", "Код устарел"),
             ("msg-tv-pair-used", "Этот код уже использован"),
             ("msg-tv-pair-rate-limited", "Слишком много попыток, подождите"),
@@ -606,6 +607,13 @@ class TestCopy:
     )
     def test_result_texts(self, ru, key, phrase):
         assert phrase in ru.get(key)
+
+    def test_attached_text_does_not_promise_an_automatic_connection(self, ru):
+        # Owner default 2026-11-18: the TV asks the user to confirm, so the bot must not
+        # say it will connect by itself in a few seconds.
+        text = ru.get("msg-tv-pair-attached")
+        assert "несколько секунд" not in text
+        assert "подключится" not in text
 
     def test_no_subscription_text_names_the_code_and_no_price(self, ru):
         text = _plain(ru.get("msg-tv-pair-no-subscription", code="K7M4-QX9P"))

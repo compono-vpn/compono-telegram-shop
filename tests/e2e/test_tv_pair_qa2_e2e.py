@@ -143,7 +143,7 @@ async def test_tv_link_while_waiting_for_promocode_text(env) -> None:
         len([1 for (_, route, _) in shop.billing.bodies if "promocode" in route]) == promo_calls
     ), "the /start tv- text was sent to billing as a promocode"
     after = await tap(shop, PROMO, question, f"tvp:{code}")
-    assert any("телевизор подключится" in (s.get("text") or "") for s in after), after
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in after), after
     status, body = await tv.poll(token, code)
     assert body["status"] in ("paired", "claimed"), body
 
@@ -224,7 +224,7 @@ async def test_old_retry_message_after_the_tv_paired(env) -> None:
     second = no_subscription_message(screens(shop, STALE, since))
     shop.billing.add_active_subscription(STALE)
     after = await tap(shop, STALE, second, f"tvp:{code}")
-    assert any("телевизор подключится" in (s.get("text") or "") for s in after)
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in after)
     status, body = await tv.poll(token, code)
     assert body["status"] in ("paired", "claimed"), body
     after = await tap(shop, STALE, first, f"tvp:{code}")
@@ -242,7 +242,7 @@ async def test_two_tvs_one_after_the_other(env) -> None:
         USED.append(code)
         question = await open_link(shop, TWO_TVS, code)
         after = await tap(shop, TWO_TVS, question, f"tvp:{code}")
-        assert any("телевизор подключится" in (s.get("text") or "") for s in after), (n, after)
+        assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in after), (n, after)
         status, body = await tv.poll(token, code)
         if tv.api_url:
             assert status == 200 and body["status"] == "paired"

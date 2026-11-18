@@ -161,7 +161,7 @@ async def test_answer_lost_after_the_claim_landed(env) -> None:
         return
     # In-memory model: the claim landed, the retry is the idempotent 200.
     after, _ = await tap_and_answer(shop, LOST, question, f"tvp:{code}")
-    assert any("телевизор подключится" in (s.get("text") or "") for s in after), after
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in after), after
 
 
 async def test_answer_lost_then_user_taps_again_before_the_tv_polls(env) -> None:
@@ -173,7 +173,7 @@ async def test_answer_lost_then_user_taps_again_before_the_tv_polls(env) -> None
     with DropNextClaim(shop, forward=True):
         await tap_and_answer(shop, LOST, question, f"tvp:{code}")
     after, answer = await tap_and_answer(shop, LOST, question, f"tvp:{code}")
-    assert any("телевизор подключится" in (s.get("text") or "") for s in after), (after, answer)
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in after), (after, answer)
     assert not alerts(shop, t0)
     status, body = await tv.poll(token, code)
     if tv.api_url:
@@ -196,7 +196,7 @@ async def test_connection_reset_before_the_claim(env) -> None:
     status, body = await tv.poll(token, code)
     assert status == 200 and body["status"] == "pending", (status, body)
     after, _ = await tap_and_answer(shop, RESET, question, f"tvp:{code}")
-    assert any("телевизор подключится" in (s.get("text") or "") for s in after), after
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in after), after
     assert not alerts(shop, t0)
 
 

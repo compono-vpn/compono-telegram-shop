@@ -145,3 +145,46 @@ class TestUserMiddlewareAttribution:
         await UserMiddleware._record_returning_touch(
             billing, 1, SimpleNamespace(text="/start source-home-hero")
         )
+
+
+class TestAndroidTvDeepLinkAttribution:
+    """Owner default 2026-11-18 (COM-202): a /start tv-<CODE> link from the TV's QR code
+    is attributed to the source ``androidtv``. The pairing code itself is a short-lived
+    secret and must never end up in the source column or the attribution touch."""
+
+    CODE = "K7M4QX9P"
+
+    def test_tv_payload_decodes_to_androidtv(self) -> None:
+        for param in (f"tv-{self.CODE}", f"TV-{self.CODE.lower()}", f" tv-{self.CODE} "):
+            decoded = decode_start_param(param)
+            assert decoded is not None, param
+            assert source_tag(decoded) == "androidtv"
+            touch = touch_from_decoded(decoded)
+            assert touch == {"ref": "androidtv"}
+            assert self.CODE not in json.dumps(touch).upper()
+
+    def test_new_user_source_and_admin_line(self) -> None:
+        event = SimpleNamespace(text=f"/start tv-{self.CODE}")
+        assert UserMiddleware._parse_source(event) == "androidtv"
+        line = source_line_for_start(f"tv-{self.CODE}")
+        assert "androidtv" in line
+        assert self.CODE not in line.upper()
+
+    @pytest.mark.asyncio
+    async def test_returning_user_gets_an_androidtv_last_touch(self) -> None:
+        billing = SimpleNamespace(update_user=AsyncMock())
+        await UserMiddleware._record_returning_touch(
+            billing, 42, SimpleNamespace(text=f"/start tv-{self.CODE}")
+        )
+        billing.update_user.assert_awaited_once_with(
+            42, {"attribution_touch": {"ref": "androidtv"}}
+        )
+
+    def test_other_payloads_are_unchanged(self) -> None:
+        # Only a payload the TV handler accepts as a code is a TV link; malformed ones open
+        # the normal main menu and stay unattributed, as before.
+        for bad in ("tv-", "tv-ABC", "tv-ILOU1234", "tv-ABCDEFGH9", "tv-ABCD-EFGH", "xtv-ABCDEFGH"):
+            assert decode_start_param(bad) is None, bad
+        assert decode_start_param("tvx") is None
+        assert decode_start_param("ref_abc") is None
+        assert source_tag(decode_start_param("source-home-hero")) == "home-hero"

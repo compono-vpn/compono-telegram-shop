@@ -17,6 +17,7 @@ The "TV" side is either
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import secrets
 import subprocess
@@ -305,7 +306,7 @@ async def test_paid_user_pairs_tv(env) -> None:
         show("tap Подключить", s)
     assert claims(shop, mark) == [{"code": code, "telegramId": PAID_ID}]
     edited = [s for s in after if s["method"] == "editMessageText"]
-    assert edited and "телевизор подключится через несколько секунд" in edited[-1]["text"]
+    assert edited and "Телевизор попросит подтвердить подключение" in edited[-1]["text"]
     assert not buttons(edited[-1])
 
     status, body = await tv.poll(token, code)
@@ -342,7 +343,7 @@ async def test_user_without_subscription_gets_plans_then_retries(env) -> None:
     shop.billing.add_active_subscription(NOSUB_ID)
     after = await tap(shop, NOSUB_ID, retry, f"tvp:{code}")
     done = [s for s in after if s["method"] == "editMessageText"]
-    assert done and "телевизор подключится" in done[-1]["text"]
+    assert done and "Телевизор попросит подтвердить" in done[-1]["text"]
     status, body = await tv.poll(token, code)
     assert body["status"] in ("paired", "claimed"), body
 
@@ -413,7 +414,8 @@ async def test_cancel_does_not_claim(env) -> None:
     assert body["status"] == "pending"
 
 
-async def test_new_user_via_tv_link_has_no_source(env) -> None:
+async def test_new_user_via_tv_link_is_attributed_to_androidtv(env) -> None:
+    # Owner default 2026-11-18: source "androidtv", and the code is never stored.
     shop, tv = env
     code, _ = await tv.create()
     mark = len(shop.billing.bodies)
@@ -424,7 +426,12 @@ async def test_new_user_via_tv_link_has_no_source(env) -> None:
     print(f"[new user] billing create_user bodies: {created}")
     assert created, "the new user was not synced to billing"
     assert created[0]["telegram_id"] == NEW_ID
-    assert created[0]["source"] is None and created[0]["attribution"] is None
+    assert created[0]["source"] == "androidtv"
+    assert created[0]["attribution"] == {
+        "first_touch": {"ref": "androidtv"},
+        "last_touch": {"ref": "androidtv"},
+    }
+    assert code not in json.dumps(created[0]).upper()
 
 
 async def test_source_link_still_attributes(env) -> None:

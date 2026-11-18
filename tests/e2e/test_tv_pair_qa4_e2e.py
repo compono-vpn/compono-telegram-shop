@@ -142,7 +142,7 @@ async def test_late_failure_reaches_the_user_as_a_message(env) -> None:
     assert not alerts(shop, t0), "a late answer must not page admins"
     # The code is still pending, so a normal tap now pairs.
     after = await tap(shop, SLOW_FAIL, question, f"tvp:{code}")
-    assert any("телевизор подключится" in (s.get("text") or "") for s in after), after
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in after), after
     if tv.api_url:
         status, body = await tv.poll(token, code)
         assert status == 200 and body["status"] == "paired", (status, body)
@@ -177,7 +177,7 @@ async def test_late_attach_is_quiet(env) -> None:
         await tap(shop, SLOW_OK, question, f"tvp:{code}")
         await asyncio.sleep(1.0)
     shown = screens(shop, SLOW_OK, since)
-    assert any("телевизор подключится" in (s.get("text") or "") for s in shown), shown
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in shown), shown
     assert not [s for s in shown if s["method"] == "sendMessage"], "no extra message on success"
     assert not alerts(shop, t0)
     if tv.api_url:

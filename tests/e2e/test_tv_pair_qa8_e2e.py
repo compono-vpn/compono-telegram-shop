@@ -131,7 +131,7 @@ async def test_tv_link_after_survey_other_still_pairs(env) -> None:
 
     question = await open_link(shop, SURVEY_TV, code)  # asserts the confirmation question
     shown = await tap(shop, SURVEY_TV, question, f"tvp:{code}")
-    assert any("телевизор подключится" in (s.get("text") or "") for s in shown), shown
+    assert any("Телевизор попросит подтвердить" in (s.get("text") or "") for s in shown), shown
 
     leaked = [t for t in admin_texts(shop, t0) if code in t]
     assert not leaked, "the full pairing code reached the admin chat"
