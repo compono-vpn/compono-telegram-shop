@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -8,6 +9,14 @@ from dishka.integrations.aiogram_dialog import inject
 from fluentogram import TranslatorRunner
 from loguru import logger
 
+from src.bot.plan_screen import (
+    DurationRow,
+    PlanRow,
+    duration_text,
+    plan_style,
+    plans_text,
+    saving_percent,
+)
 from src.bot.proxy_view import (
     await_entitlement,
     build_success_message,
@@ -33,11 +42,10 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
-from src.services.bot_payments import BOT_CURRENCY, bot_gateways
+from src.services.bot_payments import bot_gateways, display_currency, ruble_payments_enabled
 from src.services.channel_incentive import ChannelIncentiveService
-from src.services.dedicated_ip import is_ultra_tag, is_ultra_user
+from src.services.dedicated_ip import is_ultra_user
 from src.services.experiment import ExperimentService
-from src.services.payment_nudge import format_price_text
 from src.services.remnawave import RemnawaveService
 from src.services.subscription import SubscriptionService
 from src.services.trial_activation import get_monthly_trial_plan
@@ -97,25 +105,32 @@ def _month_duration_days(plan: PlanDto) -> int | None:
     return min((d.days for d in plan.durations), default=None)
 
 
-async def _plan_price_line(
+async def _plan_row(
     billing: BillingClient, telegram_id: int, plan: PlanDto, currency: str
-) -> str:
+) -> PlanRow:
     days = _month_duration_days(plan)
+    row = PlanRow(
+        plan_id=plan.id,
+        name=plan.name,
+        tag=getattr(plan, "tag", None),
+        traffic_gb=plan.traffic_limit,
+        devices=plan.device_limit,
+        price=None,
+        days=days,
+        currency=currency,
+    )
     if days is None or plan.id is None:
-        return ""
+        return row
     try:
         details = await billing.calculate_price(
             telegram_id=telegram_id, plan_id=plan.id, duration_days=days, currency=currency
         )
         pricing = billing_price_details_to_dto(details)
-        final = format_price_text(pricing.final_amount, currency)
-        if pricing.discount_percent > 0:
-            original = format_price_text(pricing.original_amount, currency)
-            final = f"<s>{original}</s> {final}"
+        row.price = Decimal(str(pricing.final_amount))
+        row.discount_percent = int(pricing.discount_percent or 0)
     except Exception:
         logger.opt(exception=True).warning(f"Could not price plan '{plan.id}' for the plan screen")
-        return ""
-    return f"{final}/мес" if days == MONTH_DAYS else f"{final} / {days} дн."
+    return row
 
 
 @inject
@@ -128,30 +143,22 @@ async def plans_getter(
 ) -> dict[str, Any]:
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
-    currency = BOT_CURRENCY
+    currency = await display_currency(billing)
 
+    rows = [await _plan_row(billing, user.telegram_id, plan, currency) for plan in plans]
     formatted_plans = [
         {
             "id": plan.id,
             "name": plan.name,
+            "label": row.button(),
+            "style": plan_style(plan.id, getattr(plan, "tag", None)),
         }
-        for plan in plans
+        for plan, row in zip(plans, rows)
     ]
-
-    lines = []
-    for plan in plans:
-        price = await _plan_price_line(billing, user.telegram_id, plan, currency)
-        limits = (
-            f"{i18n.get('unit-gigabyte', value=plan.traffic_limit)}, "
-            f"{i18n.get('unit-device', value=plan.device_limit)}"
-        )
-        if is_ultra_tag(getattr(plan, "tag", None)):
-            limits = f"{limits}, {i18n.get('plan-dedicated-ip-feature')}"
-        lines.append(f"{plan.name} — {price} · {limits}" if price else f"{plan.name} — {limits}")
 
     return {
         "plans": formatted_plans,
-        "summary": "\n".join(lines),
+        "plans_text": plans_text(rows),
     }
 
 
@@ -171,7 +178,7 @@ async def duration_getter(
     if not plan:
         raise ValueError("PlanDto not found in dialog data")
 
-    default_currency = BOT_CURRENCY
+    default_currency = await display_currency(billing)
     only_single_plan = dialog_manager.dialog_data.get("only_single_plan", False)
     dialog_manager.dialog_data["is_free"] = False
     durations = []
@@ -211,7 +218,34 @@ async def duration_getter(
             }
         )
 
+    # Saving of a longer period against paying for one month each time, from list prices.
+    month = next((d for d in durations if d["days"] == MONTH_DAYS), None)
+    month_price = Decimal(str(month["original_amount"])) if month else None
+    for item in durations:
+        item["label"] = DurationRow(
+            days=item["days"],
+            price=Decimal(str(item["final_amount"])),
+            currency=default_currency,
+            saving_percent=saving_percent(
+                item["days"], Decimal(str(item["original_amount"])), month_price
+            ),
+        ).button()
+    header_row = PlanRow(
+        plan_id=plan.id,
+        name=plan.name,
+        tag=getattr(plan, "tag", None),
+        traffic_gb=plan.traffic_limit,
+        devices=plan.device_limit,
+        price=None,
+        days=None,
+        currency=default_currency,
+    )
+
     return {
+        "duration_text": duration_text(
+            header_row, max((int(d["discount_percent"] or 0) for d in durations), default=0)
+        ),
+        "style": plan_style(plan.id, getattr(plan, "tag", None)),
         "plan": plan.name,
         "description": plan.description or False,
         "type": plan.type,
@@ -293,6 +327,7 @@ async def payment_method_getter(
         "final_amount": 0,
         "currency": "",
         "only_single_duration": only_single_duration,
+        "stars_only": int(not ruble_payments_enabled()),
     }
 
 
@@ -368,7 +403,8 @@ async def confirm_getter(
         "only_single_gateway": len(billing_active_gateways) == 1,
         "only_single_duration": only_single_duration,
         "is_free": is_free,
-        "show_ruble_note": int(not is_free),
+        "show_ruble_note": int(not is_free and not ruble_payments_enabled()),
+        "stars_only": int(not ruble_payments_enabled()),
         "is_plaidly": is_plaidly,
         "is_webapp": is_webapp,
         "crypto_asset": crypto_asset.label if crypto_asset else False,
@@ -475,6 +511,7 @@ async def proxy_confirm_getter(dialog_manager: DialogManager, **kwargs: Any) -> 
     return {
         "url": start_data["payment_url"],
         "price": start_data["price"],
+        "stars_only": int(not start_data.get("rubles")),
     }
 
 

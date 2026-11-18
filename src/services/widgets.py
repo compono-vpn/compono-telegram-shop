@@ -25,7 +25,7 @@ from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey
 from src.models.dto.plan import PlanDto
 from src.models.dto.subscription import BaseSubscriptionDto
 from src.models.dto.user import BaseUserDto, UserDto
-from src.services.bot_payments import bot_gateways
+from src.services.bot_payments import bot_gateways, is_stars_gateway
 from src.services.remnawave import RemnawaveService
 from src.services.stars_invoice import create_stars_invoice_link
 from src.services.subscription import SubscriptionService
@@ -201,7 +201,8 @@ def pick_gateway(gateways: list[Any], kind: str) -> Optional[Any]:
     """Only "star" can pay: the bot sells for Telegram Stars only; "pay" and "ton" get None."""
     if kind != "star":
         return None
-    return next(iter(bot_gateways(gateways)), None)
+    # Widgets (off in prod) stay Stars only, also while the dialog checkout offers rubles.
+    return next((g for g in bot_gateways(gateways) if is_stars_gateway(g.Type)), None)
 
 
 class WidgetService:

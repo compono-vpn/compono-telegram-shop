@@ -287,7 +287,9 @@ def test_the_old_website_purchase_message_is_gone():
 
 @pytest.mark.parametrize(
     "path",
-    ["src/bot/proxy_view.py", "src/services/widgets.py", "src/services/first_screen.py"],
+    # proxy_view.py formats ruble prices for APP_BOT_RUBLE_PAYMENTS=true; its Stars-only texts
+    # are checked in test_proxy_screen.py.
+    ["src/services/widgets.py", "src/services/first_screen.py"],
 )
 def test_bot_source_shows_no_ruble_sign(path):
     assert "₽" not in Path(path).read_text(encoding="utf-8")

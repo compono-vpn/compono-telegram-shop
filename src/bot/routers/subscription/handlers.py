@@ -16,6 +16,7 @@ from redis.asyncio import Redis
 from src.bot.keyboards import get_user_keyboard
 from src.bot.proxy_view import (
     PROXY_DURATION_DAYS,
+    format_rub,
     format_stars,
     load_proxy_view,
 )
@@ -44,6 +45,7 @@ from src.models.dto import PlanDto, PriceDetailsDto, UserDto
 from src.services.bot_payments import (
     BOT_CURRENCY,
     bot_gateways,
+    display_currency,
     gateway_value,
     is_bot_payment_gateway,
     offered_plan,
@@ -343,10 +345,15 @@ async def on_buy_proxy(
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    gateway_type = PaymentGatewayType.TELEGRAM_STARS.value
 
     try:
         view = await load_proxy_view(billing, user)
+        # Rubles (Platega link from billing) when enabled, else a Telegram Stars invoice.
+        gateway_type = (
+            PaymentGatewayType.PLATEGA.value
+            if view.rubles
+            else PaymentGatewayType.TELEGRAM_STARS.value
+        )
         if not view.personal_loaded or view.proxy_plan_id <= 0:
             raise ValueError("Proxy plan is not available")
         if view.entitled and not view.can_renew:
@@ -362,11 +369,26 @@ async def on_buy_proxy(
             telegram_id=user.telegram_id,
             plan_id=view.proxy_plan_id,
             duration_days=PROXY_DURATION_DAYS,
-            currency=BOT_CURRENCY,
+            currency=billing_gateway.Currency if view.rubles else BOT_CURRENCY,
             gateway_type=gateway_type,
             purchase_type=purchase_type.value,
             is_test=user.is_dev,
         )
+        if view.rubles:
+            if not result.URL:
+                raise ValueError("Payment link is empty")
+            transaction = await billing.get_transaction(UUID(str(result.ID)))
+            rub_amount = (
+                Decimal(transaction.Pricing.final_amount)
+                if transaction and transaction.Pricing
+                else Decimal(str(view.price_rub))
+            )
+            logger.info(f"{log(user)} Created proxy ruble payment '{result.ID}'")
+            await dialog_manager.start(
+                Subscription.PROXY_CONFIRM,
+                data={"payment_url": result.URL, "price": format_rub(rub_amount), "rubles": 1},
+            )
+            return
         # Bill exactly what billing recorded for this payment (proxy prices skip user discounts).
         transaction = await billing.get_transaction(UUID(str(result.ID)))
         amount = (
@@ -406,6 +428,7 @@ async def on_buy_proxy(
         data={
             "payment_url": payment_url,
             "price": format_stars(amount),
+            "rubles": 0,
         },
     )
 
@@ -680,7 +703,7 @@ async def on_duration_select(
 
     billing_gateways = await billing.list_active_gateways()
     gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
-    default_currency = BOT_CURRENCY
+    default_currency = await display_currency(billing)
     purchase_type: PurchaseType | None = dialog_manager.dialog_data.get("purchase_type")
     experiment_context = build_checkout_context(
         experiment_service,

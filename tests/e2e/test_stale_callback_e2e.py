@@ -226,7 +226,7 @@ async def test_subscription_plans_durations_payment_methods(shop: ShopE2E) -> No
         show("Купить", plans)
     durations = await tap(shop, plans, "Старт")
     show("Старт", durations)
-    assert any("1 месяц | 119" in b.get("text", "") for b in buttons(durations))
+    assert any("1 месяц — 119" in b.get("text", "") for b in buttons(durations))
     methods = await tap(shop, durations, "1 месяц")
     show("1 месяц", methods)
     texts = " ".join(b.get("text", "") for b in buttons(methods)) + (methods.get("text") or "")

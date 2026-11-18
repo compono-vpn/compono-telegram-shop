@@ -309,7 +309,11 @@ class TestConfirmScreen:
     async def test_getter(self):
         dm = make_dialog_manager()
         dm.start_data = {"payment_url": "https://t.me/$x", "price": "49 ★"}
-        assert await proxy_confirm_getter(dm) == {"url": "https://t.me/$x", "price": "49 ★"}
+        assert await proxy_confirm_getter(dm) == {
+            "url": "https://t.me/$x",
+            "price": "49 ★",
+            "stars_only": 1,
+        }
 
     async def test_buy_passes_formatted_price(self):
         _, dm, billing, notification = _buy_args(_not_entitled())

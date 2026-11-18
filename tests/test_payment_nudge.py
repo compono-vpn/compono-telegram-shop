@@ -131,7 +131,7 @@ class TestSend:
         assert payload.i18n_key == "ntf-payment-nudge"
         assert payload.auto_delete_after is None
         assert payload.add_close_button is False
-        assert payload.i18n_kwargs == {"plan": "⚡️ Старт", "price": "119 ★"}
+        assert payload.i18n_kwargs == {"plan": "⚡️ Старт", "price": "119 ★", "stars": 1}
         buttons = [b for row in payload.reply_markup.inline_keyboard for b in row]
         assert [b.text for b in buttons] == ["btn-payment-nudge-pay"]
         assert buttons[0].url == URL
@@ -357,7 +357,7 @@ class TestKeyboardAndCopy:
         )
         i18n = hub.get_translator_by_locale("ru")
 
-        text = i18n.get("ntf-payment-nudge", plan="⚡️ Старт", price="119 ★")
+        text = i18n.get("ntf-payment-nudge", plan="⚡️ Старт", price="119 ★", stars=1)
 
         assert "119 ★" in text and "Старт" in text
         assert "звёздами" in text

@@ -90,6 +90,9 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     website_url: str = "https://componovpn.com"
 
     widgets_enabled: bool = False
+    # Ruble gateways (Platega) next to Telegram Stars in the bot checkout; read by
+    # src/services/bot_payments.py. Off = Stars only (v0.61.5 behaviour).
+    bot_ruble_payments: bool = True
 
     channel_incentive_enabled: bool = False
     channel_incentive_address: str = ""

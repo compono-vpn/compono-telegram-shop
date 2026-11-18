@@ -432,7 +432,7 @@ def i18n():
 class TestCopy:
     def test_offer_texts_say_30_percent_first_month_once(self, i18n):
         for key in ("ntf-recovery-offer", "ntf-event-user-expired-offer"):
-            text = i18n.get(key)
+            text = i18n.get(key, stars_only=1)
             assert "30%" in text and "первый месяц" in text
             assert "один раз" in text or "одноразов" in text
 

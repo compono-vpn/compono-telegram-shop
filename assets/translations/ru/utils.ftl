@@ -299,7 +299,7 @@ gateway-type = { $gateway_type ->
     [CRYPTOMUS] Cryptomus
     [HELEKET] Heleket
     [URLPAY] UrlPay
-    [PLATEGA] Platega
+    [PLATEGA] 💳 СБП
     [PLATEGA_CRYPTO] 🪙 Криптовалюта
     [PLAIDLY] 🪙 Криптовалюта
     [MANUAL_GRANT] 🎁 Подарок от Compono

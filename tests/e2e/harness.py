@@ -131,7 +131,10 @@ class FailingTelegram(TelegramMockServer):
 
 
 class ShopE2E:
-    def __init__(self) -> None:
+    def __init__(self, extra_env: dict[str, str] | None = None) -> None:
+        # APP_BOT_RUBLE_PAYMENTS defaults to false here (the Stars-only modules prove v0.61.5);
+        # test_rubles_e2e.py passes {"APP_BOT_RUBLE_PAYMENTS": "true"}.
+        self.extra_env = dict(extra_env or {})
         self.tg_port = free_port()
         self.redis_port = free_port()
         self.shop_port = free_port()
@@ -167,6 +170,7 @@ class ShopE2E:
             "APP_KAFKA_BROKERS": f"127.0.0.1:{free_port()}",
             "APP_KAFKA_TOPIC_ENV": "e2e",
             "APP_WIDGETS_ENABLED": "false",
+            "APP_BOT_RUBLE_PAYMENTS": "false",
             "BOT_TOKEN": BOT_TOKEN,
             "BOT_SECRET_TOKEN": SECRET,
             "BOT_DEV_ID": str(DEV_ID),
@@ -183,6 +187,7 @@ class ShopE2E:
             "REDIS_PASSWORD": "e2e",
             "REDIS_NAME": "0",
         }
+        env.update(self.extra_env)
         self._log_file = open(self.log_path, "wb")
         self._shop = subprocess.Popen(
             [

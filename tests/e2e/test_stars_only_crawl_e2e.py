@@ -115,19 +115,27 @@ def _texts_since(shop: ShopE2E, since: float, uid: int) -> list[str]:
     return out
 
 
-def _problems(texts: list[str], screens: list[dict[str, Any]]) -> list[str]:
+def _problems(
+    texts: list[str],
+    screens: list[dict[str, Any]],
+    banned: tuple[str, ...] = BANNED,
+    allowed_urls: tuple[str, ...] = ALLOWED_URL_PREFIXES,
+    allow_ruble_note: bool = True,
+) -> list[str]:
     found = []
     for text in texts:
-        clean = text.replace(RUBLE_NOTE, "").replace("оплатить в рублях", "")
+        clean = text
+        if allow_ruble_note:
+            clean = clean.replace(RUBLE_NOTE, "").replace("оплатить в рублях", "")
         for fragment in ALLOWED_FRAGMENTS:
             clean = clean.replace(fragment, "")
-        for word in BANNED:
+        for word in banned:
             if word in clean:
                 found.append(f"'{word}' in: {text[:300]!r}")
     for screen in screens:
         for b in buttons(screen):
             url = b.get("url") or (b.get("web_app") or {}).get("url") or ""
-            if url and not url.startswith(ALLOWED_URL_PREFIXES):
+            if url and not url.startswith(allowed_urls):
                 found.append(f"url button {b.get('text')!r} -> {url}")
     return found
 
@@ -168,6 +176,7 @@ async def crawl(
     max_taps: int = 90,
     start: str = "/start",
     prefix: list[str] | None = None,
+    **problem_rules: Any,
 ) -> list[str]:
     findings: list[str] = []
     seen: set[str] = set()
@@ -179,7 +188,7 @@ async def crawl(
         screen = await _replay(shop, uid, path, start)
         taps += len(path) + 1
         screens = user_screens(shop, since, uid)
-        problems = _problems(_texts_since(shop, since, uid), screens)
+        problems = _problems(_texts_since(shop, since, uid), screens, **problem_rules)
         for p in problems:
             findings.append(f"{uid} {' > '.join(path) or '/start'}: {p}")
         if not screen or screen.get("_none"):

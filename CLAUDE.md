@@ -3,7 +3,27 @@
 Python aiogram 3 + aiogram-dialog 2.6 + dishka bot. Checks before merge (CI runs on pull requests and on push to `main`):
 `ruff check src/`, `ruff format --check src/`, `pytest tests/`.
 
-## Stars only (Telegram bot terms 6.2, 2026-11-17)
+## Rubles back (owner, 2026-11-18): `APP_BOT_RUBLE_PAYMENTS`
+
+`APP_BOT_RUBLE_PAYMENTS` (default `true`, read on every call by `src/services/bot_payments.py`
+`ruble_payments_enabled()`) puts the ruble gateways the pre-v0.61.5 bot offered (PLATEGA = «💳 СБП», YOOKASSA, YOOMONEY,
+ROBOKASSA, when active BOT/ALL rows) next to Telegram Stars; crypto and TON stay hidden. Prices on the plan list,
+durations, first screen and proxy offer are in billing's default currency (₽); the method screen shows СБП and Stars
+each with its own price; the «Оплата в рублях недоступна» note and the @compono_support button are hidden; the 5-minute
+nudge gets «🔄 Другой способ» back; the proxy is sold through Platega when it has a ruble price. Pre-checkout and
+`successful_payment` still accept Stars only (`is_stars_gateway`). With the flag `false` the bot behaves exactly like
+v0.61.5 (section below). Unit tests run Stars-only unless marked `@pytest.mark.rubles` (`tests/conftest.py`);
+`tests/test_ruble_payments.py` and `tests/e2e/test_rubles_e2e.py` cover the ruble mode.
+
+Plan list and duration list (owner redesign 2026-11-18) are built in `src/bot/plan_screen.py`, not fluent (fluent
+groups digits: "1 024 ГБ"): «Выберите тариф», one «🎁 Ваша скидка N% уже учтена» line instead of a strikethrough per
+plan, then per plan `⚡ <b>Старт</b> — 83 ₽/мес` / `100 ГБ · 2 устройства` (≥1024 GB as ТБ, Ultra adds «личный IP
+(Швеция или Нидерланды)»). Plan buttons `⚡ Старт · 83 ₽`, every one coloured (`plan_style`: Старт green, Про blue, Макс
+red, Ультра blue by tag; Bot API has only three styles); only the «⬅️ Назад» + «↩️ Главное меню» row, side by side,
+keeps the default style. Durations `3 месяца — 319 ₽ (−11%)`: the saving is from list prices against 1 month × months,
+buttons in the plan's colour. Tests: `tests/test_plans_prices.py`.
+
+## Stars only (Telegram bot terms 6.2, 2026-11-17; with `APP_BOT_RUBLE_PAYMENTS=false`)
 
 The bot sells only for Telegram Stars. It never shows or links a ruble, card, SBP, crypto or website payment.
 `src/services/bot_payments.py` `bot_gateways()` keeps only active BOT/ALL TELEGRAM_STARS rows, whatever else billing

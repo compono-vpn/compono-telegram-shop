@@ -9,7 +9,7 @@ from loguru import logger
 from src.core.utils.time import MSK
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.models import BillingPlan, BillingTGProxy
-from src.services.bot_payments import BOT_CURRENCY
+from src.services.bot_payments import BOT_CURRENCY, ruble_payments_enabled
 
 PAID_PROXY_PLAN_IDS = frozenset({1, 2, 3, 38})
 SOURCE_VPN_PLAN = "vpn_plan"
@@ -35,11 +35,17 @@ class ProxyView:
     personal_loaded: bool = False
     legacy_paid: bool = False
     vpn_blocked: bool = False
+    # Sold for rubles (Platega) when APP_BOT_RUBLE_PAYMENTS is on and billing has a ruble price.
+    rubles: bool = False
 
     @property
     def has_price(self) -> bool:
-        # The bot sells for Stars only, so the proxy is sellable only with a Stars price.
-        return self.proxy_plan_id > 0 and self.price_stars is not None and self.price_stars > 0
+        if self.proxy_plan_id <= 0:
+            return False
+        if self.rubles:
+            return self.price_rub is not None and self.price_rub > 0
+        # Stars only: the proxy is sellable only with a Stars price.
+        return self.price_stars is not None and self.price_stars > 0
 
     @property
     def has_personal(self) -> bool:
@@ -53,6 +59,8 @@ class ProxyView:
 
     @property
     def price_text(self) -> str:
+        if self.rubles:
+            return format_rub(self.price_rub)
         return format_stars(self.price_stars)
 
     @property
@@ -71,6 +79,12 @@ def format_price(value: float | None) -> str:
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def format_rub(value: Decimal | float | None) -> str:
+    if value is None:
+        return ""
+    return f"{format_price(float(value))} ₽"
 
 
 def format_stars(value: Decimal | float | None) -> str:
@@ -158,7 +172,10 @@ async def load_proxy_view(billing: BillingClient, user: Any) -> ProxyView:
             vpn_blocked=has_active_paid_vpn(user),
         )
         if not view.entitled or view.source == SOURCE_PROXY_PLAN:
-            view.price_stars = await load_stars_price(billing, view.proxy_plan_id)
+            if ruble_payments_enabled() and view.price_rub is not None and view.price_rub > 0:
+                view.rubles = True
+            else:
+                view.price_stars = await load_stars_price(billing, view.proxy_plan_id)
         return view
     except Exception:
         logger.opt(exception=True).warning("Failed to fetch personal TG proxies, using public list")

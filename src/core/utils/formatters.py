@@ -238,6 +238,9 @@ def i18n_format_traffic_limit(value: int) -> tuple[str, dict[str, int]]:
     if value == -1:
         return UtilKey.UNIT_UNLIMITED, {"value": value}
 
+    if value >= 1024 and value % 1024 == 0:
+        return ByteUnitKey.TERABYTE, {"value": value // 1024}
+
     return ByteUnitKey.GIGABYTE, {"value": value}
 
 

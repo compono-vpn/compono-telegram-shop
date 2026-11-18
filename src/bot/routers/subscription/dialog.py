@@ -13,7 +13,7 @@ from aiogram_dialog.widgets.kbd import (
     Url,
     WebApp,
 )
-from aiogram_dialog.widgets.style import EMPTY_STYLE, Style, StyleCase
+from aiogram_dialog.widgets.style import Style, StyleCase
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
@@ -102,22 +102,51 @@ subscription = Window(
     getter=subscription_getter,
 )
 
+# Colour per plan comes from the getter (src/bot/plan_screen.py plan_style): every plan button is
+# coloured, only the navigation row («Назад», «Главное меню») keeps the default style.
 PLAN_BUTTON_STYLES = StyleCase(
     styles={
-        1: Style(style=ButtonStyle.SUCCESS),  # ⚡️ Старт
-        2: Style(style=ButtonStyle.DANGER),  # 🚀 Про
-        3: Style(style=ButtonStyle.PRIMARY),  # 💎 Макс
-        ...: EMPTY_STYLE,
+        ButtonStyle.SUCCESS.value: Style(style=ButtonStyle.SUCCESS),
+        ButtonStyle.PRIMARY.value: Style(style=ButtonStyle.PRIMARY),
+        ButtonStyle.DANGER.value: Style(style=ButtonStyle.DANGER),
+        ...: Style(style=ButtonStyle.SUCCESS),
     },
-    selector=F["item"]["id"],
+    selector=F["item"]["style"],
 )
+DURATION_BUTTON_STYLES = StyleCase(
+    styles={
+        ButtonStyle.SUCCESS.value: Style(style=ButtonStyle.SUCCESS),
+        ButtonStyle.PRIMARY.value: Style(style=ButtonStyle.PRIMARY),
+        ButtonStyle.DANGER.value: Style(style=ButtonStyle.DANGER),
+        ...: Style(style=ButtonStyle.SUCCESS),
+    },
+    selector=F["data"]["style"],
+)
+
+
+def _nav_row(back_state: Subscription, back_id: str, back_when=None) -> Row:
+    return Row(
+        SwitchTo(
+            text=I18nFormat("btn-back"),
+            id=back_id,
+            state=back_state,
+            when=back_when,
+        ),
+        Start(
+            text=I18nFormat("btn-main-menu"),
+            id="back_main_menu",
+            state=MainMenu.MAIN,
+            mode=StartMode.RESET_STACK,
+        ),
+    )
+
 
 plans = Window(
     Banner(BannerName.SUBSCRIPTION),
-    I18nFormat("msg-subscription-plans"),
+    Format("{plans_text}"),
     Column(
         Select(
-            text=Format("{item[name]}"),
+            text=Format("{item[label]}"),
             id=f"{PURCHASE_PREFIX}select_plan",
             item_id_getter=lambda item: item["id"],
             items="plans",
@@ -126,14 +155,7 @@ plans = Window(
             style=PLAN_BUTTON_STYLES,
         ),
     ),
-    Row(
-        SwitchTo(
-            text=I18nFormat("btn-back"),
-            id=f"{PURCHASE_PREFIX}back",
-            state=Subscription.MAIN,
-        ),
-    ),
-    *back_main_menu_button,
+    _nav_row(Subscription.MAIN, f"{PURCHASE_PREFIX}back"),
     IgnoreUpdate(),
     state=Subscription.PLANS,
     getter=plans_getter,
@@ -141,35 +163,19 @@ plans = Window(
 
 duration = Window(
     Banner(BannerName.SUBSCRIPTION),
-    I18nFormat("msg-subscription-duration"),
-    Group(
+    Format("{duration_text}"),
+    Column(
         Select(
-            text=I18nFormat(
-                "btn-subscription-duration",
-                period=F["item"]["period"],
-                final_amount=F["item"]["final_amount"],
-                discount_percent=F["item"]["discount_percent"],
-                original_amount=F["item"]["original_amount"],
-                currency=F["item"]["currency"],
-                has_discount=F["item"]["has_discount"],
-            ),
+            text=Format("{item[label]}"),
             id=f"{PURCHASE_PREFIX}select_duration",
             item_id_getter=lambda item: item["days"],
             items="durations",
             type_factory=int,
             on_click=on_duration_select,
-        ),
-        width=2,
-    ),
-    Row(
-        SwitchTo(
-            text=I18nFormat("btn-subscription-back-plans"),
-            id=f"{PURCHASE_PREFIX}back_plans",
-            state=Subscription.PLANS,
-            when=~F["only_single_plan"],
+            style=DURATION_BUTTON_STYLES,
         ),
     ),
-    *back_main_menu_button,
+    _nav_row(Subscription.PLANS, f"{PURCHASE_PREFIX}back_plans", ~F["only_single_plan"]),
     IgnoreUpdate(),
     state=Subscription.DURATION,
     getter=duration_getter,
@@ -199,6 +205,7 @@ payment_method = Window(
             text=I18nFormat("btn-ruble-support"),
             url=Format(RUBLE_SUPPORT_URL),
             id=f"{PURCHASE_PREFIX}ruble_support_method",
+            when=F["stars_only"],
         ),
     ),
     Row(
@@ -269,7 +276,7 @@ confirm = Window(
             text=I18nFormat("btn-ruble-support"),
             url=Format(RUBLE_SUPPORT_URL),
             id=f"{PURCHASE_PREFIX}ruble_support_confirm",
-            when=~F["is_free"],
+            when=F["show_ruble_note"],
         ),
     ),
     Row(
@@ -353,6 +360,7 @@ proxy_confirm = Window(
         text=I18nFormat("btn-ruble-support"),
         url=Format(RUBLE_SUPPORT_URL),
         id=f"{PURCHASE_PREFIX}ruble_support_proxy",
+        when=F["stars_only"],
     ),
     Cancel(
         text=I18nFormat("btn-back"),

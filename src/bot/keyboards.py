@@ -13,6 +13,7 @@ from src.core.constants import (
     CANCEL_SURVEY_PREFIX,
     DEDICATED_IP_PREFIX,
     GOTO_PREFIX,
+    PAYMENT_NUDGE_PREFIX,
     PURCHASE_PREFIX,
     RECOVERY_OFFER_PREFIX,
     REPOSITORY,
@@ -219,11 +220,25 @@ def get_cancel_survey_keyboard(payment_id: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_payment_nudge_keyboard(payment_url: str) -> InlineKeyboardMarkup:
-    # Stars only: no "other method" button. Old messages that have it still work
-    # (routers/extra/payment_nudge.py opens the Stars-only checkout).
+def get_payment_nudge_keyboard(
+    payment_url: str, payment_id: str | None = None, stars: bool = True
+) -> InlineKeyboardMarkup:
+    # «Другой способ» (payment_id given) reopens the method list for the same plan and period
+    # (routers/extra/payment_nudge.py); it is left out while the bot sells for Stars only.
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="btn-payment-nudge-pay", url=payment_url))
+    pay = InlineKeyboardButton(
+        text="btn-payment-nudge-pay" if stars else "btn-payment-nudge-pay-rub", url=payment_url
+    )
+    if payment_id is None:
+        builder.row(pay)
+    else:
+        builder.row(
+            pay,
+            InlineKeyboardButton(
+                text="btn-payment-nudge-other",
+                callback_data=f"{PAYMENT_NUDGE_PREFIX}{payment_id}",
+            ),
+        )
     return builder.as_markup()
 
 

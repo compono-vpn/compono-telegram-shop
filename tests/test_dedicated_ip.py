@@ -785,9 +785,10 @@ class TestFourthPlanOnThePlanScreen:
 
         assert [p["id"] for p in data["plans"]] == [1, 2, 3, 38]
         assert data["plans"][3]["name"] == "👑 Ультра"
-        lines = [re.sub(r"\s", " ", line) for line in data["summary"].split("\n")]
-        assert lines[2] == "💎 Макс — 499 ★/мес · 1 024 ГБ, 20 устройств"
-        assert (
-            lines[3]
-            == "👑 Ультра — 799 ★/мес · 1 024 ГБ, 20 устройств, 🌐 личный IP (Швеция или Нидерланды)"
+        text = data["plans_text"]
+        assert "💎 <b>Макс</b> — 499 ★/мес\n1 ТБ · 20 устройств\n" in text
+        assert text.endswith(
+            "👑 <b>Ультра</b> — 799 ★/мес\n1 ТБ · 20 устройств · личный IP (Швеция или Нидерланды)"
         )
+        # Ultra has its own colour, never the default style of the navigation buttons.
+        assert [p["style"] for p in data["plans"]] == ["success", "primary", "danger", "primary"]

@@ -21,7 +21,11 @@ from src.core.storage.keys import (
 )
 from src.core.utils.message_payload import MessagePayload
 from src.infrastructure.billing import BillingClient
-from src.services.bot_payments import is_bot_payment_gateway
+from src.services.bot_payments import (
+    is_bot_payment_gateway,
+    is_stars_gateway,
+    ruble_payments_enabled,
+)
 from src.services.notification import NotificationService
 from src.services.recovery_offer import claim_offer, release_offer
 from src.services.reminder_delivery import can_receive_reminders
@@ -131,9 +135,9 @@ async def _eligible(
     if not transaction or transaction.Status != TransactionStatus.PENDING.value:
         return None
     if not is_bot_payment_gateway(transaction.GatewayType):
-        # A link queued before the Stars-only switch (e.g. Platega); never resend it from the bot.
+        # A method the bot does not sell with now (e.g. Platega while rubles are off).
         logger.info(
-            f"Payment nudge for '{payment_id}' skipped: '{transaction.GatewayType}' is not Stars"
+            f"Payment nudge for '{payment_id}' skipped: '{transaction.GatewayType}' is not offered"
         )
         return None
     if await first_charge(redis_client, payment_id) is not None:
@@ -191,13 +195,20 @@ async def _send_one(
     if claimed is None:
         return False
 
+    stars = is_stars_gateway(transaction.GatewayType)
+    # «Другой способ» only when the bot offers more than Stars.
+    stars_only = not ruble_payments_enabled()
     try:
         message = await notification_service.notify_user(
             user=user,
             payload=MessagePayload(
                 i18n_key="ntf-payment-nudge",
-                i18n_kwargs={"plan": data["plan"], "price": data["price"]},
-                reply_markup=get_payment_nudge_keyboard(data["url"]),
+                i18n_kwargs={"plan": data["plan"], "price": data["price"], "stars": int(stars)},
+                reply_markup=get_payment_nudge_keyboard(
+                    data["url"],
+                    payment_id=None if stars_only else payment_id,
+                    stars=stars,
+                ),
                 auto_delete_after=None,
                 add_close_button=False,
             ),
@@ -291,6 +302,7 @@ async def _offer_one(
             user=user,
             payload=MessagePayload(
                 i18n_key="ntf-recovery-offer",
+                i18n_kwargs={"stars_only": int(not ruble_payments_enabled())},
                 reply_markup=get_recovery_offer_keyboard(payment_id),
                 auto_delete_after=None,
                 add_close_button=False,

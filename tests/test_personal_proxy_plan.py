@@ -173,7 +173,11 @@ class TestBuyProxy:
         assert stars_invoice.await_args.kwargs["amount"] == Decimal("49")
         dm.start.assert_awaited_once()
         assert dm.start.await_args.args[0] == Subscription.PROXY_CONFIRM
-        assert dm.start.await_args.kwargs["data"] == {"payment_url": PAY_URL, "price": "49 ★"}
+        assert dm.start.await_args.kwargs["data"] == {
+            "payment_url": PAY_URL,
+            "price": "49 ★",
+            "rubles": 0,
+        }
         notification.notify_user.assert_not_awaited()
 
     async def test_invoice_charges_what_billing_recorded_for_the_payment(self, stars_invoice):
@@ -270,7 +274,7 @@ class TestConfirmAndSuccess:
         dm = make_dialog_manager()
         dm.start_data = {"payment_url": PAY_URL, "price": "49 ★"}
 
-        assert await proxy_confirm_getter(dm) == {"url": PAY_URL, "price": "49 ★"}
+        assert await proxy_confirm_getter(dm) == {"url": PAY_URL, "price": "49 ★", "stars_only": 1}
 
 
 def _consumer() -> UserNotificationConsumer:

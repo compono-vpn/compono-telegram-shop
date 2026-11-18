@@ -1040,11 +1040,17 @@ msg-subscription-duration =
     { msg-subscription-details }
 
 msg-subscription-payment-method =
-    <b>⭐ Оплата звёздами Telegram</b>
+    { $stars_only ->
+    [1] <b>⭐ Оплата звёздами Telegram</b>
+    *[0] <b>💳 Выберите способ оплаты</b>
+    }
 
     { msg-subscription-details }
 
-    { msg-ruble-payments-note }
+    { $stars_only ->
+    [1] { msg-ruble-payments-note }
+    *[0] { empty }
+    }
 
 msg-subscription-crypto-asset =
     <b>🪙 Выберите криптовалюту</b>
@@ -1099,11 +1105,17 @@ msg-subscription-change-success =
 
 msg-proxy-confirm =
     <b>⭐ Pro-прокси на 30 дней</b>
-    <b>{ $price }</b>, оплата звёздами Telegram.
+    { $stars_only ->
+    [1] <b>{ $price }</b>, оплата звёздами Telegram.
+    *[0] <b>{ $price }</b>.
+    }
 
     После оплаты кнопка подключения появится здесь.
 
-    { msg-ruble-payments-note }
+    { $stars_only ->
+    [1] { msg-ruble-payments-note }
+    *[0] { empty }
+    }
 
 msg-subscription-failed = 
     <b>❌ Произошла ошибка!</b>

@@ -12,7 +12,7 @@ from src.core.enums import PlanType, PurchaseType, TransactionStatus
 from src.core.utils.formatters import format_user_log as log
 from src.infrastructure.billing import BillingClient
 from src.models.dto import UserDto
-from src.services.bot_payments import is_bot_payment_gateway
+from src.services.bot_payments import is_stars_gateway
 from src.services.stars_charges import claim_charge, first_charge
 
 router = Router(name=__name__)
@@ -90,7 +90,7 @@ async def _pre_checkout_error(
         reason = "payment not found"
     elif transaction.UserTelegramID != user.telegram_id:
         reason = f"payment belongs to '{transaction.UserTelegramID}'"
-    elif not is_bot_payment_gateway(transaction.GatewayType):
+    elif not is_stars_gateway(transaction.GatewayType):
         reason = f"gateway '{transaction.GatewayType}' is not Stars"
     elif transaction.Status != TransactionStatus.PENDING.value:
         reason = f"payment is {transaction.Status}"

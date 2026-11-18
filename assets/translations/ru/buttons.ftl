@@ -203,6 +203,8 @@ btn-cancel-survey-other = ✍️ Другое
 
 
 btn-payment-nudge-pay = ⭐ Оплатить звёздами
+btn-payment-nudge-pay-rub = 💳 Оплатить
+btn-payment-nudge-other = 🔄 Другой способ
 btn-recovery-offer-accept = 🎁 Купить со скидкой 30%
 
 # Source survey
@@ -448,7 +450,10 @@ btn-subscription-payment-method = { gateway-type } | { $has_discount ->
     [1] 🔥 { $price } { $currency }
     *[0] { $price } { $currency }
     }
-btn-subscription-pay = ⭐ Оплатить звёздами
+btn-subscription-pay = { $payment_method ->
+    [TELEGRAM_STARS] ⭐ Оплатить звёздами
+    *[OTHER] 💳 Оплатить
+    }
 btn-ruble-support = 💬 Написать в @compono_support
 btn-subscription-get = 🎁 Получить бесплатно
 btn-subscription-back-plans = ⬅️ Назад к выбору плана
@@ -498,5 +503,8 @@ btn-proxy-stable = 🔗 Подключить стабильный
 btn-proxy-phone = 📱 Не подключается на телефоне?
 btn-proxy-free-backup = 🆓 Бесплатный (запасной)
 btn-proxy-free-connect = 🆓 Подключить бесплатный
-btn-proxy-pay = ⭐ Оплатить { $price }
+btn-proxy-pay = { $stars_only ->
+    [1] ⭐ Оплатить { $price }
+    *[0] 💳 Оплатить { $price }
+    }
 btn-proxy-to-menu = ⬅️ В меню

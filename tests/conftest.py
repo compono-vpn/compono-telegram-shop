@@ -233,3 +233,18 @@ def make_dialog_manager() -> MagicMock:
     dm.dialog_data = {}
     dm.middleware_data = {}
     return dm
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "rubles: run with APP_BOT_RUBLE_PAYMENTS=true (ruble gateways next to Stars in the bot)",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _bot_ruble_payments(request, monkeypatch):
+    """Tests run Stars only (APP_BOT_RUBLE_PAYMENTS=false, the v0.61.5 behaviour) unless marked
+    `@pytest.mark.rubles`, which turns ruble gateways on (the production default)."""
+    enabled = request.node.get_closest_marker("rubles") is not None
+    monkeypatch.setenv("APP_BOT_RUBLE_PAYMENTS", "true" if enabled else "false")
