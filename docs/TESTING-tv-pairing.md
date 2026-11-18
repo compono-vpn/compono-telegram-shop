@@ -342,3 +342,32 @@ Not changed, noted: if the user scanned the same code twice and pairs from one q
 | `pytest tests/` | 1532 passed, 11 skipped (opt-in e2e), 0 failed |
 | compono-api 4f44f83 (unchanged this round): `go vet ./...`, `go test -race` of the TV pairing, billing, redis and middleware packages | clean, all ok |
 | whole `tests/e2e` (all TV modules including qa6, plus the stale-callback and Stars-only modules), tgmock, Redis 7.4.1, real compono-api binary from 4f44f83 | 88 passed, 0 failed in 28 min 52 s (`qa-r6/e2e-all-real-api.txt`) |
+
+## QA round 7 (2026-11-18, separate QA worktree from ee20566, no code change)
+
+No new bug found in the bot. What was checked beyond rounds 1-6:
+
+- **Code review again** of `src/bot/routers/extra/tv_pair.py`, `src/services/tv_pair.py`, the
+  `/start tv-` handler, `ApiClient.claim_tv_pair` and the middlewares a TV update passes through.
+  `AccessMiddleware` stops a blocked user before the handler, so a blocked user cannot pair.
+  `GarbageMiddleware` deletes the user's own `/start tv-<CODE>` message, as it does for every
+  `/start` with a payload; the bot's question still arrives. The global `PrivateFilter` keeps the
+  question out of group chats. `decode_start_param` returns nothing for `tv-`, so the full code
+  never lands in `users.source`, billing attribution or the `#EventNewUser` card.
+- **Noted, wording (same family as the round 6 note on «Отмена»):** if the user scanned the same
+  code twice, paired from one question and then taps «Подключить» on the other, the TV has already
+  redeemed and compono-api answers 404, so the bot says «Код устарел. Обновите его на телевизоре…»
+  although the TV is connected. compono-api deliberately does not tell a redeemed code from an
+  expired one. Found by reading the code, not run.
+- **Not a bug:** `_CODE_RE` uses `$`, which also matches before a trailing newline, so forged
+  callback data `tvp:K7M4QX9P\n` passes; compono-api trims it and claims the same code, and only the
+  first two characters are logged.
+
+### Gates (unchanged commit ee20566)
+
+| Gate | Result |
+|---|---|
+| `ruff check src/`, `ruff format --check src/` | pass, 205 files already formatted |
+| `pytest tests/` | 1532 passed, 11 skipped (opt-in e2e), 0 failed |
+| the seven TV e2e modules (`test_tv_pair_e2e.py`, `_qa_` and `_qa2_` to `_qa6_`), tgmock, Redis 7.4.1, real compono-api binary built from 4f44f83 with go1.26.10 | 50 passed, 0 failed in 6 min 28 s (`qa-r7/tv-e2e-real-api.txt`); no subscription URL, connect link or internal secret in the output |
+| compono-api 4f44f83: `go test -race ./...`, golangci-lint v2.10.1 (go1.26.10) | 1531 passed; 0 issues (see the API PR's QA round 7 section) |
