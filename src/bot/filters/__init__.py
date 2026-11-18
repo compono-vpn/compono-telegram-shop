@@ -1,9 +1,11 @@
 from aiogram import Router
 
 from .private import PrivateFilter
+from .privileged import PrivilegedFilter
 from .super_dev import SuperDevFilter
 
 __all__ = [
+    "PrivilegedFilter",
     "SuperDevFilter",
     "setup_global_filters",
 ]

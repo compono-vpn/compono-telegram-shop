@@ -3,6 +3,50 @@
 Python aiogram 3 + aiogram-dialog 2.6 + dishka bot. Checks before merge (CI runs on pull requests and on push to `main`):
 `ruff check src/`, `ruff format --check src/`, `pytest tests/`.
 
+## Stars only (Telegram bot terms 6.2, 2026-11-17)
+
+The bot sells only for Telegram Stars. It never shows or links a ruble, card, SBP, crypto or website payment.
+`src/services/bot_payments.py` `bot_gateways()` keeps only active BOT/ALL TELEGRAM_STARS rows, whatever else billing
+returns. `_create_payment_and_get_data` refuses any other gateway. Prices are read in XTR, not billing's
+`default_currency`. The proxy is bought with a Stars invoice. The widget plan card is off. Ruble payers see
+«Оплата в рублях сейчас недоступна… напишите в @compono_support». A human there answers with
+`docs/SUPPORT-RUBLE-PAYMENTS.md`. Never add a ruble gateway, a ₽ price or a website-payment link to a bot screen;
+`tests/test_stars_only.py` lints the user-facing texts. Details and test evidence: `docs/TESTING-stars-only.md`.
+
+Paying a Stars invoice (`src/bot/routers/extra/payment.py`): `pre_checkout_query` says ok only for this user's PENDING
+Stars payment in billing. `successful_payment` (the stars are already taken) calls billing `/payment/handle-free` up to
+3 times (waits 1 s, 3 s). handle-free completes nothing itself: it only queues a Kafka event and billing's consumer moves
+the payment from PENDING to COMPLETED a moment later, so the bot then reads the payment until it leaves PENDING (about
+20 s). COMPLETED: done. CANCELED (billing's 30-minute timeout won the race): the bot refunds the stars with
+`refundStarPayment` and tells the user. Anything else (still PENDING after the wait, not found, REFUNDED, billing
+unreachable): the handler raises, so `#EventError` (with the payment id and the charge id) reaches the admins and nothing
+is refunded; check that the payment completes, or complete it by hand (`/payment/handle-free` with the payment id). Never
+refund on a PENDING read: that gave every buyer the stars back and the subscription (found in QA, 2026-11-18).
+One charge per payment: the first charge id is kept in Redis `stars_charge:<payment id>` (7 days). Pre-checkout refuses
+an invoice that was already charged (the user paying again while billing's Kafka consumer is slow), and a second charge
+that still gets through is refunded; a redelivered update has the same charge id. «Получить бесплатно» calls
+handle-free only after billing confirms the payment is this user's, PENDING and 0 stars (aiogram-dialog runs a hidden
+button's handler too). Shutdown waits up to 20 s for updates in progress (`SHUTDOWN_DRAIN_SECONDS` in
+`src/api/endpoints/telegram.py`) because the webhook already answered Telegram 200 for them.
+A `successful_payment` message skips the gate middlewares (throttling, access mode, rules, channel:
+`__lets_payments_through__` in `src/bot/middlewares/base.py`); the 0.5 s throttle used to drop it silently. The charge
+record lives in `src/services/stars_charges.py`; the 5-minute nudge and the 15-minute 30% offer skip a payment that has
+one, so a user whose payment billing has not completed yet is never asked to pay again. `UserMiddleware` loads the user
+from billing (a PUT on every update) before any handler runs; for a `successful_payment` it retries that load (1 s, 3 s),
+and if billing stays down the #EventError names the payment and the charge id. Every refund goes through `_refund`:
+if Telegram refuses it, the #EventError names the payment, the charge and the user (refund it by hand). If billing is
+still completing the payment after the wait, the user is told the payment arrived and not to pay again.
+The confirm screen offers only the payment made for the current choice: a payment creation first forgets the shown
+payment (a failure used to leave the previous choice's invoice behind a new choice's text), and a payment cached for the
+same plan, purchase type, duration and method is reused only while billing says PENDING (a cancelled one used to be
+offered again and again; a key without plan and purchase type sold a Макс change under «Старт, продление»).
+Pre-checkout also refuses a NEW payment once the user's current subscription was created after it (a trial taken or
+another order bought since): billing's `PurchaseSubscription` skips such a NEW purchase, so the stars would buy nothing.
+Never trust an id from callback data: aiogram-dialog `Select` passes any item id, so every checkout entry (plan list,
+«Другой способ» reminder, 30% offer) takes the plan only from `/plans/available` (`offered_plan` in
+`src/services/bot_payments.py`; billing's payment creation would sell the trial, the proxy or a hidden plan by id), and
+the admin dialogs check the role themselves (`PrivilegedFilter` on their routers, `goto`, `on_open_dashboard`).
+
 ## E2E against a fake Telegram (tgmock, 2026-11-17)
 
 `tests/e2e/` runs the real app (uvicorn webhook mode, aiogram, aiogram-dialog, dishka, Redis) against tgmock's fake

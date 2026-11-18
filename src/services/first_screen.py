@@ -8,6 +8,7 @@ from src.core.enums import Currency
 from src.core.utils.formatters import i18n_format_days
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.models import BillingPlan
+from src.services.bot_payments import BOT_CURRENCY
 from src.services.payment_nudge import format_price_text
 
 MONTH_DAYS = 30
@@ -45,7 +46,7 @@ def _month_price(plan: BillingPlan, currency: str) -> Optional[Decimal]:
 
 async def _price_from(billing: BillingClient, telegram_id: int) -> str | bool:
     try:
-        currency = await billing.get_default_currency()
+        currency = BOT_CURRENCY
         plans = await billing.get_available_plans(telegram_id)
         prices = [p for p in (_month_price(plan, currency) for plan in plans) if p and p > 0]
         if not prices:

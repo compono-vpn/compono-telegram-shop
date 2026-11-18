@@ -15,6 +15,7 @@ from src.core.utils.formatters import format_user_log as log
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_plan_to_dto
 from src.models.dto import UserDto
+from src.services.bot_payments import offered_plan
 
 router = Router(name=__name__)
 
@@ -44,7 +45,7 @@ async def on_payment_nudge_other(
         return
 
     plan_id = transaction.Plan.id if transaction.Plan else 0
-    billing_plan = await billing.get_plan(plan_id) if plan_id else None
+    billing_plan = await offered_plan(billing, user.telegram_id, plan_id)
     if not billing_plan or not transaction.Plan:
         await callback.answer()
         return

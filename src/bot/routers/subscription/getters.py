@@ -33,6 +33,7 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.converters import billing_subscription_to_dto
 from src.infrastructure.billing.models import BillingSubscription
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
+from src.services.bot_payments import BOT_CURRENCY, bot_gateways
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.dedicated_ip import is_ultra_tag, is_ultra_user
 from src.services.experiment import ExperimentService
@@ -65,9 +66,6 @@ async def _await_billing_subscription(
         if attempt < attempts - 1:
             await asyncio.sleep(delay)
     return None
-
-
-WIDGET_ONLY_GATEWAYS = {PaymentGatewayType.TON.value}
 
 
 @inject
@@ -130,7 +128,7 @@ async def plans_getter(
 ) -> dict[str, Any]:
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
-    currency = await billing.get_default_currency()
+    currency = BOT_CURRENCY
 
     formatted_plans = [
         {
@@ -173,7 +171,7 @@ async def duration_getter(
     if not plan:
         raise ValueError("PlanDto not found in dialog data")
 
-    default_currency = await billing.get_default_currency()
+    default_currency = BOT_CURRENCY
     only_single_plan = dialog_manager.dialog_data.get("only_single_plan", False)
     dialog_manager.dialog_data["is_free"] = False
     durations = []
@@ -244,11 +242,7 @@ async def payment_method_getter(
         raise ValueError("PlanDto not found in dialog data")
 
     billing_gateways = await billing.list_active_gateways()
-    gateways = [
-        billing_gateway_to_dto(g)
-        for g in billing_gateways
-        if g.Channel in ("BOT", "ALL") and g.Type not in WIDGET_ONLY_GATEWAYS
-    ]
+    gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
     selected_duration = dialog_manager.dialog_data["selected_duration"]
     only_single_duration = dialog_manager.dialog_data.get("only_single_duration", False)
     duration = plan.get_duration(selected_duration)
@@ -348,11 +342,7 @@ async def confirm_getter(
     pricing = PriceDetailsDto.model_validate_json(pricing_data)
 
     key, kw = i18n_format_days(duration.days)
-    billing_active_gateways = [
-        g
-        for g in await billing.list_active_gateways()
-        if g.Channel in ("BOT", "ALL") and g.Type not in WIDGET_ONLY_GATEWAYS
-    ]
+    billing_active_gateways = bot_gateways(await billing.list_active_gateways())
 
     is_plaidly = selected_payment_method == PaymentGatewayType.PLAIDLY
     crypto_asset_id = dialog_manager.dialog_data.get("selected_crypto_asset")
@@ -378,6 +368,7 @@ async def confirm_getter(
         "only_single_gateway": len(billing_active_gateways) == 1,
         "only_single_duration": only_single_duration,
         "is_free": is_free,
+        "show_ruble_note": int(not is_free),
         "is_plaidly": is_plaidly,
         "is_webapp": is_webapp,
         "crypto_asset": crypto_asset.label if crypto_asset else False,
@@ -484,7 +475,6 @@ async def proxy_confirm_getter(dialog_manager: DialogManager, **kwargs: Any) -> 
     return {
         "url": start_data["payment_url"],
         "price": start_data["price"],
-        "original_price": start_data["original_price"],
     }
 
 

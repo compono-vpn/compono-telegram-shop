@@ -15,7 +15,6 @@ from fluentogram import TranslatorHub
 from fluentogram.storage import FileStorage
 
 from src.bot.keyboards import get_payment_nudge_keyboard
-from src.core.constants import PAYMENT_NUDGE_PREFIX
 from src.core.metrics import PAYMENT_NUDGE_SENT_TOTAL
 from src.core.storage.keys import PendingPaymentNudgesKey
 from src.services.payment_nudge import (
@@ -28,14 +27,14 @@ from tests.conftest import make_user
 from tests.reminder_fakes import KvRedis
 
 TG = 4242
-URL = "https://pay.example/abc"
+URL = "https://t.me/$stars-invoice"
 NOW = 1_800_000_000.0
 
 
 def _transaction(status: str = "PENDING", created_at: Optional[datetime] = None, **kwargs):
     return SimpleNamespace(
         Status=status,
-        GatewayType=kwargs.get("gateway", "PLATEGA"),
+        GatewayType=kwargs.get("gateway", "TELEGRAM_STARS"),
         CreatedAt=created_at or datetime.fromtimestamp(NOW, tz=timezone.utc),
     )
 
@@ -65,7 +64,7 @@ async def _schedule(redis, payment_id=None, telegram_id=TG, now=NOW):
         telegram_id=telegram_id,
         payment_url=URL,
         plan_name="⚡️ Старт",
-        price_text="119 ₽",
+        price_text="119 ★",
         now=now,
     )
     return payment_id
@@ -99,7 +98,7 @@ class TestSchedule:
         stored = [json.loads(v) for k, v in redis.values.items() if payment_id in k and v != "1"]
         assert stored and stored[0]["url"] == URL
         assert stored[0]["plan"] == "⚡️ Старт"
-        assert stored[0]["price"] == "119 ₽"
+        assert stored[0]["price"] == "119 ★"
 
     async def test_without_a_payment_link_nothing_is_queued(self):
         redis = KvRedis()
@@ -122,7 +121,7 @@ class TestSend:
         redis = KvRedis()
         payment_id = await _schedule(redis)
         user_service, notification = _services()
-        before = PAYMENT_NUDGE_SENT_TOTAL.labels(gateway="PLATEGA")._value.get()
+        before = PAYMENT_NUDGE_SENT_TOTAL.labels(gateway="TELEGRAM_STARS")._value.get()
 
         sent = await _run(redis, _billing(), user_service, notification, NOW + 301)
 
@@ -132,12 +131,11 @@ class TestSend:
         assert payload.i18n_key == "ntf-payment-nudge"
         assert payload.auto_delete_after is None
         assert payload.add_close_button is False
-        assert payload.i18n_kwargs == {"plan": "⚡️ Старт", "price": "119 ₽"}
+        assert payload.i18n_kwargs == {"plan": "⚡️ Старт", "price": "119 ★"}
         buttons = [b for row in payload.reply_markup.inline_keyboard for b in row]
-        assert [b.text for b in buttons] == ["btn-payment-nudge-pay", "btn-payment-nudge-other"]
+        assert [b.text for b in buttons] == ["btn-payment-nudge-pay"]
         assert buttons[0].url == URL
-        assert buttons[1].callback_data == f"{PAYMENT_NUDGE_PREFIX}{payment_id}"
-        assert PAYMENT_NUDGE_SENT_TOTAL.labels(gateway="PLATEGA")._value.get() == before + 1
+        assert PAYMENT_NUDGE_SENT_TOTAL.labels(gateway="TELEGRAM_STARS")._value.get() == before + 1
 
     async def test_nothing_is_sent_before_five_minutes(self):
         redis = KvRedis()
@@ -229,10 +227,7 @@ class TestNeverSent:
         assert sent == 1
         url_checked = [c.args[0] for c in billing.get_transaction.await_args_list]
         assert str(second) in {str(u) for u in url_checked}
-        payload = notification.notify_user.await_args.kwargs["payload"]
-        buttons = [b for row in payload.reply_markup.inline_keyboard for b in row]
-        assert buttons[1].callback_data.endswith(second)
-        assert not buttons[1].callback_data.endswith(first)
+        assert str(first) not in {str(u) for u in url_checked}
 
     async def test_user_who_got_a_nudge_recently_gets_no_second_one(self):
         redis = KvRedis()
@@ -322,18 +317,33 @@ class TestFailures:
         assert notification.notify_user.await_count == 2
 
 
+class TestStarsOnly:
+    @pytest.mark.parametrize("gateway", ["PLATEGA", "PLATEGA_CRYPTO", "YOOKASSA", "TON", ""])
+    async def test_a_pending_non_stars_payment_is_never_nudged(self, gateway):
+        # A Platega link queued before the Stars-only release must not be resent by the bot.
+        redis = KvRedis()
+        await _schedule(redis)
+        user_service, notification = _services()
+
+        sent = await _run(
+            redis, _billing(_transaction(gateway=gateway)), user_service, notification, NOW + 301
+        )
+
+        assert sent == 0
+        notification.notify_user.assert_not_awaited()
+
+
 class TestKeyboardAndCopy:
-    def test_keyboard_has_pay_link_and_other_method(self):
-        keyboard = get_payment_nudge_keyboard("pid", URL)
+    def test_keyboard_has_only_the_stars_pay_link(self):
+        keyboard = get_payment_nudge_keyboard(URL)
 
         flat = [b for row in keyboard.inline_keyboard for b in row]
         assert [(b.text, b.url, b.callback_data) for b in flat] == [
             ("btn-payment-nudge-pay", URL, None),
-            ("btn-payment-nudge-other", None, f"{PAYMENT_NUDGE_PREFIX}pid"),
         ]
 
     def test_callback_data_fits_telegram_limit(self):
-        keyboard = get_payment_nudge_keyboard(str(uuid4()), URL)
+        keyboard = get_payment_nudge_keyboard(URL)
 
         for row in keyboard.inline_keyboard:
             for button in row:
@@ -347,8 +357,26 @@ class TestKeyboardAndCopy:
         )
         i18n = hub.get_translator_by_locale("ru")
 
-        text = i18n.get("ntf-payment-nudge", plan="⚡️ Старт", price="119 ₽")
+        text = i18n.get("ntf-payment-nudge", plan="⚡️ Старт", price="119 ★")
 
-        assert "119 ₽" in text and "Старт" in text
-        assert i18n.get("btn-payment-nudge-pay") == "💳 Оплатить"
-        assert i18n.get("btn-payment-nudge-other") == "🔄 Другой способ"
+        assert "119 ★" in text and "Старт" in text
+        assert "звёздами" in text
+        for banned in ("банк", "другой способ", "₽", "карт"):
+            assert banned not in text.lower()
+        assert i18n.get("btn-payment-nudge-pay") == "⭐ Оплатить звёздами"
+
+
+class TestChargedButNotYetCompleted:
+    # Telegram took the stars, billing's Kafka consumer has not completed the payment yet (it can
+    # lag or stall). The payment is still PENDING, but the user has paid: «Оплата не завершена» with
+    # the same link would be wrong, and it invites a second payment.
+    async def test_a_charged_payment_gets_no_nudge(self):
+        redis = KvRedis()
+        payment_id = await _schedule(redis)
+        await redis.set(f"stars_charge:{payment_id}", "stx-1")
+        user_service, notification = _services()
+
+        sent = await _run(redis, _billing(), user_service, notification, NOW + 301)
+
+        assert sent == 0
+        notification.notify_user.assert_not_awaited()

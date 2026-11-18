@@ -84,7 +84,7 @@ async def test_monthly_shortcut_resets_stale_checkout_and_keeps_payment_explicit
     remna.get_user.return_value = SimpleNamespace(user_traffic=SimpleNamespace(
         used_traffic_bytes=1024, lifetime_used_traffic_bytes=1024))
     billing.get_available_plans.return_value = [monthly_plan()]
-    billing.list_active_gateways.return_value = [BillingPaymentGateway(IsActive=True, Channel="BOT")]
+    billing.list_active_gateways.return_value = [BillingPaymentGateway(IsActive=True, Channel="BOT", Type="TELEGRAM_STARS")]
     await unwrap_inject(on_trial_monthly_upgrade)(AsyncMock(), None, dm, billing, remna)
     assert dm.dialog_data["selected_duration"] == 30
     assert dm.dialog_data["purchase_type"] == PurchaseType.NEW

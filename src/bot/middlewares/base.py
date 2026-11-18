@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Awaitable, Callable, ClassVar, Final, Optional
 
 from aiogram import BaseMiddleware, Router
-from aiogram.types import ErrorEvent, TelegramObject
+from aiogram.types import ErrorEvent, Message, TelegramObject
 from aiogram.types import User as AiogramUser
 from loguru import logger
 
@@ -16,8 +16,16 @@ DEFAULT_UPDATE_TYPES: Final[list[MiddlewareEventType]] = [
 ]
 
 
+def is_payment_message(event: TelegramObject) -> bool:
+    """Telegram's report that the user paid an invoice: the stars are already taken."""
+    return isinstance(event, Message) and event.successful_payment is not None
+
+
 class EventTypedMiddleware(BaseMiddleware, ABC):
     __event_types__: ClassVar[list[MiddlewareEventType]] = DEFAULT_UPDATE_TYPES
+    # A gate (throttling, access mode, rules, channel) must never drop a successful_payment: the
+    # stars are already taken, so the payment has to reach billing whatever the gate says.
+    __lets_payments_through__: ClassVar[bool] = False
 
     async def __call__(
         self,
@@ -25,6 +33,8 @@ class EventTypedMiddleware(BaseMiddleware, ABC):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        if self.__lets_payments_through__ and is_payment_message(event):
+            return await handler(event, data)
         start = time.monotonic()
         result = await self.middleware_logic(handler, event, data)
         duration = time.monotonic() - start

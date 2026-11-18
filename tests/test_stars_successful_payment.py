@@ -1,0 +1,276 @@
+"""successful_payment: Telegram has already taken the stars, so billing must complete the payment.
+
+Since the bot sells only for Stars, this handler is the one place a paid order becomes a
+subscription. Before, one failed billing call (a pod restart, a timeout) lost the order: the stars
+were gone, nothing was granted and nothing retried. And when billing had already cancelled the
+payment (its 30-minute timeout racing the user's tap), handle-free answered 200 and skipped it
+silently, so the stars were also gone.
+"""
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from src.bot.routers.extra import payment as payment_router
+from src.bot.routers.extra.payment import on_successful_payment
+from src.infrastructure.billing.client import BillingClientError
+from tests.conftest import make_user
+
+pytestmark = pytest.mark.asyncio
+
+UID = 555
+PAYMENT_ID = "6f1c1f0e-8a0b-4a43-9a51-2a3c2f6d9b11"
+CHARGE_ID = "stxCHARGE"
+
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    monkeypatch.setattr(payment_router, "HANDLE_FREE_RETRY_DELAYS", (0, 0), raising=False)
+    monkeypatch.setattr(payment_router, "COMPLETION_POLL_DELAYS", (0, 0, 0), raising=False)
+
+
+def _message() -> MagicMock:
+    message = MagicMock()
+    message.successful_payment = MagicMock(
+        invoice_payload=PAYMENT_ID, telegram_payment_charge_id=CHARGE_ID, total_amount=119
+    )
+    message.answer = AsyncMock()
+    return message
+
+
+def _tx(status: str) -> MagicMock:
+    tx = MagicMock()
+    tx.Status = status
+    tx.UserTelegramID = UID
+    return tx
+
+
+class FakeRedis:
+    """Just SET NX / GET, which is all the charge claim uses."""
+
+    def __init__(self, data: dict | None = None, fail: bool = False) -> None:
+        self.data = dict(data or {})
+        self.fail = fail
+
+    async def set(self, key, value, nx=False, ex=None):
+        if self.fail:
+            raise ConnectionError("redis down")
+        if nx and key in self.data:
+            return None
+        self.data[key] = value.encode() if isinstance(value, str) else value
+        return True
+
+    async def get(self, key):
+        if self.fail:
+            raise ConnectionError("redis down")
+        return self.data.get(key)
+
+
+async def _run(
+    billing: AsyncMock, *, dev: bool = False, redis: FakeRedis | None = None
+) -> tuple[MagicMock, MagicMock]:
+    bot = MagicMock()
+    bot.refund_star_payment = AsyncMock()
+    message = _message()
+    user = make_user(telegram_id=UID)
+    if dev:
+        user = user.model_copy(update={"role": "DEV"})
+    await on_successful_payment(message, user, bot, billing, redis or FakeRedis())
+    return bot, message
+
+
+async def test_completed_payment_is_not_refunded():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("COMPLETED")
+    bot, message = await _run(billing)
+    billing.handle_free_payment.assert_awaited_once()
+    bot.refund_star_payment.assert_not_awaited()
+
+
+async def test_transient_billing_error_is_retried():
+    billing = AsyncMock()
+    billing.handle_free_payment.side_effect = [BillingClientError(503, "unavailable"), None]
+    billing.get_transaction.return_value = _tx("COMPLETED")
+    bot, _ = await _run(billing)
+    assert billing.handle_free_payment.await_count == 2
+    bot.refund_star_payment.assert_not_awaited()
+
+
+async def test_payment_billing_cancelled_meanwhile_is_refunded_and_user_told():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("CANCELED")
+    bot, message = await _run(billing)
+    bot.refund_star_payment.assert_awaited_once_with(
+        user_id=UID, telegram_payment_charge_id=CHARGE_ID
+    )
+    text = message.answer.await_args.args[0]
+    assert "вернули" in text
+
+
+@pytest.mark.parametrize("found", [None, "REFUNDED", "FAILED"])
+async def test_payment_not_cancelled_by_billing_keeps_the_stars_and_alerts(found):
+    # Only CANCELED is a final "billing will never complete this" answer. Anything else (a lookup
+    # that finds nothing, a payment an admin already refunded, an unknown status) goes to a person.
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx(found) if found else None
+    bot = MagicMock()
+    bot.refund_star_payment = AsyncMock()
+    user = make_user(telegram_id=UID)
+    with pytest.raises(RuntimeError):
+        await on_successful_payment(_message(), user, bot, billing, FakeRedis())
+    bot.refund_star_payment.assert_not_awaited()
+
+
+async def test_billing_down_raises_for_the_alert_and_does_not_refund():
+    billing = AsyncMock()
+    billing.handle_free_payment.side_effect = BillingClientError(503, "unavailable")
+    billing.get_transaction.side_effect = BillingClientError(503, "unavailable")
+    # The alert must carry what a person needs to finish or refund it by hand.
+    with pytest.raises(RuntimeError, match=f"{PAYMENT_ID}.*{CHARGE_ID}"):
+        await _run(billing)
+    assert billing.handle_free_payment.await_count == 3
+
+
+async def test_billing_down_after_handle_free_alerts_with_the_charge():
+    billing = AsyncMock()
+    billing.get_transaction.side_effect = BillingClientError(503, "unavailable")
+    with pytest.raises(RuntimeError, match=f"{PAYMENT_ID}.*{CHARGE_ID}"):
+        await _run(billing)
+
+
+async def test_dev_payment_is_refunded_only_once():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("CANCELED")
+    bot, _ = await _run(billing, dev=True)
+    bot.refund_star_payment.assert_awaited_once()
+
+
+# Billing's /payment/handle-free only queues a Kafka event (compono-billing
+# PaymentUseCase.HandleFreePayment); the consumer moves the payment from PENDING to COMPLETED a
+# moment later. Right after the call the payment is still PENDING, and refunding then would give
+# every buyer both the stars back and the subscription.
+
+
+async def test_payment_completed_a_moment_later_is_not_refunded():
+    billing = AsyncMock()
+    billing.get_transaction.side_effect = [_tx("PENDING"), _tx("PENDING"), _tx("COMPLETED")]
+    bot, message = await _run(billing)
+    bot.refund_star_payment.assert_not_awaited()
+    message.answer.assert_not_awaited()
+
+
+async def test_payment_still_pending_is_not_refunded_and_alerts():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("PENDING")
+    with pytest.raises(RuntimeError):
+        await _run(billing)
+    assert billing.get_transaction.await_count >= 2
+
+
+async def test_payment_still_pending_tells_the_user_not_to_pay_again():
+    # Billing's consumer is slow: the user paid, sees no «оплата прошла» yet and is sent to the
+    # main menu by the error handler. Without a word they may buy the same plan a second time.
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("PENDING")
+    bot = MagicMock()
+    bot.refund_star_payment = AsyncMock()
+    message = _message()
+    with pytest.raises(RuntimeError):
+        await on_successful_payment(message, make_user(telegram_id=UID), bot, billing, FakeRedis())
+    text = message.answer.await_args.args[0]
+    assert "не нужно" in text
+    bot.refund_star_payment.assert_not_awaited()
+
+
+async def test_payment_cancelled_after_a_pending_read_is_refunded():
+    billing = AsyncMock()
+    billing.get_transaction.side_effect = [_tx("PENDING"), _tx("CANCELED")]
+    bot, _ = await _run(billing)
+    bot.refund_star_payment.assert_awaited_once()
+
+
+# Billing completes a payment once. When its Kafka consumer is slow the payment stays PENDING, the
+# confirm screen still shows the invoice link and the user can pay the same invoice again: the
+# pre-checkout passes (PENDING) and Telegram takes the stars a second time for one order.
+
+
+async def test_second_charge_for_the_same_payment_is_refunded():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("COMPLETED")
+    redis = FakeRedis({f"stars_charge:{PAYMENT_ID}": b"stxFIRST"})
+    bot, message = await _run(billing, redis=redis)
+    bot.refund_star_payment.assert_awaited_once_with(
+        user_id=UID, telegram_payment_charge_id=CHARGE_ID
+    )
+    billing.handle_free_payment.assert_not_awaited()
+    assert "вернули" in message.answer.await_args.args[0]
+
+
+async def test_redelivered_update_of_the_same_charge_is_not_refunded():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("COMPLETED")
+    redis = FakeRedis({f"stars_charge:{PAYMENT_ID}": CHARGE_ID.encode()})
+    bot, _ = await _run(billing, redis=redis)
+    bot.refund_star_payment.assert_not_awaited()
+    billing.handle_free_payment.assert_awaited_once()
+
+
+async def test_first_charge_is_recorded():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("COMPLETED")
+    redis = FakeRedis()
+    await _run(billing, redis=redis)
+    assert redis.data[f"stars_charge:{PAYMENT_ID}"] == CHARGE_ID.encode()
+
+
+async def test_redis_down_keeps_the_old_behaviour():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("COMPLETED")
+    bot, _ = await _run(billing, redis=FakeRedis(fail=True))
+    bot.refund_star_payment.assert_not_awaited()
+    billing.handle_free_payment.assert_awaited_once()
+
+
+async def test_dev_second_charge_is_refunded_only_once():
+    billing = AsyncMock()
+    redis = FakeRedis({f"stars_charge:{PAYMENT_ID}": b"stxFIRST"})
+    bot, _ = await _run(billing, dev=True, redis=redis)
+    bot.refund_star_payment.assert_awaited_once()
+
+
+# A refund the bot owes can fail (Telegram refuses, a timeout). The stars then stay taken for an
+# order billing will never complete, and only a person can send them back, so the alert must name
+# the payment and the Telegram charge id. Before, it carried only Telegram's error text.
+
+
+class RefundRefused(Exception):
+    pass
+
+
+def _bot_refusing_refunds() -> MagicMock:
+    bot = MagicMock()
+    bot.refund_star_payment = AsyncMock(side_effect=RefundRefused("Bad Request: CHARGE_NOT_FOUND"))
+    return bot
+
+
+async def test_failed_refund_of_a_cancelled_payment_alerts_with_the_charge():
+    billing = AsyncMock()
+    billing.get_transaction.return_value = _tx("CANCELED")
+    message = _message()
+    with pytest.raises(RuntimeError, match=f"{PAYMENT_ID}.*{CHARGE_ID}.*refund"):
+        await on_successful_payment(
+            message, make_user(telegram_id=UID), _bot_refusing_refunds(), billing, FakeRedis()
+        )
+    message.answer.assert_not_awaited()
+
+
+async def test_failed_refund_of_a_second_charge_alerts_with_the_charge():
+    billing = AsyncMock()
+    redis = FakeRedis({f"stars_charge:{PAYMENT_ID}": b"stxFIRST"})
+    message = _message()
+    with pytest.raises(RuntimeError, match=f"{PAYMENT_ID}.*{CHARGE_ID}.*refund"):
+        await on_successful_payment(
+            message, make_user(telegram_id=UID), _bot_refusing_refunds(), billing, redis
+        )
+    message.answer.assert_not_awaited()
+    billing.handle_free_payment.assert_not_awaited()

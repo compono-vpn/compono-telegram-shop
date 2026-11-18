@@ -9,7 +9,7 @@ from fluentogram import TranslatorRunner
 from loguru import logger
 
 from src.bot.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT, get_channel_keyboard
-from src.bot.states import MainMenu, Subscription
+from src.bot.states import Dashboard, MainMenu, Subscription
 from src.core.constants import USER_KEY
 from src.core.enums import MediaType
 from src.core.i18n.translator import get_translated_kwargs
@@ -48,6 +48,17 @@ def _record_trial_activation(experiment_service: ExperimentService, user: UserDt
             user.telegram_id,
             "trial_activated",
         )
+
+
+async def on_open_dashboard(
+    callback: CallbackQuery, widget: Button, dialog_manager: DialogManager
+) -> None:
+    # aiogram-dialog runs a button's handler even when `when` hides it, so check the role here.
+    user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    if not user.is_privileged:
+        logger.warning(f"{log(user)} Refused the dashboard: not an admin")
+        return
+    await dialog_manager.start(state=Dashboard.MAIN, mode=StartMode.RESET_STACK)
 
 
 async def on_start_dialog(
@@ -138,10 +149,8 @@ async def on_start_command(
     channel_incentive_service: FromDishka[ChannelIncentiveService],
     notification_service: FromDishka[NotificationService],
 ) -> None:
-    # Web purchases are managed at the web portal — this bot is TG-native only.
-    # If the user arrives via a legacy /start web_<token> deep link, send a
-    # neutral redirect message instead of attempting to claim or link any
-    # subscription on the billing side.
+    # A legacy /start web_<token> deep link just opens the main menu. The bot sells only for
+    # Telegram Stars (bot terms 6.2) and never names the website as a way to pay.
     if message.text and len(message.text.split()) > 1:
         param = message.text.split()[1]
         if param in {"proxy", "source-channel_proxy"}:
@@ -152,11 +161,7 @@ async def on_start_command(
             )
             return
         if param.startswith("web_"):
-            logger.info(
-                f"{log(user)} Received legacy web deep link '{param}' — "
-                f"sending neutral redirect; web claim flow is removed"
-            )
-            await message.answer(i18n.get("msg-web-purchase-redirect"))
+            logger.info(f"{log(user)} Received legacy web deep link '{param}', opening the menu")
 
     await on_start_dialog(user, dialog_manager)
     await _maybe_prompt_channel_incentive(

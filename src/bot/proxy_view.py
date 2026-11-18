@@ -1,18 +1,19 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from decimal import Decimal, InvalidOperation
+from typing import Any, Optional
 
 from loguru import logger
 
 from src.core.utils.time import MSK
 from src.infrastructure.billing import BillingClient
-from src.infrastructure.billing.models import BillingTGProxy
+from src.infrastructure.billing.models import BillingPlan, BillingTGProxy
+from src.services.bot_payments import BOT_CURRENCY
 
 PAID_PROXY_PLAN_IDS = frozenset({1, 2, 3, 38})
 SOURCE_VPN_PLAN = "vpn_plan"
 SOURCE_PROXY_PLAN = "proxy_plan"
-STRIKETHROUGH_PRICE_RUB = 49
 PROXY_DURATION_DAYS = 30
 TITLE = "📡 <b>Прокси для Telegram</b>"
 NO_VPN = "Telegram работает без VPN."
@@ -30,13 +31,15 @@ class ProxyView:
     expires_at: datetime | None = None
     proxy_plan_id: int = 0
     price_rub: float | None = None
+    price_stars: Decimal | None = None
     personal_loaded: bool = False
     legacy_paid: bool = False
     vpn_blocked: bool = False
 
     @property
     def has_price(self) -> bool:
-        return self.proxy_plan_id > 0 and self.price_rub is not None and self.price_rub > 0
+        # The bot sells for Stars only, so the proxy is sellable only with a Stars price.
+        return self.proxy_plan_id > 0 and self.price_stars is not None and self.price_stars > 0
 
     @property
     def has_personal(self) -> bool:
@@ -50,7 +53,7 @@ class ProxyView:
 
     @property
     def price_text(self) -> str:
-        return format_price(self.price_rub)
+        return format_stars(self.price_stars)
 
     @property
     def can_renew(self) -> bool:
@@ -68,6 +71,40 @@ def format_price(value: float | None) -> str:
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def format_stars(value: Decimal | float | None) -> str:
+    if value is None:
+        return ""
+    return f"{format_price(float(value))} ★"
+
+
+def stars_price(plan: Optional[BillingPlan], days: int) -> Decimal | None:
+    if plan is None:
+        return None
+    for duration in plan.Durations:
+        if duration.Days != days:
+            continue
+        for price in duration.Prices:
+            if price.Currency != BOT_CURRENCY:
+                continue
+            try:
+                return Decimal(price.Price)
+            except InvalidOperation:
+                return None
+    return None
+
+
+async def load_stars_price(billing: BillingClient, plan_id: int) -> Decimal | None:
+    if plan_id <= 0:
+        return None
+    try:
+        return stars_price(await billing.get_plan(plan_id), PROXY_DURATION_DAYS)
+    except Exception:
+        logger.opt(exception=True).warning(
+            f"Could not read the Stars price of proxy plan {plan_id}"
+        )
+        return None
 
 
 def has_active_paid_vpn(user: Any) -> bool:
@@ -110,7 +147,7 @@ def legacy_proxy_plan_id(user: Any) -> int:
 async def load_proxy_view(billing: BillingClient, user: Any) -> ProxyView:
     try:
         personal = await billing.get_personal_tg_proxies(user.telegram_id)
-        return ProxyView(
+        view = ProxyView(
             proxies=serialize_proxies(personal.proxies),
             entitled=personal.entitled,
             source=personal.source,
@@ -120,6 +157,9 @@ async def load_proxy_view(billing: BillingClient, user: Any) -> ProxyView:
             personal_loaded=True,
             vpn_blocked=has_active_paid_vpn(user),
         )
+        if not view.entitled or view.source == SOURCE_PROXY_PLAN:
+            view.price_stars = await load_stars_price(billing, view.proxy_plan_id)
+        return view
     except Exception:
         logger.opt(exception=True).warning("Failed to fetch personal TG proxies, using public list")
     plan_id = legacy_proxy_plan_id(user)
@@ -235,9 +275,8 @@ def _offer_message(view: ProxyView) -> str:
         lines.extend(
             [
                 FREE_LINE,
-                f"⭐ <b>Pro</b> — личный и быстрый, до 3 устройств."
-                f" <s>{STRIKETHROUGH_PRICE_RUB} ₽</s> <b>{view.price_text} ₽/мес</b>"
-                " до 31 октября.",
+                "⭐ <b>Pro</b> — личный и быстрый, до 3 устройств."
+                f" <b>{view.price_text} в месяц</b>.",
                 "🎁 С подпиской Compono VPN — Pro бесплатно.",
             ]
         )

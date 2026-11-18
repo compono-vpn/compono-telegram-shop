@@ -1,6 +1,7 @@
-from typing import Any, Awaitable, Callable, Optional
+import asyncio
+from typing import Any, Awaitable, Callable, Optional, cast
 
-from aiogram.types import TelegramObject
+from aiogram.types import Message, SuccessfulPayment, TelegramObject
 from aiogram.types import User as AiogramUser
 from aiogram_dialog.api.internal import FakeUser
 from dishka import AsyncContainer
@@ -31,7 +32,10 @@ from src.services.notification import NotificationService
 from src.services.referral import ReferralService
 from src.services.user import UserService
 
-from .base import EventTypedMiddleware
+from .base import EventTypedMiddleware, is_payment_message
+
+# Waits between user loads for a successful_payment while billing does not answer (3 in all).
+PAYMENT_USER_RETRY_DELAYS = (1, 3)
 
 
 class UserMiddleware(EventTypedMiddleware):
@@ -57,8 +61,49 @@ class UserMiddleware(EventTypedMiddleware):
             return
 
         container: AsyncContainer = data[CONTAINER_KEY]
-        notification_service: NotificationService = await container.get(NotificationService)
         config: AppConfig = await container.get(AppConfig)
+        if is_payment_message(event):
+            user = await self._load_user_for_payment(cast(Message, event), aiogram_user, container)
+        else:
+            user = await self._load_user(event, aiogram_user, container)
+
+        data[USER_KEY] = user
+        data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
+
+        return await handler(event, data)
+
+    async def _load_user_for_payment(
+        self, message: Message, aiogram_user: AiogramUser, container: AsyncContainer
+    ) -> UserDto:
+        """Load the user of a successful_payment, riding out a short billing outage.
+
+        Telegram has already taken the stars and will not send this update again, so the payment
+        handler must run. If billing stays down, the alert names what a person needs.
+        """
+        for attempt, delay in enumerate((*PAYMENT_USER_RETRY_DELAYS, None), start=1):
+            try:
+                return await self._load_user(message, aiogram_user, container)
+            except Exception as exception:
+                if delay is None:
+                    payment = cast(SuccessfulPayment, message.successful_payment)
+                    # Ids first: the #EventError text is cut at 512 characters.
+                    raise RuntimeError(
+                        f"Stars payment '{payment.invoice_payload}' (charge "
+                        f"'{payment.telegram_payment_charge_id}') of user '{aiogram_user.id}': "
+                        f"could not load the user; stars kept, complete it with handle-free or "
+                        f"refund the charge. Error: {exception}"
+                    ) from exception
+                logger.opt(exception=True).warning(
+                    f"Could not load user '{aiogram_user.id}' for a Stars payment "
+                    f"(attempt {attempt}), retrying in {delay}s"
+                )
+                await asyncio.sleep(delay)
+        raise AssertionError("unreachable")
+
+    async def _load_user(
+        self, event: TelegramObject, aiogram_user: AiogramUser, container: AsyncContainer
+    ) -> UserDto:
+        notification_service: NotificationService = await container.get(NotificationService)
         user_service: UserService = await container.get(UserService)
         referral_service: ReferralService = await container.get(ReferralService)
         user: Optional[UserDto] = await user_service.get(telegram_id=aiogram_user.id)
@@ -140,10 +185,7 @@ class UserMiddleware(EventTypedMiddleware):
                 "Failed to fetch subscription from billing API, using ORM value"
             )
 
-        data[USER_KEY] = user
-        data[IS_SUPER_DEV_KEY] = user.telegram_id == config.bot.dev_id
-
-        return await handler(event, data)
+        return user
 
     @staticmethod
     def _start_param(event: TelegramObject) -> Optional[str]:

@@ -13,6 +13,9 @@ from loguru import logger
 from src.core.metrics import UPDATE_PROCESSING_TIME, UPDATES_TOTAL
 from src.services.widgets import WIDGET_QUERY_UPDATE, WidgetService
 
+# How long shutdown waits for updates still being handled before it cancels them.
+SHUTDOWN_DRAIN_SECONDS = 20.0
+
 
 class TelegramWebhookEndpoint:
     dispatcher: Dispatcher
@@ -28,6 +31,14 @@ class TelegramWebhookEndpoint:
         await self.dispatcher.emit_startup(**self.dispatcher.workflow_data)
 
     async def shutdown(self) -> None:
+        # Telegram already got 200 for these updates and will not send them again. Let them
+        # finish first (a successful_payment must reach billing, or its refund must be sent),
+        # within the pod's 30 s termination grace period.
+        pending = [task for task in self._feed_update_tasks if not task.done()]
+        if pending:
+            logger.info(f"Waiting for {len(pending)} update(s) in progress before shutdown")
+            await asyncio.wait(pending, timeout=SHUTDOWN_DRAIN_SECONDS)
+
         await self.dispatcher.emit_shutdown(**self.dispatcher.workflow_data)
 
         for task in list(self._feed_update_tasks):

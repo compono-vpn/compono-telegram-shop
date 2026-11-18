@@ -6,10 +6,12 @@ Only the routes the e2e flows touch are modelled; every other path answers 404 a
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +42,20 @@ class FakeBilling:
         # contract answers it from ``tv_codes`` (code -> {"tg": id or None}).
         self.tv_pair_api: str | None = None
         self.tv_codes: dict[str, dict[str, Any]] = {}
+        # Gateway rows /gateways/active returns (stage copy; a test may add prod-like rows).
+        self.gateways: list[dict[str, Any]] = [dict(g) for g in STAGE["gateways_active"]]
+        # Plans sold in the plan list on top of the stage ones, and plans only reachable by id.
+        self.extra_plans: list[dict[str, Any]] = []
+        self.hidden_plans: list[dict[str, Any]] = []
+        self.discounts: dict[int, int] = {}  # telegram_id -> purchase discount percent
+        self.promocodes: dict[str, int] = {}  # code -> PURCHASE_DISCOUNT percent
+        self.personal_proxies: dict[int, dict[str, Any]] = {}
+        self.created: list[dict[str, Any]] = []  # POST /payment/create bodies + the result
+        self.completed: list[str] = []  # payment ids sent to /payment/handle-free
+        self.skipped_purchases: list[str] = []  # COMPLETED, but billing bought nothing
+        self.completion_delay = 0.7  # seconds until the "consumer" completes a handle-free payment
+        # "<METHOD> <path>" -> how many next requests answer 503 (billing restarting).
+        self.fail_next: dict[str, int] = {}
         self.port = 0
         self._runner: web.AppRunner | None = None
 
@@ -61,26 +77,36 @@ class FakeBilling:
             "UpdatedAt": _now(),
         }
 
-    def add_active_subscription(self, telegram_id: int) -> None:
-        """Paid Старт subscription, shaped like stage GET /subscription/{id}/current."""
+    def add_active_subscription(
+        self,
+        telegram_id: int,
+        *,
+        plan_id: int = 1,
+        plan_name: str = "⚡️ Старт",
+        tag: str | None = None,
+        days_left: int = 20,
+        is_trial: bool = False,
+    ) -> None:
+        """Paid (or trial) subscription, shaped like stage GET /subscription/{id}/current."""
         sub_id = 100 + len(self.subscriptions)
         self.subscriptions[telegram_id] = {
             "ID": sub_id,
             "UserRemnaID": str(uuid.UUID(int=telegram_id)),
             "UserTelegramID": telegram_id,
             "Status": "ACTIVE",
-            "IsTrial": False,
+            "IsTrial": is_trial,
             "TrafficLimit": 100,
             "DeviceLimit": 2,
             "TrafficLimitStrategy": "MONTH",
-            "Tag": None,
+            "Tag": tag,
             "InternalSquads": ["683111d4-ab20-4422-a74b-559bb4501dc4"],
             "ExternalSquad": None,
-            "ExpireAt": (datetime.now(timezone.utc) + timedelta(days=20)).isoformat(),
+            "ExpireAt": (datetime.now(timezone.utc) + timedelta(days=days_left)).isoformat(),
             "URL": f"https://componovpn.com/api/sub/e2e{telegram_id}",
             "Plan": {
-                "id": 1,
-                "name": "⚡️ Старт",
+                "id": plan_id,
+                "name": plan_name,
+                "tag": tag,
                 "type": "BOTH",
                 "traffic_limit": 100,
                 "device_limit": 2,
@@ -124,9 +150,11 @@ class FakeBilling:
             "Referral": {"enable": False, "level": 1, "accrual_strategy": "ON_FIRST_PAYMENT"},
         }
 
-    @staticmethod
-    def _plan(plan_id: int) -> dict[str, Any] | None:
-        for plan in [*STAGE["plans_available"], STAGE["plan_trial"]]:
+    def _available(self) -> list[dict[str, Any]]:
+        return [*STAGE["plans_available"], *self.extra_plans]
+
+    def _plan(self, plan_id: int) -> dict[str, Any] | None:
+        for plan in [*self._available(), *self.hidden_plans, STAGE["plan_trial"]]:
             if plan["ID"] == plan_id:
                 return plan
         return None
@@ -140,6 +168,86 @@ class FakeBilling:
                         return str(price["Price"])
         return None
 
+    def _pricing(self, body: dict[str, Any], *, recorded: bool = False) -> dict[str, Any] | None:
+        """Like billing: a user's purchase discount, whole stars floored.
+
+        A proxy payment is recorded undiscounted (CreatePayment prices it for a bare user), while
+        /pricing/calculate (CalculateForPlan) applies the user's discount to any plan.
+        """
+        price = self._price(body)
+        if price is None:
+            return None
+        plan = self._plan(int(body.get("plan_id", 0))) or {}
+        discount = (
+            0
+            if recorded and plan.get("Type") == "PROXY"
+            else self.discounts.get(int(body.get("telegram_id", 0)), 0)
+        )
+        original = Decimal(price)
+        final = original * (100 - discount) / 100
+        if body.get("currency") in ("XTR", "RUB"):
+            final = final.to_integral_value(rounding=ROUND_FLOOR)
+        return {
+            "original_amount": str(original.normalize()),
+            "discount_percent": discount,
+            "final_amount": str(final.normalize()),
+        }
+
+    def _gateway_by_type(self, gateway_type: str) -> dict[str, Any] | None:
+        rows = [g for g in self.gateways if g["Type"] == gateway_type and g["IsActive"]]
+        rows.sort(key=lambda g: g["Channel"] != "BOT")
+        return rows[0] if rows else None
+
+    def _create_payment(self, body: dict[str, Any]) -> dict[str, Any]:
+        payment_id = str(uuid.uuid4())
+        gateway = body.get("gateway_type", "")
+        pricing = self._pricing(body, recorded=True) or {
+            "original_amount": "0",
+            "final_amount": "0",
+        }
+        plan = self._plan(int(body.get("plan_id", 0))) or {}
+        self.transactions[payment_id] = {
+            "ID": len(self.transactions) + 1,
+            "PaymentID": payment_id,
+            "UserTelegramID": int(body.get("telegram_id", 0)),
+            "Status": "PENDING",
+            "PurchaseType": body.get("purchase_type", "NEW"),
+            "GatewayType": gateway,
+            "Currency": body.get("currency", ""),
+            "Pricing": pricing,
+            "Plan": {
+                "id": plan.get("ID", 0),
+                "name": plan.get("Name", ""),
+                "tag": plan.get("Tag"),
+                "type": plan.get("Type", "BOTH"),
+                "duration": int(body.get("duration_days", 0)),
+            },
+            "CreatedAt": _now(),
+            "UpdatedAt": _now(),
+        }
+        if pricing["final_amount"] == "0":
+            # Like billing: a 0-price payment completes by itself (CreatePayment queues the event).
+            self._complete_later(payment_id)
+        # Billing returns no URL for Stars (the bot makes the invoice link itself).
+        url = None if gateway == "TELEGRAM_STARS" else f"https://pay.platega.io/{payment_id}"
+        result = {"ID": payment_id, "URL": url}
+        self.created.append({**body, **result})
+        return result
+
+    def _complete_later(self, payment_id: str) -> None:
+        # Like TransitionStatus, only a PENDING payment completes; others are skipped.
+        def _complete() -> None:
+            tx = self.transactions.get(payment_id)
+            if tx is not None and tx.get("Status") == "PENDING":
+                tx["Status"] = "COMPLETED"
+                # Like PurchaseSubscription: a NEW purchase is skipped when the current
+                # subscription was created after the payment (its retry guard).
+                sub = self.subscriptions.get(int(tx.get("UserTelegramID", 0)))
+                if tx.get("PurchaseType") == "NEW" and sub and sub["CreatedAt"] > tx["CreatedAt"]:
+                    self.skipped_purchases.append(payment_id)
+
+        asyncio.get_running_loop().call_later(self.completion_delay, _complete)
+
     @staticmethod
     def _not_found() -> web.Response:
         return web.json_response({"error": "not found"}, status=404)
@@ -148,6 +256,10 @@ class FakeBilling:
         path = request.path
         method = request.method
         self.calls.append((method, request.path_qs))
+        failing = f"{method} {path[len(PREFIX) :]}"
+        if self.fail_next.get(failing, 0) > 0:
+            self.fail_next[failing] -= 1
+            return web.json_response({"error": "unavailable"}, status=503)
         if not path.startswith(PREFIX):
             # Remnawave and anything else is not available in the e2e.
             self.unknown.append((method, request.path_qs))
@@ -201,25 +313,47 @@ class FakeBilling:
         if re.fullmatch(r"/subscription/\d+/trial-used", route):
             return web.json_response({"used": True})
         if route in ("/plans", "/plans/allowed", "/plans/available"):
-            return web.json_response(STAGE["plans_available"])
+            return web.json_response(self._available())
         if m := re.fullmatch(r"/plans/(\d+)", route):
             plan = self._plan(int(m.group(1)))
             return web.json_response(plan) if plan else self._not_found()
         if route == "/plans/trial":
             return web.json_response(STAGE["plan_trial"])
         if route == "/gateways/active":
-            return web.json_response(STAGE["gateways_active"])
+            return web.json_response([g for g in self.gateways if g["IsActive"]])
+        if route == "/gateways/by-type":
+            row = self._gateway_by_type(request.query.get("type", ""))
+            return web.json_response(row) if row else self._not_found()
         if route == "/tg-proxies":
             return web.json_response([])
-        if re.fullmatch(r"/tg-proxies/personal/\d+", route):
-            return web.json_response({"entitled": False, "proxies": []})
-        if method == "POST" and route == "/pricing/calculate":
-            price = self._price(body or {})
-            if price is None:
-                return self._not_found()
+        if m := re.fullmatch(r"/tg-proxies/personal/(\d+)", route):
             return web.json_response(
-                {"original_amount": price, "discount_percent": 0, "final_amount": price}
+                self.personal_proxies.get(int(m.group(1)), {"entitled": False, "proxies": []})
             )
+        if method == "POST" and route == "/pricing/calculate":
+            pricing = self._pricing(body or {})
+            return web.json_response(pricing) if pricing else self._not_found()
+        if method == "POST" and route == "/payment/create":
+            return web.json_response(self._create_payment(body or {}))
+        if method == "POST" and route == "/payment/handle-free":
+            payment_id = (body or {}).get("payment_id", "")
+
+            # Like billing: handle-free only queues a Kafka event and the consumer completes the
+            # payment a moment later (PaymentUseCase.HandleFreePayment). Like TransitionStatus, only
+            # a PENDING payment completes; others are skipped.
+            self._complete_later(payment_id)
+            self.completed.append(payment_id)
+            return web.json_response({})
+        if method == "POST" and route == "/promocode/activate":
+            code = str((body or {}).get("code", "")).upper()
+            if code not in self.promocodes:
+                return self._not_found()
+            self.discounts[int((body or {}).get("telegram_id", 0))] = self.promocodes[code]
+            return web.json_response({})
+        if re.fullmatch(r"/user-reminders/\d+", route):
+            return web.json_response([])
+        if method == "POST" and route == "/user-reminders/claim":
+            return web.json_response({"claimed": True})
 
         self.unknown.append((method, request.path_qs))
         return self._not_found()

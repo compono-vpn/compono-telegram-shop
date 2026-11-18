@@ -100,6 +100,7 @@ async def env():
     billing.get_plan.return_value = BillingPlan(
         ID=1, Name="Старт", Type="BOTH", Durations=[BillingPlanDuration(ID=1, Days=30)]
     )
+    billing.get_available_plans.return_value = [billing.get_plan.return_value]
 
     class Deps(Provider):
         scope = Scope.REQUEST

@@ -1,5 +1,7 @@
 import traceback
+from decimal import Decimal
 from typing import Optional, TypedDict, cast
+from uuid import UUID
 
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.formatting import Text
@@ -14,13 +16,18 @@ from redis.asyncio import Redis
 from src.bot.keyboards import get_user_keyboard
 from src.bot.proxy_view import (
     PROXY_DURATION_DAYS,
-    STRIKETHROUGH_PRICE_RUB,
+    format_stars,
     load_proxy_view,
 )
 from src.bot.states import Subscription
 from src.core.constants import PURCHASE_PREFIX, USER_KEY
 from src.core.crypto_assets import get_crypto_asset
-from src.core.enums import PaymentGatewayType, PurchaseType, SystemNotificationType
+from src.core.enums import (
+    PaymentGatewayType,
+    PurchaseType,
+    SystemNotificationType,
+    TransactionStatus,
+)
 from src.core.utils.adapter import DialogDataAdapter
 from src.core.utils.formatters import format_user_log as log
 from src.core.utils.message_payload import MessagePayload
@@ -34,6 +41,13 @@ from src.infrastructure.billing import (
 from src.infrastructure.billing.client import BillingClientError
 from src.infrastructure.taskiq.tasks.cancel_survey import schedule_cancel_survey_check
 from src.models.dto import PlanDto, PriceDetailsDto, UserDto
+from src.services.bot_payments import (
+    BOT_CURRENCY,
+    bot_gateways,
+    gateway_value,
+    is_bot_payment_gateway,
+    offered_plan,
+)
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.dedicated_ip import get_choice, send_country_prompt
 from src.services.experiment import ExperimentService
@@ -58,15 +72,64 @@ class CachedPaymentData(TypedDict):
     final_pricing: str
 
 
-def _get_cache_key(duration: int, gateway_type) -> str:
+def _get_cache_key(dialog_manager: DialogManager, duration: int, gateway_type) -> str:
+    """One cached payment per plan, purchase type, duration and method.
+
+    The cache outlives a purchase-type switch («Изменить» → back → «Продлить» keeps it), so a key
+    without the plan and the purchase type reused one plan's invoice under another plan's name.
+    """
+    plan = DialogDataAdapter(dialog_manager).load(PlanDto)
+    plan_id = plan.id if plan else None
+    purchase_type = dialog_manager.dialog_data.get("purchase_type")
+    pt = purchase_type.value if hasattr(purchase_type, "value") else str(purchase_type)
     gt = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
-    return f"{duration}:{gt}"
+    return f"{plan_id}:{pt}:{duration}:{gt}"
 
 
 def _load_payment_data(dialog_manager: DialogManager) -> dict[str, CachedPaymentData]:
     if PAYMENT_CACHE_KEY not in dialog_manager.dialog_data:
         dialog_manager.dialog_data[PAYMENT_CACHE_KEY] = {}
     return cast(dict[str, CachedPaymentData], dialog_manager.dialog_data[PAYMENT_CACHE_KEY])
+
+
+CURRENT_PAYMENT_KEYS = ("payment_id", "payment_url", "final_pricing")
+
+
+def _drop_current_payment(dialog_manager: DialogManager) -> None:
+    """Forget the payment the confirm screen shows, before a new one is made for a new choice.
+
+    The confirm screen reads the payment from dialog data; a failed creation must never leave the
+    previous choice's invoice there (it showed one plan and sold another).
+    """
+    for key in CURRENT_PAYMENT_KEYS:
+        dialog_manager.dialog_data.pop(key, None)
+
+
+async def _reusable_payment(
+    dialog_manager: DialogManager, billing: BillingClient, cache_key: str
+) -> Optional[CachedPaymentData]:
+    """The payment made earlier in this dialog for the same choice, while billing can complete it.
+
+    Billing cancels a PENDING payment after 30-60 minutes; its invoice is then refused at
+    pre-checkout, so a new payment is needed. A PENDING one is kept, also when it was already
+    charged (billing is completing it): a new payment then could be paid a second time.
+    """
+    cache = _load_payment_data(dialog_manager)
+    cached = cache.get(cache_key)
+    if cached is None:
+        return None
+    try:
+        transaction = await billing.get_transaction(UUID(cached["payment_id"]))
+    except Exception:
+        logger.opt(exception=True).warning(
+            f"Could not check cached payment '{cached['payment_id']}', reusing it"
+        )
+        return cached
+    if transaction is not None and transaction.Status == TransactionStatus.PENDING.value:
+        return cached
+    logger.info(f"Cached payment '{cached['payment_id']}' can no longer be paid, making a new one")
+    cache.pop(cache_key, None)
+    return None
 
 
 def _save_payment_data(dialog_manager: DialogManager, payment_data: CachedPaymentData) -> None:
@@ -113,6 +176,7 @@ async def _create_payment_and_get_data(
     gateway_metadata: Optional[dict[str, str]] = None,
 ) -> Optional[CachedPaymentData]:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    _drop_current_payment(dialog_manager)
     duration = plan.get_duration(duration_days)
     purchase_type: PurchaseType = dialog_manager.dialog_data["purchase_type"]
 
@@ -120,7 +184,17 @@ async def _create_payment_and_get_data(
         logger.error(f"{log(user)} Failed to find duration for payment creation")
         return None
 
-    gt_str = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
+    gt_str = gateway_value(gateway_type)
+    if not is_bot_payment_gateway(gt_str):
+        # Telegram bot terms 6.2: the bot sells only for Stars, whatever billing offers.
+        logger.error(
+            f"{log(user)} Refused to create a '{gt_str}' payment: the bot sells for Stars only"
+        )
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-subscription-payment-creation-failed"),
+        )
+        return None
     pt_str = purchase_type.value if hasattr(purchase_type, "value") else str(purchase_type)
     experiment_context = build_checkout_context(
         experiment_service,
@@ -269,7 +343,7 @@ async def on_buy_proxy(
     notification_service: FromDishka[NotificationService],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    gateway_type = PaymentGatewayType.PLATEGA.value
+    gateway_type = PaymentGatewayType.TELEGRAM_STARS.value
 
     try:
         view = await load_proxy_view(billing, user)
@@ -281,20 +355,34 @@ async def on_buy_proxy(
         if view.vpn_blocked or not view.has_price:
             raise ValueError("Proxy purchase is not available")
         billing_gateway = await billing.get_gateway_by_type(gateway_type)
-        if not billing_gateway:
-            raise ValueError(f"Gateway '{gateway_type}' not found")
+        if not billing_gateway or not bot_gateways([billing_gateway]):
+            raise ValueError(f"Gateway '{gateway_type}' is not available for the bot")
         purchase_type = PurchaseType.RENEW if view.can_renew else PurchaseType.NEW
         result = await billing.create_payment(
             telegram_id=user.telegram_id,
             plan_id=view.proxy_plan_id,
             duration_days=PROXY_DURATION_DAYS,
-            currency=billing_gateway.Currency,
+            currency=BOT_CURRENCY,
             gateway_type=gateway_type,
             purchase_type=purchase_type.value,
             is_test=user.is_dev,
         )
-        if not result.URL:
-            raise ValueError("Payment link is empty")
+        # Bill exactly what billing recorded for this payment (proxy prices skip user discounts).
+        transaction = await billing.get_transaction(UUID(str(result.ID)))
+        amount = (
+            Decimal(transaction.Pricing.final_amount)
+            if transaction and transaction.Pricing
+            else view.price_stars
+        )
+        if amount is None:
+            raise ValueError("Proxy price in stars is unknown")
+        payment_url = result.URL or await create_stars_invoice_link(
+            dialog_manager.middleware_data["bot"],
+            payment_id=UUID(str(result.ID)),
+            title="Pro-прокси для Telegram",
+            description=f"Pro-прокси для Telegram · {PROXY_DURATION_DAYS} дн.",
+            amount=amount,
+        )
     except BillingClientError as exception:
         logger.warning(f"{log(user)} Billing rejected proxy payment: {exception}")
         key = (
@@ -312,13 +400,12 @@ async def on_buy_proxy(
         )
         return
 
-    logger.info(f"{log(user)} Created proxy payment '{result.ID}'")
+    logger.info(f"{log(user)} Created proxy Stars payment '{result.ID}'")
     await dialog_manager.start(
         Subscription.PROXY_CONFIRM,
         data={
-            "payment_url": result.URL,
-            "price": view.price_text,
-            "original_price": STRIKETHROUGH_PRICE_RUB,
+            "payment_url": payment_url,
+            "price": format_stars(amount),
         },
     )
 
@@ -335,11 +422,7 @@ async def on_purchase_type_select(
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     billing_gateways = await billing.list_active_gateways()
-    gateways = [
-        billing_gateway_to_dto(g)
-        for g in billing_gateways
-        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
-    ]
+    gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
     dialog_manager.dialog_data["purchase_type"] = purchase_type
     dialog_manager.dialog_data.pop(CURRENT_DURATION_KEY, None)
 
@@ -417,11 +500,7 @@ async def on_subscription_plans(  # noqa: C901
     billing_plans = await billing.get_available_plans(user.telegram_id)
     plans = [billing_plan_to_dto(bp) for bp in billing_plans]
     billing_gateways = await billing.list_active_gateways()
-    gateways = [
-        billing_gateway_to_dto(g)
-        for g in billing_gateways
-        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
-    ]
+    gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
 
     if not callback.data:
         raise ValueError("Callback data is empty")
@@ -506,9 +585,8 @@ async def on_subscription_plans(  # noqa: C901
 
                 if payment_data:
                     _save_payment_data(dialog_manager, payment_data)
-
-                await dialog_manager.switch_to(state=Subscription.CONFIRM)
-                return
+                    await dialog_manager.switch_to(state=Subscription.CONFIRM)
+                    return
 
             await dialog_manager.switch_to(state=Subscription.PAYMENT_METHOD)
             return
@@ -534,10 +612,14 @@ async def on_plan_select(
     redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    billing_plan = await billing.get_plan(plan_id=selected_plan)
+    # Select passes whatever id the callback carries (an older message, a modified client). Sell
+    # only a plan billing offers this user, the list the screen shows: never the trial, the proxy
+    # or a hidden plan, which billing's payment creation would accept by id.
+    billing_plan = await offered_plan(billing, user.telegram_id, selected_plan)
 
     if not billing_plan:
-        raise ValueError(f"Selected plan '{selected_plan}' not found")
+        logger.warning(f"{log(user)} Ignored plan '{selected_plan}': not offered to the user")
+        return
 
     plan = billing_plan_to_dto(billing_plan)
     logger.info(f"{log(user)} Selected plan '{plan.id}'")
@@ -597,12 +679,8 @@ async def on_duration_select(
         raise ValueError("PlanDto not found in dialog data")
 
     billing_gateways = await billing.list_active_gateways()
-    gateways = [
-        billing_gateway_to_dto(g)
-        for g in billing_gateways
-        if g.Channel in ("BOT", "ALL") and g.Type != PaymentGatewayType.TON.value
-    ]
-    default_currency = await billing.get_default_currency()
+    gateways = [billing_gateway_to_dto(g) for g in bot_gateways(billing_gateways)]
+    default_currency = BOT_CURRENCY
     purchase_type: PurchaseType | None = dialog_manager.dialog_data.get("purchase_type")
     experiment_context = build_checkout_context(
         experiment_service,
@@ -634,16 +712,25 @@ async def on_duration_select(
     pricing = billing_price_details_to_dto(price_details)
     dialog_manager.dialog_data["is_free"] = pricing.is_free
 
+    if not gateways:
+        logger.warning(f"{log(user)} No active payment gateways")
+        await notification_service.notify_user(
+            user=user,
+            payload=MessagePayload(i18n_key="ntf-subscription-gateways-not-available"),
+        )
+        return
+
     if len(gateways) == 1 or pricing.is_free:
         selected_payment_method = gateways[0].type
         dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
 
         cache = _load_payment_data(dialog_manager)
-        cache_key = _get_cache_key(selected_duration, selected_payment_method)
+        cache_key = _get_cache_key(dialog_manager, selected_duration, selected_payment_method)
+        cached = await _reusable_payment(dialog_manager, billing, cache_key)
 
-        if cache_key in cache:
+        if cached:
             logger.info(f"{log(user)} Re-selected same duration and single gateway")
-            _save_payment_data(dialog_manager, cache[cache_key])
+            _save_payment_data(dialog_manager, cached)
             await dialog_manager.switch_to(state=Subscription.CONFIRM)
             return
 
@@ -686,20 +773,22 @@ async def on_payment_method_select(
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{log(user)} Selected payment method '{selected_payment_method}'")
 
+    if not is_bot_payment_gateway(selected_payment_method):
+        logger.warning(
+            f"{log(user)} Ignored payment method '{selected_payment_method}': Stars only"
+        )
+        return
+
     selected_duration = dialog_manager.dialog_data[CURRENT_DURATION_KEY]
     dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
 
-    if selected_payment_method == PaymentGatewayType.PLAIDLY:
-        logger.info(f"{log(user)} Plaidly selected, choosing crypto asset")
-        await dialog_manager.switch_to(state=Subscription.CRYPTO_ASSET)
-        return
-
     cache = _load_payment_data(dialog_manager)
-    cache_key = _get_cache_key(selected_duration, selected_payment_method)
+    cache_key = _get_cache_key(dialog_manager, selected_duration, selected_payment_method)
+    cached = await _reusable_payment(dialog_manager, billing, cache_key)
 
-    if cache_key in cache:
+    if cached:
         logger.info(f"{log(user)} Re-selected same method and duration")
-        _save_payment_data(dialog_manager, cache[cache_key])
+        _save_payment_data(dialog_manager, cached)
         await dialog_manager.switch_to(state=Subscription.CONFIRM)
         return
 
@@ -723,10 +812,11 @@ async def on_payment_method_select(
         channel_incentive_service=channel_incentive_service,
     )
 
-    if payment_data:
-        cache[cache_key] = payment_data
-        _save_payment_data(dialog_manager, payment_data)
-
+    if not payment_data:
+        # The user was told it failed; the confirm screen has no payment to show.
+        return
+    cache[cache_key] = payment_data
+    _save_payment_data(dialog_manager, payment_data)
     await dialog_manager.switch_to(state=Subscription.CONFIRM)
 
 
@@ -743,6 +833,10 @@ async def on_crypto_asset_select(
     redis_client: FromDishka[Redis],
 ) -> None:
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
+    if not is_bot_payment_gateway(PaymentGatewayType.PLAIDLY):
+        # Crypto (Plaidly) is not sold in the bot: Stars only, bot terms 6.2.
+        logger.warning(f"{log(user)} Ignored crypto asset '{selected_asset_id}': Stars only")
+        return
     asset = get_crypto_asset(selected_asset_id)
     logger.info(f"{log(user)} Selected crypto asset '{asset.id}' ({asset.chain}/{asset.token})")
 
@@ -751,7 +845,10 @@ async def on_crypto_asset_select(
     dialog_manager.dialog_data[CRYPTO_ASSET_KEY] = asset.id
 
     cache = _load_payment_data(dialog_manager)
-    cache_key = f"{_get_cache_key(selected_duration, PaymentGatewayType.PLAIDLY)}:{asset.id}"
+    cache_key = (
+        f"{_get_cache_key(dialog_manager, selected_duration, PaymentGatewayType.PLAIDLY)}"
+        f":{asset.id}"
+    )
 
     if cache_key in cache:
         logger.info(f"{log(user)} Re-selected same crypto asset and duration")
@@ -780,10 +877,10 @@ async def on_crypto_asset_select(
         gateway_metadata={"chain": asset.chain, "token": asset.token},
     )
 
-    if payment_data:
-        cache[cache_key] = payment_data
-        _save_payment_data(dialog_manager, payment_data)
-
+    if not payment_data:
+        return
+    cache[cache_key] = payment_data
+    _save_payment_data(dialog_manager, payment_data)
     await dialog_manager.switch_to(state=Subscription.CONFIRM)
 
 
@@ -794,10 +891,23 @@ async def on_get_subscription(
     dialog_manager: DialogManager,
     billing: FromDishka[BillingClient],
 ) -> None:
-    from uuid import UUID  # noqa: PLC0415
-
     user: UserDto = dialog_manager.middleware_data[USER_KEY]
-    payment_id = dialog_manager.dialog_data["payment_id"]
+    payment_id = dialog_manager.dialog_data.get("payment_id")
+    if not payment_id:
+        return
+    # handle-free completes any PENDING payment whatever its amount, and aiogram-dialog runs this
+    # handler even when `when` hides the button (an old message, a modified client). Only a
+    # 0-star pending payment of this user may be completed here.
+    transaction = await billing.get_transaction(UUID(payment_id))
+    if (
+        transaction is None
+        or transaction.UserTelegramID != user.telegram_id
+        or transaction.Status != TransactionStatus.PENDING.value
+        or transaction.Pricing is None
+        or Decimal(transaction.Pricing.final_amount or "0") != 0
+    ):
+        logger.warning(f"{log(user)} Refused free completion of payment '{payment_id}'")
+        return
     logger.info(f"{log(user)} Getted free subscription '{payment_id}'")
     await billing.handle_free_payment(UUID(payment_id))
 
@@ -893,8 +1003,7 @@ async def on_trial_monthly_upgrade(
     if plan is None:
         await dialog_manager.switch_to(state=Subscription.MAIN)
         return
-    gateways = await billing.list_active_gateways()
-    if not any(g.IsActive and g.Channel in ("BOT", "ALL") for g in gateways):
+    if not bot_gateways(await billing.list_active_gateways()):
         await dialog_manager.switch_to(state=Subscription.MAIN)
         return
     dialog_manager.dialog_data.clear()

@@ -114,19 +114,16 @@ def gw(kind, currency, *, order=0, channel="BOT", active=True):
     )
 
 
-def test_card_payments_prefer_platega_and_fall_back_to_any_ruble_gateway():
-    assert (
-        widgets.pick_gateway(
-            [gw("YOOKASSA", "RUB", order=1), gw("PLATEGA", "RUB", order=2)], False
-        ).Type
-        == "PLATEGA"
-    )
-    assert (
-        widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR"), gw("YOOKASSA", "RUB")], "pay").Type
-        == "YOOKASSA"
-    )
-    assert widgets.pick_gateway([gw("PLATEGA", "RUB", active=False)], "pay") is None
+def test_only_telegram_stars_can_pay_from_a_widget():
+    # Bot terms 6.2: Stars only, even when billing returns active ruble or TON BOT rows.
+    rows = [gw("YOOKASSA", "RUB", order=1), gw("PLATEGA", "RUB", order=2), gw("TON", "TON")]
+    assert widgets.pick_gateway(rows, "pay") is None
+    assert widgets.pick_gateway(rows, "ton") is None
+    assert widgets.pick_gateway(rows, "star") is None
     assert widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR")], "star").Type == "TELEGRAM_STARS"
+    assert widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR", active=False)], "star") is None
+    assert widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR", channel="WEB")], "star") is None
+    assert widgets.pick_gateway([gw("TELEGRAM_STARS", "XTR")], "pay") is None
 
 
 def service(user=None, subscription=None, *, connected=False):
@@ -174,23 +171,12 @@ def query(data, **extra):
     }
 
 
-async def test_pay_creates_a_platega_payment_and_answers_its_link(monkeypatch):
-    monkeypatch.setattr(widgets, "schedule_cancel_survey_check", AsyncMock())
-    monkeypatch.setattr(
-        widgets,
-        "billing_price_details_to_dto",
-        lambda _: SimpleNamespace(final_amount=Decimal(119)),
-    )
+async def test_ruble_pay_is_refused_without_a_payment():
     svc, bot, billing = service(subscription=None)
     await svc.handle_query(query("pay:1:30"))
-    kwargs = billing.create_payment.await_args.kwargs
-    assert (
-        kwargs["plan_id"],
-        kwargs["duration_days"],
-        kwargs["gateway_type"],
-        kwargs["purchase_type"],
-    ) == (1, 30, "PLATEGA", "NEW")
-    assert answer_of(bot) == {"u": "https://pay.example/abc", "a": "119 ₽"}
+    billing.create_payment.assert_not_awaited()
+    assert "недоступен" in answer_of(bot)["m"]
+    assert "₽" not in json.dumps(answer_of(bot), ensure_ascii=False)
 
 
 async def test_star_payment_answers_a_telegram_invoice_link(monkeypatch):
@@ -243,11 +229,20 @@ async def test_cards_are_sent_with_queries_allowed_and_a_caption():
     assert json.loads(msg.chat_data)["n"] == "🚀 Про"
 
 
-async def test_a_user_without_paid_subscription_gets_the_plan_card():
+async def test_the_plan_card_is_off_so_the_menu_opens_instead():
+    # The plan card shows ruble prices, so it is not sent while the bot sells for Stars only.
     svc, bot, _ = service(subscription=make_subscription(is_trial=True))
-    await svc.send_subscription(make_user())
-    (msg,) = sent(bot, SendWidget)
-    assert msg.html == widgets.PLANS_HTML
+    assert await svc.send_subscription(make_user()) is None
+    assert sent(bot, SendWidget) == []
+
+
+async def test_buy_from_the_status_card_opens_the_subscription_menu():
+    svc, bot, _ = service(subscription=make_subscription())
+    manager = AsyncMock()
+    svc.bg_manager_factory.bg.return_value = manager
+    await svc.handle_query(query("buy"))
+    manager.start.assert_awaited_once()
+    assert sent(bot, SendWidget) == []
 
 
 async def test_webhook_answers_widget_queries_without_the_dispatcher():
@@ -298,26 +293,12 @@ def test_ton_transfer_link_becomes_a_ton_connect_transaction():
     assert ton.parse_transfer_url("ton://transfer/UQabc?amount=0&text=x") is None
 
 
-async def test_ton_pay_answers_a_transaction_for_the_wallet(monkeypatch):
-    monkeypatch.setattr(
-        widgets,
-        "billing_price_details_to_dto",
-        lambda _: SimpleNamespace(final_amount=Decimal("0.52")),
-    )
-    survey = AsyncMock()
-    monkeypatch.setattr(widgets, "schedule_cancel_survey_check", survey)
+async def test_ton_pay_is_refused_even_when_the_gateway_is_on():
     svc, bot, billing = service(subscription=None)
     billing.list_active_gateways.return_value.append(gw("TON", "TON"))
-    billing.create_payment.return_value = SimpleNamespace(
-        ID="1b4e28ba-2fa1-11d2-883f-0016d3cca427",
-        URL="ton://transfer/UQATmChrR3EtbPS1Gzbjve5rQsahMDk9W7-9-2n7D5Fi_DeR?amount=520000000&text=1b4e28ba-2fa1-11d2-883f-0016d3cca427",
-    )
     await svc.handle_query(query("ton:1:30"))
-    assert billing.create_payment.await_args.kwargs["gateway_type"] == "TON"
-    reply = answer_of(bot)
-    assert reply["id"] == "1b4e28ba-2fa1-11d2-883f-0016d3cca427" and reply["a"] == "0.52 TON"
-    assert reply["x"]["messages"][0]["amount"] == "520000000"
-    survey.assert_not_awaited()
+    billing.create_payment.assert_not_awaited()
+    assert "недоступен" in answer_of(bot)["m"]
 
 
 async def test_ton_pay_is_refused_when_the_gateway_is_off():
@@ -341,16 +322,8 @@ async def test_sent_transaction_is_confirmed_with_billing(monkeypatch):
     assert answer_of(bot)["ok"] == 1 and "Оплачено" in answer_of(bot)["m"]
 
 
-async def test_plan_card_offers_ton_only_when_the_gateway_is_on():
+async def test_plan_card_is_never_sent_even_with_ton_on():
     svc, bot, billing = service()
-    await svc.send_plans(make_user())
-    assert "w" not in json.loads(sent(bot, SendWidget)[0].chat_data)
     billing.list_active_gateways.return_value.append(gw("TON", "TON"))
-    await svc.send_plans(make_user())
-    assert json.loads(sent(bot, SendWidget)[1].chat_data)["w"] == 1
-
-
-def test_ton_never_shows_in_the_old_payment_screens():
-    from src.bot.routers.subscription.getters import WIDGET_ONLY_GATEWAYS
-
-    assert "TON" in WIDGET_ONLY_GATEWAYS
+    assert await svc.send_plans(make_user()) is None
+    assert sent(bot, SendWidget) == []

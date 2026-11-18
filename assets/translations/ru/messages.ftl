@@ -1,11 +1,6 @@
-# Web purchase redirect — bot is TG-native only since the web/TG split.
-# Shown when a user opens a legacy /start web_<token> deep link.
-msg-web-purchase-redirect =
-    🌐 Веб-покупки управляются на <a href="https://app.componovpn.com">app.componovpn.com</a>.
-    Этот бот предназначен только для покупок через Telegram.
-
-    Web purchases are managed at <a href="https://app.componovpn.com">app.componovpn.com</a>.
-    This bot is for Telegram-native purchases only.
+# Telegram bot terms 6.2: the bot sells only for Telegram Stars and never names the website as a
+# way to pay. People who want to pay in rubles are sent to @compono_support, a human answers there.
+msg-ruble-payments-note = <i>Оплата в рублях сейчас недоступна. Если хотите оплатить в рублях — напишите в @compono_support.</i>
 
 msg-beta-tester-enrolled =
     🧪 <b>Готово — вы стали бета-тестером Compono!</b>
@@ -1060,9 +1055,11 @@ msg-subscription-duration =
     { msg-subscription-details }
 
 msg-subscription-payment-method =
-    <b>💳 Выберите способ оплаты</b>
+    <b>⭐ Оплата звёздами Telegram</b>
 
     { msg-subscription-details }
+
+    { msg-ruble-payments-note }
 
 msg-subscription-crypto-asset =
     <b>🪙 Выберите криптовалюту</b>
@@ -1089,6 +1086,11 @@ msg-subscription-confirm =
     *[OTHER] { empty }
     }
 
+    { $show_ruble_note ->
+    [1] { msg-ruble-payments-note }
+    *[0] { empty }
+    }
+
 msg-subscription-trial =
     <b>✅ Пробная подписка успешно получена!</b>
 
@@ -1112,9 +1114,11 @@ msg-subscription-change-success =
 
 msg-proxy-confirm =
     <b>⭐ Pro-прокси на 30 дней</b>
-    <s>{ $original_price } ₽</s> <b>{ $price } ₽</b> — до 31 октября.
+    <b>{ $price }</b>, оплата звёздами Telegram.
 
     После оплаты кнопка подключения появится здесь.
+
+    { msg-ruble-payments-note }
 
 msg-subscription-failed = 
     <b>❌ Произошла ошибка!</b>

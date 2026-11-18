@@ -17,6 +17,7 @@ from .base import EventTypedMiddleware
 
 class RulesMiddleware(EventTypedMiddleware):
     __event_types__ = [MiddlewareEventType.MESSAGE, MiddlewareEventType.CALLBACK_QUERY]
+    __lets_payments_through__ = True
 
     async def middleware_logic(
         self,

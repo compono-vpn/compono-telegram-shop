@@ -164,15 +164,14 @@ def _dm_for_crypto(plan: PlanDto) -> MagicMock:
     return dm
 
 
-class TestOnPaymentMethodSelectPlaidly:
-    async def test_plaidly_routes_to_crypto_asset_without_creating_payment(self):
+class TestPlaidlyIsNotSoldInTheBot:
+    """Stars only (bot terms 6.2): a Plaidly or crypto press, even a forged one, creates nothing."""
+
+    async def test_plaidly_method_press_is_ignored(self):
         plan = _plan_with_duration()
         dm = _dm_for_crypto(plan)
         billing = _make_billing()
-        ntf = AsyncMock()
-        experiment_service = make_experiment_service()
         raw = unwrap_inject(on_payment_method_select)
-        redis_client = AsyncMock()
 
         await raw(
             MagicMock(),
@@ -180,54 +179,22 @@ class TestOnPaymentMethodSelectPlaidly:
             dm,
             PaymentGatewayType.PLAIDLY,
             billing,
-            experiment_service,
+            make_experiment_service(),
             _NoChannelIncentive(),
-            ntf,
-            redis_client,
+            AsyncMock(),
+            AsyncMock(),
         )
 
         billing.create_payment.assert_not_called()
-        dm.switch_to.assert_awaited_once_with(state=Subscription.CRYPTO_ASSET)
-        assert dm.dialog_data["selected_payment_method"] == PaymentGatewayType.PLAIDLY
+        dm.switch_to.assert_not_awaited()
+        assert "selected_payment_method" not in dm.dialog_data
 
-
-class TestOnCryptoAssetSelect:
-    async def test_stores_chain_token_and_sends_gateway_metadata(self):
-        plan = _plan_with_duration()
-        dm = _dm_for_crypto(plan)
-        billing = _make_billing()
-        ntf = AsyncMock()
-        experiment_service = make_experiment_service()
-        raw = unwrap_inject(on_crypto_asset_select)
-        redis_client = AsyncMock()
-
-        await raw(
-            MagicMock(),
-            MagicMock(),
-            dm,
-            "usdt-tron",
-            billing,
-            experiment_service,
-            _NoChannelIncentive(),
-            ntf,
-            redis_client,
-        )
-
-        billing.create_payment.assert_awaited_once()
-        kwargs = billing.create_payment.await_args.kwargs
-        assert kwargs["gateway_type"] == "PLAIDLY"
-        assert kwargs["gateway_metadata"] == {"chain": "tron", "token": "USDT"}
-        assert dm.dialog_data["selected_crypto_asset"] == "usdt-tron"
-        dm.switch_to.assert_awaited_once_with(state=Subscription.CONFIRM)
-
-    async def test_each_asset_maps_to_its_chain_and_token(self):
+    async def test_crypto_asset_press_creates_no_payment(self):
         for asset in CRYPTO_ASSETS:
             plan = _plan_with_duration()
             dm = _dm_for_crypto(plan)
             billing = _make_billing()
-            experiment_service = make_experiment_service()
             raw = unwrap_inject(on_crypto_asset_select)
-            redis_client = AsyncMock()
 
             await raw(
                 MagicMock(),
@@ -235,11 +202,11 @@ class TestOnCryptoAssetSelect:
                 dm,
                 asset.id,
                 billing,
-                experiment_service,
+                make_experiment_service(),
                 _NoChannelIncentive(),
                 AsyncMock(),
-                redis_client,
+                AsyncMock(),
             )
 
-            kwargs = billing.create_payment.await_args.kwargs
-            assert kwargs["gateway_metadata"] == {"chain": asset.chain, "token": asset.token}
+            billing.create_payment.assert_not_called()
+            dm.switch_to.assert_not_awaited()

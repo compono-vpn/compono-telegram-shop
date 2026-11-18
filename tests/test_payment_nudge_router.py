@@ -43,12 +43,14 @@ def _dialog_manager() -> MagicMock:
 def _billing(transaction):
     billing = AsyncMock()
     billing.get_transaction.return_value = transaction
-    billing.get_plan.return_value = BillingPlan(
+    plan = BillingPlan(
         ID=1,
         Name="⚡️ Старт",
         Type="BOTH",
         Durations=[BillingPlanDuration(ID=1, Days=30, Prices=[])],
     )
+    billing.get_plan.return_value = plan
+    billing.get_available_plans.return_value = [plan]
     return billing
 
 
@@ -123,10 +125,23 @@ async def test_unknown_or_malformed_payment_is_ignored():
 async def test_plan_that_no_longer_exists_is_ignored():
     dm = _dialog_manager()
     billing = _billing(_transaction())
-    billing.get_plan.return_value = None
+    billing.get_available_plans.return_value = []
     callback = _callback(str(uuid4()))
 
     await _call(callback, dm, billing)
 
     dm.start.assert_not_awaited()
     callback.answer.assert_awaited_once_with()
+
+
+async def test_a_plan_no_longer_offered_is_not_sold():
+    # The payment's plan can be the proxy plan (priced without the user's discount by billing,
+    # with it by the invoice), an archived plan, or the trial: sell only what the plan list offers.
+    dm = _dialog_manager()
+    billing = _billing(_transaction(plan_id=5))
+    callback = _callback(str(uuid4()))
+
+    await _call(callback, dm, billing)
+
+    dm.start.assert_not_awaited()
+    callback.answer.assert_awaited_once()

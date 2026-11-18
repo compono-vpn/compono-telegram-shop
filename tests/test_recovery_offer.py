@@ -336,11 +336,11 @@ def _router_billing(activation_error=None, plan=True):
     billing = AsyncMock()
     billing.activate_promocode.side_effect = activation_error
     billing.get_transaction.return_value = _tx("PENDING")
-    billing.get_plan.return_value = (
-        BillingPlan(ID=1, Name="Старт", Type="BOTH", Durations=[BillingPlanDuration(ID=1, Days=30)])
-        if plan
-        else None
+    start = BillingPlan(
+        ID=1, Name="Старт", Type="BOTH", Durations=[BillingPlanDuration(ID=1, Days=30)]
     )
+    billing.get_plan.return_value = start if plan else None
+    billing.get_available_plans.return_value = [start] if plan else []
     return billing
 
 
@@ -357,6 +357,18 @@ class TestAcceptButton:
         seeded = dm.update.await_args.args[0]
         assert seeded["plandto"]["id"] == 1
         assert seeded["only_single_plan"] is False
+
+    async def test_an_abandoned_plan_no_longer_offered_opens_the_plan_list(self):
+        # The 30% offer on a proxy, archived or trial plan's durations: sell only offered plans.
+        dm, billing = _dm(), _router_billing()
+        billing.get_transaction.return_value.Plan.id = 5
+        callback = _callback(f"{RECOVERY_OFFER_PREFIX}{uuid4()}")
+
+        raw = unwrap_inject(on_recovery_offer_accept)
+        await raw(callback, _user(), dm, billing, make_i18n())
+
+        assert dm.start.await_args.args[0] == Subscription.PLANS
+        assert "plandto" not in dm.update.await_args.args[0]
 
     async def test_from_the_expired_notice_opens_the_plan_list(self):
         dm, billing = _dm(), _router_billing()
@@ -433,3 +445,20 @@ class TestCopy:
         root = Path("assets/translations/ru")
         text = "".join(p.read_text(encoding="utf-8") for p in root.glob("*.ftl"))
         assert "COMPONO30" not in text
+
+
+class TestChargedButNotYetCompletedOffer:
+    # The user paid, billing has not completed the payment yet: offering 30% off a new payment
+    # 15 minutes later makes them pay twice.
+    async def test_a_charged_payment_gets_no_offer(self):
+        redis = KvRedis()
+        payment_id = await _schedule(redis)
+        await redis.set(f"stars_charge:{payment_id}", "stx-1")
+        billing = _Billing("PENDING")
+        user_service, notification = _services()
+
+        sent = await _offers(redis, billing, user_service, notification, NOW + 901)
+
+        assert sent == 0
+        notification.notify_user.assert_not_awaited()
+        assert REF not in billing.claims
