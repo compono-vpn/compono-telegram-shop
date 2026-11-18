@@ -30,6 +30,13 @@ router = Router(name=__name__)
 
 async def _edit(callback: CallbackQuery, text: str, reply_markup=None) -> None:  # noqa: ANN001
     if not isinstance(callback.message, Message):
+        # Telegram sent an InaccessibleMessage (deleted or too old for its content to be
+        # sent). The claim has already run, so the outcome still has to reach the user, as a
+        # new message (QA round 6: it used to be dropped silently).
+        if callback.bot is not None:
+            await callback.bot.send_message(
+                chat_id=callback.from_user.id, text=text, reply_markup=reply_markup
+            )
         return
     try:
         await callback.message.edit_text(text=text, reply_markup=reply_markup)

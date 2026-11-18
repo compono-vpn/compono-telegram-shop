@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message
+from aiogram.types import Chat, InaccessibleMessage, Message
 from fluentogram import TranslatorHub
 from fluentogram.storage import FileStorage
 from loguru import logger
@@ -744,5 +744,62 @@ class TestQuestionGoneDuringClaim:
         )
         await unwrap_inject(on_tv_pair_cancel)(
             callback=callback, user=make_user(), i18n=make_i18n()
+        )
+        callback.answer.assert_awaited_once_with()
+
+
+class TestInaccessibleQuestion:
+    """QA round 6 regression: Telegram can deliver the tap with an InaccessibleMessage
+    instead of the message (Bot API 7.0: "deleted or otherwise inaccessible", for example a
+    message too old for Telegram to send its content). _edit returned silently in that case,
+    so a finished claim (the TV pairs), an expired or used code and «Отмена» reached the user
+    as nothing at all. _send_no_subscription and _answer already fall back to a new message;
+    the outcome must too.
+    """
+
+    @staticmethod
+    def _inaccessible_callback(data: str):
+        callback = MagicMock()
+        callback.data = data
+        callback.answer = AsyncMock()
+        callback.message = InaccessibleMessage(
+            chat=Chat(id=TG, type="private"), message_id=7, date=0
+        )
+        callback.from_user = MagicMock(id=TG)
+        callback.bot = MagicMock()
+        callback.bot.send_message = AsyncMock()
+        return callback
+
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, result, key):
+        callback = self._inaccessible_callback(f"tvp:{CODE}")
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+        await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+        callback.bot.send_message.assert_awaited_once_with(
+            chat_id=TG, text=f"[{key}]", reply_markup=None
+        )
+        callback.answer.assert_awaited_once_with()
+
+    async def test_cancel_is_told(self):
+        callback = self._inaccessible_callback("tvx")
+        await unwrap_inject(on_tv_pair_cancel)(
+            callback=callback, user=make_user(telegram_id=TG), i18n=make_i18n()
+        )
+        callback.bot.send_message.assert_awaited_once_with(
+            chat_id=TG, text="[msg-tv-pair-cancelled]", reply_markup=None
         )
         callback.answer.assert_awaited_once_with()
