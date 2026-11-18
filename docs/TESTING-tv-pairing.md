@@ -396,3 +396,41 @@ No new bug found in the bot code. What was checked beyond rounds 1-6:
 | `pytest tests/` with the flake fix, 10 runs in a row | 1533 passed, 11 skipped, 0 failed each time |
 | the seven TV e2e modules (`test_tv_pair_e2e.py`, `_qa_` and `_qa2_` to `_qa6_`), tgmock, Redis 7.4.1, real compono-api binary built from 4f44f83 with go1.26.10 | 50 passed, 0 failed in 6 min 28 s (`qa-r7/tv-e2e-real-api.txt`); no subscription URL, connect link or internal secret in the output |
 | compono-api 4f44f83: `go test -race ./...`, golangci-lint v2.10.1 (go1.26.10) | 1531 passed; 0 issues (see the API PR's QA round 7 section) |
+
+## QA round 8 (2026-11-18, separate QA worktree from e37b168)
+
+### Fixed: the TV link was swallowed after the cancel survey's «Другое»
+
+After a cancelled payment the bot asks why. «Другое» sets `cancel_survey_awaiting_text:<tg>` for
+30 minutes, and `AwaitingCancelSurveyText` (router `extra.cancel_survey`, which runs before
+`menu.handlers`) took **every** message in that time as the answer, commands included. A user who
+then scanned the TV's QR code got «🙏 Спасибо за ответ!» instead of the confirmation question, so the
+TV could not pair. The full `/start tv-<CODE>` text was also stored as the answer for 90 days and
+sent to the admin chat (`ntf-event-cancel-survey-other`). A plain `/start` was swallowed the same way.
+
+- Unit tests `TestAwaitingCancelSurveyTextSkipsCommands` (`tests/test_cancel_survey_router.py`):
+  3 of 4 failed before the fix (`qa-r8/cancel-survey-unit-before-fix.txt`). The fourth checks that a
+  typed answer is still taken.
+- tgmock e2e `tests/e2e/test_tv_pair_qa8_e2e.py` on the real bot and the real compono-api binary
+  (ebfeaf8): the TV link and plain /start cases failed before the fix
+  (`qa-r8/qa8-e2e-before-fix.txt`, codes redacted). After it all 3 pass: the TV poll returns
+  `paired`, and the full code is not in the admin chat, the bot log or the stored answer
+  (`qa-r8/qa8-e2e-after-fix.txt`).
+- Fix: a message whose text starts with `/` is never the free-text answer.
+
+### Noted, not changed
+
+- A claim in the last seconds of the 10 minutes is answered «Готово», but the TV polls every 3 s
+  and can find the code expired (410) before its next poll. The contract says the lifetime is
+  never extended; same family as owner item 9.
+- `ApiClient.claim_tv_pair` maps any 200 to "attached" without reading the body, and a 200 with a
+  non-JSON body raises. Only a misrouted `APP_API_URL` would send that.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `ruff check src/`, `ruff format --check src/` | pass, 205 files already formatted |
+| `pytest tests/` | 1537 passed, 12 skipped (opt-in e2e), 0 failed |
+| the eight TV e2e modules plus `test_stale_callback_e2e.py`, tgmock, Redis 7.4.1, real compono-api built from ebfeaf8 with go1.26.10 | 59 passed, 0 failed in 7 min 26 s (`qa-r8/tv-e2e-real-api.txt`); 0 subscription URLs or full codes in the output |
+| compono-api ebfeaf8: `go vet ./...`, `go test -race` on tvpair, usecase, domain, adapter/redis, middleware | clean; all ok |
