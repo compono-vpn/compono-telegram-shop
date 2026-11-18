@@ -1,0 +1,66 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.3, pytest-8.4.2, pluggy-1.6.0 -- /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/bin/python
+rootdir: /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.3.0, tgmock-0.2.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 46 items
+
+tests/e2e/test_tv_pair_e2e.py::test_paid_user_pairs_tv PASSED            [  2%]
+tests/e2e/test_tv_pair_e2e.py::test_user_without_subscription_gets_plans_then_retries PASSED [  4%]
+tests/e2e/test_tv_pair_e2e.py::test_second_tap_without_subscription_is_quiet PASSED [  6%]
+tests/e2e/test_tv_pair_e2e.py::test_code_used_by_someone_else PASSED     [  8%]
+tests/e2e/test_tv_pair_e2e.py::test_expired_or_unknown_code PASSED       [ 10%]
+tests/e2e/test_tv_pair_e2e.py::test_cancel_does_not_claim PASSED         [ 13%]
+tests/e2e/test_tv_pair_e2e.py::test_new_user_via_tv_link_has_no_source PASSED [ 15%]
+tests/e2e/test_tv_pair_e2e.py::test_source_link_still_attributes PASSED  [ 17%]
+tests/e2e/test_tv_pair_e2e.py::test_plain_start_still_opens_main_menu PASSED [ 19%]
+tests/e2e/test_tv_pair_qa3_e2e.py::test_answer_lost_after_the_claim_landed PASSED [ 21%]
+tests/e2e/test_tv_pair_qa3_e2e.py::test_answer_lost_then_user_taps_again_before_the_tv_polls PASSED [ 23%]
+tests/e2e/test_tv_pair_qa3_e2e.py::test_connection_reset_before_the_claim PASSED [ 26%]
+tests/e2e/test_tv_pair_qa3_e2e.py::test_typed_lookalike_code_is_an_ordinary_start[tv-\u212a7M4QX9P] PASSED [ 28%]
+tests/e2e/test_tv_pair_qa3_e2e.py::test_typed_lookalike_code_is_an_ordinary_start[tv-K7M4QX9\u017f] PASSED [ 30%]
+tests/e2e/test_tv_pair_qa3_e2e.py::test_bot_log_has_no_full_code PASSED  [ 32%]
+tests/e2e/test_tv_pair_qa4_e2e.py::test_late_failure_reaches_the_user_as_a_message PASSED [ 34%]
+tests/e2e/test_tv_pair_qa4_e2e.py::test_late_no_subscription_still_opens_the_plan_list PASSED [ 36%]
+tests/e2e/test_tv_pair_qa4_e2e.py::test_late_attach_is_quiet PASSED      [ 39%]
+tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_still_gets_the_outcome PASSED [ 41%]
+tests/e2e/test_tv_pair_qa5_e2e.py::test_deleted_question_used_code_is_told PASSED [ 43%]
+tests/e2e/test_tv_pair_qa2_e2e.py::test_tv_link_while_waiting_for_promocode_text PASSED [ 45%]
+tests/e2e/test_tv_pair_qa2_e2e.py::test_repeated_taps_without_subscription_then_the_claim_limit PASSED [ 47%]
+tests/e2e/test_tv_pair_qa2_e2e.py::test_new_user_cancels_then_uses_the_bot PASSED [ 50%]
+tests/e2e/test_tv_pair_qa2_e2e.py::test_old_retry_message_after_the_tv_paired PASSED [ 52%]
+tests/e2e/test_tv_pair_qa2_e2e.py::test_two_tvs_one_after_the_other PASSED [ 54%]
+tests/e2e/test_tv_pair_qa2_e2e.py::test_bot_log_has_no_full_code PASSED  [ 56%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_no_subscription_keeps_the_retry_message PASSED [ 58%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_lower_case_payload PASSED         [ 60%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ILOU1234] PASSED [ 63%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABC] PASSED [ 65%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABCDEFGH9] PASSED [ 67%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-] PASSED [ 69%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv_ABCDEFGH] PASSED [ 71%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[tv-ABCD-EFGH] PASSED [ 73%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_bad_tv_payload_opens_the_main_menu[xtv-ABCDEFGH] PASSED [ 76%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:] PASSED [ 78%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ABC] PASSED [ 80%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ILOU1234] PASSED [ 82%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:abcdefgh] PASSED [ 84%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:ABCDEFGH1] PASSED [ 86%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_forged_button_never_claims[tvp:../../x] PASSED [ 89%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_api_failure_shows_alert_keeps_buttons PASSED [ 91%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_guessing_codes_is_stopped PASSED  [ 93%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_double_tap_at_once PASSED         [ 95%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_nothing_secret_in_logs PASSED     [ 97%]
+tests/e2e/test_tv_pair_qa_e2e.py::test_main_menu_still_works_after_tv_question PASSED [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 46 passed, 5 warnings in 348.73s (0:05:48) ==================
