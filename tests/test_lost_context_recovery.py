@@ -38,6 +38,8 @@ class RecordingSession(BaseSession):
         super().__init__()
         self.calls: list[TelegramMethod[Any]] = []
         self._next_id = 100
+        # Seconds each Telegram call takes; > 0 stands in for a busy event loop (CI).
+        self.delay = 0.0
 
     async def close(self) -> None:
         return None
@@ -47,6 +49,8 @@ class RecordingSession(BaseSession):
         yield b""
 
     async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: Any = None) -> Any:
+        if self.delay:
+            await asyncio.sleep(self.delay)
         self.calls.append(method)
         if isinstance(method, (SendMessage, EditMessageText)):
             self._next_id += 1
@@ -114,9 +118,22 @@ class Harness:
     def bg(self):
         return self.bg_factory.bg(bot=self.bot, user_id=TELEGRAM_ID, chat_id=TELEGRAM_ID)
 
-    async def settle(self) -> None:
-        for _ in range(5):
-            await asyncio.sleep(0.02)
+    async def settle(self, timeout: float = 10.0) -> None:
+        """Wait until the background work aiogram-dialog started (BgManager updates) is done.
+
+        A fixed sleep was not enough on a busy loop (QA round 7). Two quiet checks in a row:
+        a finishing task may start the next one.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        quiet = 0
+        while quiet < 2:
+            await asyncio.sleep(0.01)
+            me = asyncio.current_task()
+            busy = [t for t in asyncio.all_tasks() if t is not me and not t.done()]
+            quiet = 0 if busy else quiet + 1
+            if loop.time() > deadline:
+                raise AssertionError(f"background work still running: {busy}")
 
     async def start_menu(self, mode: StartMode = StartMode.RESET_STACK) -> str:
         await self.bg().start(MainMenu.MAIN, mode=mode, show_mode=ShowMode.SEND)
@@ -183,6 +200,28 @@ async def test_press_after_stack_reset_recovers_into_fresh_menu(harness: Harness
 
 
 async def test_press_after_storage_loss_recovers_and_new_menu_works(harness: Harness) -> None:
+    old_data = await harness.start_menu()
+    harness.storage.storage.clear()
+
+    await harness.press(old_data)
+
+    assert harness.menu_presses == 0
+    new_data = harness.session.of(SendMessage)[-1].reply_markup.inline_keyboard[0][0].callback_data
+    assert new_data != old_data
+
+    await harness.press(new_data, message_id=102)
+
+    assert harness.menu_presses == 1
+
+
+async def test_recovery_is_awaited_even_when_telegram_is_slow(harness: Harness) -> None:
+    """The menu start and the recovery run in aiogram-dialog background tasks. A fixed 100 ms
+    wait made these tests fail now and then in the full suite and in CI (QA round 7: shop CI
+    run 53 on a docs-only commit; 1 of 6 local full runs). Slow every Telegram call down well
+    past that wait: the harness must still wait for the work, not for a fixed time.
+    """
+    harness.session.delay = 0.15
+
     old_data = await harness.start_menu()
     harness.storage.storage.clear()
 

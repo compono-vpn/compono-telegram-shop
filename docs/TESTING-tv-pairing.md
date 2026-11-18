@@ -343,9 +343,32 @@ Not changed, noted: if the user scanned the same code twice and pairs from one q
 | compono-api 4f44f83 (unchanged this round): `go vet ./...`, `go test -race` of the TV pairing, billing, redis and middleware packages | clean, all ok |
 | whole `tests/e2e` (all TV modules including qa6, plus the stale-callback and Stars-only modules), tgmock, Redis 7.4.1, real compono-api binary from 4f44f83 | 88 passed, 0 failed in 28 min 52 s (`qa-r6/e2e-all-real-api.txt`) |
 
-## QA round 7 (2026-11-18, separate QA worktree from ee20566, no code change)
+## QA round 7 (2026-11-18, separate QA worktree from ee20566)
 
-No new bug found in the bot. What was checked beyond rounds 1-6:
+### Fixed: a flaky test made CI red (no change to the bot itself)
+
+The docs-only push b4f2388 failed CI (`lint-and-test`, run 53). The Forgejo actions logs (read
+only) show the same file broke the other two red runs as well: run 53
+`test_press_after_storage_loss_recovers_and_new_menu_works` (`assert new_data != old_data`, the
+recovery menu was not sent yet), runs 50 (this PR) and 46 (PR #12)
+`test_press_after_stack_reset_recovers_into_fresh_menu` (`assert 1 == 0`)
+(`qa-r7/ci-run53-excerpt.txt`). Locally the full suite failed the same way in 1 of 21 runs. Cause:
+the test harness waited a fixed 100 ms (`settle`) for work that aiogram-dialog runs in background
+tasks (the `BgManager` menu start and the recovery). On a busy runner that is not enough.
+
+- New test `test_recovery_is_awaited_even_when_telegram_is_slow` makes every fake Telegram call
+  take 150 ms. Before the fix it failed (`qa-r7/lost-context-flake-before-fix.txt`, `IndexError`:
+  no menu sent yet); after it passes (`qa-r7/lost-context-flake-after-fix.txt`).
+- Fix (test code only): `settle()` waits until no other asyncio task is running, twice in a row,
+  with a 10 s limit that fails the test with the list of running tasks.
+- After the fix the full suite passed 10 of 10 local runs.
+
+The file is not part of the TV feature (it came with COM-180), but its flake turned this PR's CI
+red, so the fix rides in this PR.
+
+### Checks
+
+No new bug found in the bot code. What was checked beyond rounds 1-6:
 
 - **Code review again** of `src/bot/routers/extra/tv_pair.py`, `src/services/tv_pair.py`, the
   `/start tv-` handler, `ApiClient.claim_tv_pair` and the middlewares a TV update passes through.
@@ -363,11 +386,13 @@ No new bug found in the bot. What was checked beyond rounds 1-6:
   callback data `tvp:K7M4QX9P\n` passes; compono-api trims it and claims the same code, and only the
   first two characters are logged.
 
-### Gates (unchanged commit ee20566)
+### Gates
 
 | Gate | Result |
 |---|---|
 | `ruff check src/`, `ruff format --check src/` | pass, 205 files already formatted |
-| `pytest tests/` | 1532 passed, 11 skipped (opt-in e2e), 0 failed |
+| `ruff check` and `ruff format --check` on `tests/test_lost_context_recovery.py` | pass |
+| `pytest tests/` on ee20566 | 1532 passed, 11 skipped (opt-in e2e), 0 failed |
+| `pytest tests/` with the flake fix, 10 runs in a row | 1533 passed, 11 skipped, 0 failed each time |
 | the seven TV e2e modules (`test_tv_pair_e2e.py`, `_qa_` and `_qa2_` to `_qa6_`), tgmock, Redis 7.4.1, real compono-api binary built from 4f44f83 with go1.26.10 | 50 passed, 0 failed in 6 min 28 s (`qa-r7/tv-e2e-real-api.txt`); no subscription URL, connect link or internal secret in the output |
 | compono-api 4f44f83: `go test -race ./...`, golangci-lint v2.10.1 (go1.26.10) | 1531 passed; 0 issues (see the API PR's QA round 7 section) |
