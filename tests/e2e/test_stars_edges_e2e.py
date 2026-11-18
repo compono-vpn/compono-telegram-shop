@@ -462,7 +462,7 @@ async def test_failed_payment_creation_never_offers_the_previous_order(shop: Sho
     confirm = await tap(shop, durations, "1 месяц")
     old = stars_checkout(shop, confirm, before)
     durations = await tap(shop, confirm, "Изменить длительность")
-    plans = await tap(shop, durations, "Назад к выбору плана")
+    plans = await tap(shop, durations, "⬅️ Назад")
     durations = await tap(shop, plans, "Старт")
 
     shop.billing.fail_next["POST /payment/create"] = 2
@@ -527,7 +527,7 @@ async def test_renew_after_starting_a_change_sells_the_renewal(shop: ShopE2E) ->
     assert shop.billing.transactions[change["payload"]]["PurchaseType"] == "CHANGE"
 
     durations = await tap(shop, confirm, "Изменить длительность")
-    plans = await tap(shop, durations, "Назад к выбору плана")
+    plans = await tap(shop, durations, "⬅️ Назад")
     sub = await tap(shop, plans, "⬅️ Назад")
     durations = await tap(shop, sub, "Продлить")
     before = len(shop.tg.invoices)

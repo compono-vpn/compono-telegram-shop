@@ -249,7 +249,7 @@ async def test_plans_durations_and_checkout_are_stars_only(shop: ShopE2E) -> Non
     show("durations", durations)
     assert_stars_only(durations)
     labels = [b.get("text", "") for b in buttons(durations)]
-    for price in ("119★", "319★", "579★", "999★"):
+    for price in ("1 месяц — 119 ★", "3 месяца — 319 ★", "6 месяцев — 579 ★", "1 год — 999 ★"):
         assert any(price in label for label in labels), (price, labels)
 
     before = len(shop.tg.invoices)
@@ -282,9 +282,10 @@ async def test_promo_code_discount_applies_to_the_stars_price(shop: ShopE2E) -> 
 
     plans = await open_plans(shop, PROMO)
     show("promo plans", plans)
-    assert "<s>119 ★</s> 83 ★/мес" in plans["text"]
+    assert "🎁 Ваша скидка 30% уже учтена" in plans["text"]
+    assert "⚡ <b>Старт</b> — 83 ★/мес" in plans["text"]
     durations = await tap(shop, plans, "Старт")
-    assert any("🔥 83★" in b.get("text", "") for b in buttons(durations))
+    assert any("1 месяц — 83 ★" in b.get("text", "") for b in buttons(durations))
     before = len(shop.tg.invoices)
     confirm = await tap(shop, durations, "1 месяц")
     invoice = stars_checkout(shop, confirm, before)

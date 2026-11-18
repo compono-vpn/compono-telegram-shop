@@ -140,7 +140,7 @@ async def test_sbp_creates_a_platega_ruble_payment(shop: ShopE2E) -> None:
     assert pay["url"] == f"{PLATEGA_URL}{created['ID']}"
     assert len(shop.tg.invoices) == invoices, "a Stars invoice was made for a ruble payment"
     assert RUBLE_NOTE not in (confirm.get("text") or "")
-    assert "119 ₽" in (confirm.get("text") or "")
+    assert "119₽" in (confirm.get("text") or "")
     assert not any("compono_support" in t for t in _labels(confirm))
     assert not admin_alerts(shop, started), admin_alerts(shop, started)
 
