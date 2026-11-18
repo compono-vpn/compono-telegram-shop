@@ -1,6 +1,6 @@
 import traceback
 from decimal import Decimal
-from typing import Optional, TypedDict, cast
+from typing import Any, Optional, TypedDict, cast
 from uuid import UUID
 
 from aiogram.types import CallbackQuery, Message
@@ -336,6 +336,25 @@ async def _create_payment_and_get_data(
         return None
 
 
+async def _bot_gateway_row(billing: BillingClient, gateway_type: str) -> Optional[Any]:
+    """The active BOT/ALL billing row of this gateway type, or None.
+
+    /gateways/by-type ignores the channel: in prod it returns the PLATEGA WEB row (same
+    order_index as the BOT row), so fall back to this type's row in the active bot list.
+    """
+    row = await billing.get_gateway_by_type(gateway_type)
+    if row and bot_gateways([row]):
+        return row
+    return next(
+        (
+            g
+            for g in bot_gateways(await billing.list_active_gateways())
+            if gateway_value(g.Type) == gateway_type
+        ),
+        None,
+    )
+
+
 @inject
 async def on_buy_proxy(
     callback: CallbackQuery,
@@ -361,8 +380,8 @@ async def on_buy_proxy(
             return
         if view.vpn_blocked or not view.has_price:
             raise ValueError("Proxy purchase is not available")
-        billing_gateway = await billing.get_gateway_by_type(gateway_type)
-        if not billing_gateway or not bot_gateways([billing_gateway]):
+        billing_gateway = await _bot_gateway_row(billing, gateway_type)
+        if not billing_gateway:
             raise ValueError(f"Gateway '{gateway_type}' is not available for the bot")
         purchase_type = PurchaseType.RENEW if view.can_renew else PurchaseType.NEW
         result = await billing.create_payment(

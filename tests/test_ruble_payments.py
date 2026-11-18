@@ -254,6 +254,27 @@ class TestProxy:
         }
         notification.notify_user.assert_not_awaited()
 
+    async def test_buy_uses_the_bot_row_when_billing_by_type_returns_the_web_row(
+        self, stars_invoice
+    ):
+        # Prod billing has PLATEGA WEB (id 8) and PLATEGA BOT (id 7) with the same order_index;
+        # /gateways/by-type returns the WEB row (verified 2026-11-18). The bot must still sell.
+        user, dm, billing, notification = _buy_args(
+            _not_entitled(),
+            create_result=MagicMock(ID=str(uuid4()), URL=PLATEGA_URL),
+            recorded_stars="25",
+        )
+        web = BillingPaymentGateway(Type="PLATEGA", Channel="WEB", Currency="RUB", IsActive=True)
+        bot = BillingPaymentGateway(Type="PLATEGA", Channel="BOT", Currency="RUB", IsActive=True)
+        billing.get_gateway_by_type.return_value = web
+        billing.list_active_gateways.return_value = [web, bot]
+
+        await _buy(dm, billing, notification)
+
+        kwargs = billing.create_payment.await_args.kwargs
+        assert (kwargs["gateway_type"], kwargs["currency"]) == ("PLATEGA", "RUB")
+        notification.notify_user.assert_not_awaited()
+
     async def test_confirm_getter(self):
         from tests.conftest import make_dialog_manager  # noqa: PLC0415
 

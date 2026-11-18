@@ -187,8 +187,11 @@ class FakeBilling:
         }
 
     def _gateway_by_type(self, gateway_type: str) -> dict[str, Any] | None:
-        rows = [g for g in self.gateways if g["Type"] == gateway_type and g["IsActive"]]
-        rows.sort(key=lambda g: g["Channel"] != "BOT")
+        # Like real billing: `WHERE type = $1 ORDER BY order_index LIMIT 1`, no channel or
+        # is_active filter. On a tie prod returns the PLATEGA WEB row (id 8, not BOT id 7;
+        # checked 2026-11-18), so a tie puts WEB first here.
+        rows = [g for g in self.gateways if g["Type"] == gateway_type]
+        rows.sort(key=lambda g: (g.get("OrderIndex") or 0, g["Channel"] != "WEB"))
         return rows[0] if rows else None
 
     def _create_payment(self, body: dict[str, Any]) -> dict[str, Any]:
