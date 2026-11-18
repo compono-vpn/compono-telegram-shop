@@ -1,0 +1,11 @@
+772:2026-11-18T04:14:49.7976093Z tests/test_lost_context_recovery.py::test_press_after_storage_loss_recovers_and_new_menu_works FAILED [ 42%]
+1675:2026-11-18T04:15:30.0088778Z >       assert new_data != old_data
+1676:2026-11-18T04:15:30.0088854Z E       AssertionError: assert 'Xnxlta\x1dgo' != 'Xnxlta\x1dgo'
+1678:2026-11-18T04:15:30.0089024Z tests/test_lost_context_recovery.py:193: AssertionError
+1701:2026-11-18T04:15:30.0090946Z =========================== short test summary info ============================
+1702:2026-11-18T04:15:30.0091030Z FAILED tests/test_lost_context_recovery.py::test_press_after_storage_loss_recovers_and_new_menu_works - AssertionError: assert 'Xnxlta\x1dgo' != 'Xnxlta\x1dgo'
+1703:2026-11-18T04:15:30.0091106Z ====== 1 failed, 1531 passed, 11 skipped, 28 warnings in 65.01s (0:01:05) ======
+
+Same file failed the other two red lint-and-test runs (read from the Forgejo actions logs, read only):
+run 50 (ea25252, PR #13) and run 46 (b7c9ecf, PR #12):
+  FAILED tests/test_lost_context_recovery.py::test_press_after_stack_reset_recovers_into_fresh_menu - assert 1 == 0

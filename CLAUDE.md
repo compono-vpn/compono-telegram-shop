@@ -108,6 +108,9 @@ aiogram-dialog, fake Bot session).
 - Reminders and expiry notices are plain messages (`NotificationService`) and never touch the dialog stack.
   The `redirect_to_*` taskiq tasks and the Kafka `redirect` handler do start dialogs in `RESET_STACK` with
   `DELETE_AND_SEND`; that replaces the old menu on purpose after a payment or trial result.
+- The test harness in `tests/test_lost_context_recovery.py` waits in `settle()` until aiogram-dialog's background
+  tasks are done, not for a fixed 100 ms: the fixed wait made CI runs 46, 50 and 53 fail now and then (2026-11-18).
+  Do not go back to a fixed sleep in tests that use `BgManagerFactory`.
 
 ## Telegram unreachable for a moment (2026-11-09)
 

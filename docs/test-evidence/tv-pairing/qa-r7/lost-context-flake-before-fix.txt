@@ -1,0 +1,54 @@
+...F..                                                                   [100%]
+=================================== FAILURES ===================================
+_____________ test_recovery_is_awaited_even_when_telegram_is_slow ______________
+
+harness = <tests.test_lost_context_recovery.Harness object at 0x11c1324b0>
+
+    async def test_recovery_is_awaited_even_when_telegram_is_slow(harness: Harness) -> None:
+        """The menu start and the recovery run in aiogram-dialog background tasks. A fixed 100 ms
+        wait made these tests fail now and then in the full suite and in CI (QA round 7: shop CI
+        run 53 on a docs-only commit; 1 of 6 local full runs). Slow every Telegram call down well
+        past that wait: the harness must still wait for the work, not for a fixed time.
+        """
+        harness.session.delay = 0.15
+    
+>       old_data = await harness.start_menu()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_lost_context_recovery.py:212: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <tests.test_lost_context_recovery.Harness object at 0x11c1324b0>
+mode = <StartMode.RESET_STACK: 'RESET_STACK'>
+
+    async def start_menu(self, mode: StartMode = StartMode.RESET_STACK) -> str:
+        await self.bg().start(MainMenu.MAIN, mode=mode, show_mode=ShowMode.SEND)
+        await self.settle()
+>       return self.session.of(SendMessage)[-1].reply_markup.inline_keyboard[0][0].callback_data
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_lost_context_recovery.py:128: IndexError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa7-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: 22 warnings
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa7-shop-tv-pairing/.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: DeprecationWarning: Behavior without patch module is deprecated, use patch_module = True
+    return _inject_wrapper(func, patch_module=patch_module)
+
+tests/test_lost_context_recovery.py::test_failed_restart_keeps_the_error_notice
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa7-shop-tv-pairing/src/bot/routers/extra/error.py:72: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    recovered = await _restart_main_menu(bot, bg_manager_factory, user)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_lost_context_recovery.py::test_recovery_is_awaited_even_when_telegram_is_slow
+1 failed, 5 passed, 28 warnings in 1.53s
