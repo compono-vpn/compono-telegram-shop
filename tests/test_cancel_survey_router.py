@@ -307,7 +307,9 @@ class TestOnCancelSurveyOtherText:
             experiment_service,
         )
 
-        redis_client.delete.assert_awaited_once_with(CancelSurveyAwaitingTextKey(telegram_id=42).pack())
+        redis_client.delete.assert_awaited_once_with(
+            CancelSurveyAwaitingTextKey(telegram_id=42).pack()
+        )
         redis_client.hset.assert_not_awaited()
         notification_service.notify_super_dev.assert_not_awaited()
 
@@ -397,5 +399,67 @@ class TestAwaitingCancelSurveyTextFilter:
         container.get.return_value = redis_client
 
         result = await AwaitingCancelSurveyText()(message, **{CONTAINER_KEY: container})
+
+        assert result == {"cancel_survey_payment_id": payment_id}
+
+
+class TestAwaitingCancelSurveyTextSkipsCommands:
+    """QA round 8 (COM-202): within 30 minutes of tapping «Другое» every message was taken
+    as the free-text answer, commands included. `/start tv-<CODE>` from the TV's QR code
+    was swallowed (no confirmation question, so the TV never paired), and the full pairing
+    code was stored as the answer for 90 days and sent to the admin chat. A plain /start did
+    not open the menu either. A command is never a survey answer."""
+
+    @staticmethod
+    def _message(text: str) -> MagicMock:
+        message = MagicMock(spec=Message)
+        message.from_user = MagicMock()
+        message.from_user.id = 42
+        message.text = text
+        message.caption = None
+        return message
+
+    @staticmethod
+    def _container(payment_id: str) -> AsyncMock:
+        redis_client = AsyncMock()
+        redis_client.get.return_value = payment_id.encode()
+        container = AsyncMock()
+        container.get.return_value = redis_client
+        return container
+
+    async def test_tv_pairing_deep_link_is_not_an_answer(self):
+        container = self._container(str(uuid4()))
+
+        result = await AwaitingCancelSurveyText()(
+            self._message("/start tv-K7M4QX9P"), **{CONTAINER_KEY: container}
+        )
+
+        assert result is False
+
+    async def test_plain_start_is_not_an_answer(self):
+        container = self._container(str(uuid4()))
+
+        result = await AwaitingCancelSurveyText()(
+            self._message("/start"), **{CONTAINER_KEY: container}
+        )
+
+        assert result is False
+
+    async def test_other_command_is_not_an_answer(self):
+        container = self._container(str(uuid4()))
+
+        result = await AwaitingCancelSurveyText()(
+            self._message("  /help"), **{CONTAINER_KEY: container}
+        )
+
+        assert result is False
+
+    async def test_plain_text_is_still_an_answer(self):
+        payment_id = str(uuid4())
+        container = self._container(payment_id)
+
+        result = await AwaitingCancelSurveyText()(
+            self._message("слишком дорого / подумаю"), **{CONTAINER_KEY: container}
+        )
 
         assert result == {"cancel_survey_payment_id": payment_id}

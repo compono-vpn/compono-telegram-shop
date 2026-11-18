@@ -102,7 +102,13 @@ attached, code_not_found, code_already_claimed, no_active_subscription, rate_lim
 
 A `tv-` payload is not attribution: `decode_start_param` returns None, so a new user from a TV QR gets
 `source=None` (and may get the source survey after paying). Mapping `tv-` to a source such as `androidtv`
-is an open owner decision. Tests: `tests/test_tv_pair.py`, e2e `tests/e2e/test_tv_pair_e2e.py` and `tests/e2e/test_tv_pair_qa*_e2e.py` (set
+is an open owner decision.
+
+Routers that take free text sit before `menu.handlers` and see `/start` first. The cancel survey's
+«Другое» waits 30 minutes for a free-text answer (`AwaitingCancelSurveyText`); it used to take any message,
+so `/start tv-<CODE>` was swallowed (no question, TV never paired) and the full code was stored and sent to
+the admin chat. It now ignores commands (text starting with `/`) (QA round 8). Any new free-text capture
+must do the same. Tests: `tests/test_tv_pair.py`, e2e `tests/e2e/test_tv_pair_e2e.py` and `tests/e2e/test_tv_pair_qa*_e2e.py` (set
 `SHOP_E2E_API_BIN` to a built compono-api to run it against the real API); matrix in
 `docs/TESTING-tv-pairing.md`.
 
