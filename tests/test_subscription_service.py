@@ -439,11 +439,11 @@ class TestBuildConnectUrl:
 
     def test_uses_website_url_regardless_of_subscription_host(self):
         result = SubscriptionService.build_connect_url(
-            "https://getfastlink.online/connect/7UK9yXmGY8d5vRss",
+            "https://getfastlink.online/connect/FakeSubToken0001",
             "https://componovpn.com",
         )
 
-        assert result == "https://componovpn.com/connect/7UK9yXmGY8d5vRss"
+        assert result == "https://componovpn.com/connect/FakeSubToken0001"
 
     def test_extracts_short_uuid_regardless_of_scheme(self):
         result = SubscriptionService.build_connect_url(
