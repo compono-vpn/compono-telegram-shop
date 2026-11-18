@@ -34,11 +34,18 @@ async def _edit(callback: CallbackQuery, text: str, reply_markup=None) -> None: 
     try:
         await callback.message.edit_text(text=text, reply_markup=reply_markup)
     except TelegramBadRequest as e:
+        reason = str(e).lower()
         # A repeated tap with the same outcome (tapping «Подключить» again while still
         # without a subscription, or a double tap) leaves the message unchanged, and
         # Telegram refuses the edit. The message already says the right thing.
-        if "message is not modified" not in str(e).lower():
-            raise
+        if "message is not modified" in reason:
+            return
+        # The user deleted the question while the claim was running: the claim already
+        # happened, so the outcome must still reach them, as a new message (QA round 5).
+        if "message to edit not found" in reason or "message can't be edited" in reason:
+            await callback.message.answer(text=text, reply_markup=reply_markup)
+            return
+        raise
 
 
 async def _answer(callback: CallbackQuery, user: UserDto, alert: str | None = None) -> None:

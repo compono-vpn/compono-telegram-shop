@@ -1,0 +1,476 @@
+........................................................................ [ 57%]
+..............................................FFFFFFF                    [100%]
+=================================== FAILURES ===================================
+_ TestQuestionGoneDuringClaim.test_outcome_is_sent_as_a_new_message[TvPairClaim.ATTACHED-msg-tv-pair-attached-Bad Request: message to edit not found] _
+
+self = <tests.test_tv_pair.TestQuestionGoneDuringClaim object at 0x11d550260>
+error = 'Bad Request: message to edit not found'
+result = <TvPairClaim.ATTACHED: 'attached'>, key = 'msg-tv-pair-attached'
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            "Bad Request: message to edit not found",
+            "Bad Request: message can't be edited",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, error, result, key):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=error)
+        )
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+>       await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+
+tests/test_tv_pair.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/bot/routers/extra/tv_pair.py:100: in on_tv_pair_confirm
+    await _edit(callback, i18n.get("msg-tv-pair-attached"))
+src/bot/routers/extra/tv_pair.py:35: in _edit
+    await callback.message.edit_text(text=text, reply_markup=reply_markup)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock name='mock.message.edit_text' id='4788071424'>, args = ()
+kwargs = {'reply_markup': None, 'text': '[msg-tv-pair-attached]'}
+_call = call(text='[msg-tv-pair-attached]', reply_markup=None)
+effect = TelegramBadRequest('Telegram server says - Bad Request: message to edit not found')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+>               raise effect
+E               aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: message to edit not found
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2262: TelegramBadRequest
+----------------------------- Captured stderr call -----------------------------
+2026-11-18 06:26:21.672 | INFO     | src.bot.routers.extra.tv_pair:on_tv_pair_confirm:97 - [USER:1750352084 (Anton)] TV pairing claim code=K7****** result=attached
+_ TestQuestionGoneDuringClaim.test_outcome_is_sent_as_a_new_message[TvPairClaim.ATTACHED-msg-tv-pair-attached-Bad Request: message can't be edited] _
+
+self = <tests.test_tv_pair.TestQuestionGoneDuringClaim object at 0x11d550110>
+error = "Bad Request: message can't be edited"
+result = <TvPairClaim.ATTACHED: 'attached'>, key = 'msg-tv-pair-attached'
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            "Bad Request: message to edit not found",
+            "Bad Request: message can't be edited",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, error, result, key):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=error)
+        )
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+>       await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+
+tests/test_tv_pair.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/bot/routers/extra/tv_pair.py:100: in on_tv_pair_confirm
+    await _edit(callback, i18n.get("msg-tv-pair-attached"))
+src/bot/routers/extra/tv_pair.py:35: in _edit
+    await callback.message.edit_text(text=text, reply_markup=reply_markup)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock name='mock.message.edit_text' id='4797014688'>, args = ()
+kwargs = {'reply_markup': None, 'text': '[msg-tv-pair-attached]'}
+_call = call(text='[msg-tv-pair-attached]', reply_markup=None)
+effect = TelegramBadRequest('Telegram server says - Bad Request: message can't be edited')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+>               raise effect
+E               aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: message can't be edited
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2262: TelegramBadRequest
+----------------------------- Captured stderr call -----------------------------
+2026-11-18 06:26:21.748 | INFO     | src.bot.routers.extra.tv_pair:on_tv_pair_confirm:97 - [USER:1750352084 (Anton)] TV pairing claim code=K7****** result=attached
+_ TestQuestionGoneDuringClaim.test_outcome_is_sent_as_a_new_message[TvPairClaim.NOT_FOUND-msg-tv-pair-expired-Bad Request: message to edit not found] _
+
+self = <tests.test_tv_pair.TestQuestionGoneDuringClaim object at 0x11d550440>
+error = 'Bad Request: message to edit not found'
+result = <TvPairClaim.NOT_FOUND: 'code_not_found'>, key = 'msg-tv-pair-expired'
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            "Bad Request: message to edit not found",
+            "Bad Request: message can't be edited",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, error, result, key):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=error)
+        )
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+>       await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+
+tests/test_tv_pair.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/bot/routers/extra/tv_pair.py:116: in on_tv_pair_confirm
+    await _edit(callback, i18n.get("msg-tv-pair-expired"))
+src/bot/routers/extra/tv_pair.py:35: in _edit
+    await callback.message.edit_text(text=text, reply_markup=reply_markup)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock name='mock.message.edit_text' id='4788072960'>, args = ()
+kwargs = {'reply_markup': None, 'text': '[msg-tv-pair-expired]'}
+_call = call(text='[msg-tv-pair-expired]', reply_markup=None)
+effect = TelegramBadRequest('Telegram server says - Bad Request: message to edit not found')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+>               raise effect
+E               aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: message to edit not found
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2262: TelegramBadRequest
+----------------------------- Captured stderr call -----------------------------
+2026-11-18 06:26:21.769 | INFO     | src.bot.routers.extra.tv_pair:on_tv_pair_confirm:97 - [USER:1750352084 (Anton)] TV pairing claim code=K7****** result=code_not_found
+_ TestQuestionGoneDuringClaim.test_outcome_is_sent_as_a_new_message[TvPairClaim.NOT_FOUND-msg-tv-pair-expired-Bad Request: message can't be edited] _
+
+self = <tests.test_tv_pair.TestQuestionGoneDuringClaim object at 0x11d550500>
+error = "Bad Request: message can't be edited"
+result = <TvPairClaim.NOT_FOUND: 'code_not_found'>, key = 'msg-tv-pair-expired'
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            "Bad Request: message to edit not found",
+            "Bad Request: message can't be edited",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, error, result, key):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=error)
+        )
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+>       await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+
+tests/test_tv_pair.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/bot/routers/extra/tv_pair.py:116: in on_tv_pair_confirm
+    await _edit(callback, i18n.get("msg-tv-pair-expired"))
+src/bot/routers/extra/tv_pair.py:35: in _edit
+    await callback.message.edit_text(text=text, reply_markup=reply_markup)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock name='mock.message.edit_text' id='4787949152'>, args = ()
+kwargs = {'reply_markup': None, 'text': '[msg-tv-pair-expired]'}
+_call = call(text='[msg-tv-pair-expired]', reply_markup=None)
+effect = TelegramBadRequest('Telegram server says - Bad Request: message can't be edited')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+>               raise effect
+E               aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: message can't be edited
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2262: TelegramBadRequest
+----------------------------- Captured stderr call -----------------------------
+2026-11-18 06:26:21.788 | INFO     | src.bot.routers.extra.tv_pair:on_tv_pair_confirm:97 - [USER:1750352084 (Anton)] TV pairing claim code=K7****** result=code_not_found
+_ TestQuestionGoneDuringClaim.test_outcome_is_sent_as_a_new_message[TvPairClaim.ALREADY_CLAIMED-msg-tv-pair-used-Bad Request: message to edit not found] _
+
+self = <tests.test_tv_pair.TestQuestionGoneDuringClaim object at 0x11d5505c0>
+error = 'Bad Request: message to edit not found'
+result = <TvPairClaim.ALREADY_CLAIMED: 'code_already_claimed'>
+key = 'msg-tv-pair-used'
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            "Bad Request: message to edit not found",
+            "Bad Request: message can't be edited",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, error, result, key):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=error)
+        )
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+>       await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+
+tests/test_tv_pair.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/bot/routers/extra/tv_pair.py:120: in on_tv_pair_confirm
+    await _edit(callback, i18n.get("msg-tv-pair-used"))
+src/bot/routers/extra/tv_pair.py:35: in _edit
+    await callback.message.edit_text(text=text, reply_markup=reply_markup)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock name='mock.message.edit_text' id='4794009408'>, args = ()
+kwargs = {'reply_markup': None, 'text': '[msg-tv-pair-used]'}
+_call = call(text='[msg-tv-pair-used]', reply_markup=None)
+effect = TelegramBadRequest('Telegram server says - Bad Request: message to edit not found')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+>               raise effect
+E               aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: message to edit not found
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2262: TelegramBadRequest
+----------------------------- Captured stderr call -----------------------------
+2026-11-18 06:26:21.808 | INFO     | src.bot.routers.extra.tv_pair:on_tv_pair_confirm:97 - [USER:1750352084 (Anton)] TV pairing claim code=K7****** result=code_already_claimed
+_ TestQuestionGoneDuringClaim.test_outcome_is_sent_as_a_new_message[TvPairClaim.ALREADY_CLAIMED-msg-tv-pair-used-Bad Request: message can't be edited] _
+
+self = <tests.test_tv_pair.TestQuestionGoneDuringClaim object at 0x11d550680>
+error = "Bad Request: message can't be edited"
+result = <TvPairClaim.ALREADY_CLAIMED: 'code_already_claimed'>
+key = 'msg-tv-pair-used'
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            "Bad Request: message to edit not found",
+            "Bad Request: message can't be edited",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, error, result, key):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=error)
+        )
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+>       await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+
+tests/test_tv_pair.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/bot/routers/extra/tv_pair.py:120: in on_tv_pair_confirm
+    await _edit(callback, i18n.get("msg-tv-pair-used"))
+src/bot/routers/extra/tv_pair.py:35: in _edit
+    await callback.message.edit_text(text=text, reply_markup=reply_markup)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock name='mock.message.edit_text' id='4787951120'>, args = ()
+kwargs = {'reply_markup': None, 'text': '[msg-tv-pair-used]'}
+_call = call(text='[msg-tv-pair-used]', reply_markup=None)
+effect = TelegramBadRequest('Telegram server says - Bad Request: message can't be edited')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+>               raise effect
+E               aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: message can't be edited
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2262: TelegramBadRequest
+----------------------------- Captured stderr call -----------------------------
+2026-11-18 06:26:21.829 | INFO     | src.bot.routers.extra.tv_pair:on_tv_pair_confirm:97 - [USER:1750352084 (Anton)] TV pairing claim code=K7****** result=code_already_claimed
+__ TestQuestionGoneDuringClaim.test_cancel_on_a_deleted_question_is_answered ___
+
+self = <tests.test_tv_pair.TestQuestionGoneDuringClaim object at 0x11d550dd0>
+
+    async def test_cancel_on_a_deleted_question_is_answered(self):
+        callback = _callback("tvx")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(
+                method=MagicMock(), message="Bad Request: message to edit not found"
+            )
+        )
+>       await unwrap_inject(on_tv_pair_cancel)(
+            callback=callback, user=make_user(), i18n=make_i18n()
+        )
+
+tests/test_tv_pair.py:745: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/bot/routers/extra/tv_pair.py:139: in on_tv_pair_cancel
+    await _edit(callback, i18n.get("msg-tv-pair-cancelled"))
+src/bot/routers/extra/tv_pair.py:35: in _edit
+    await callback.message.edit_text(text=text, reply_markup=reply_markup)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AsyncMock name='mock.message.edit_text' id='4788064752'>, args = ()
+kwargs = {'reply_markup': None, 'text': '[msg-tv-pair-cancelled]'}
+_call = call(text='[msg-tv-pair-cancelled]', reply_markup=None)
+effect = TelegramBadRequest('Telegram server says - Bad Request: message to edit not found')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+>               raise effect
+E               aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: message to edit not found
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:2262: TelegramBadRequest
+----------------------------- Captured stderr call -----------------------------
+2026-11-18 06:26:21.847 | INFO     | src.bot.routers.extra.tv_pair:on_tv_pair_cancel:138 - [USER:1750352084 (Anton)] Cancelled a TV pairing question
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/pydantic_core/core_schema.py:4324: DeprecationWarning: `FieldValidationInfo` is deprecated, use `ValidationInfo` instead.
+    warnings.warn(msg, DeprecationWarning, stacklevel=1)
+
+.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: 22 warnings
+  /Users/anton_1/.claude/personal/jobs/b9075f2f/tmp/wt/qa5-shop-tv-pairing/.venv/lib/python3.12/site-packages/dishka/integrations/taskiq.py:81: DeprecationWarning: Behavior without patch module is deprecated, use patch_module = True
+    return _inject_wrapper(func, patch_module=patch_module)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_tv_pair.py::TestQuestionGoneDuringClaim::test_outcome_is_sent_as_a_new_message[TvPairClaim.ATTACHED-msg-tv-pair-attached-Bad Request: message to edit not found]
+FAILED tests/test_tv_pair.py::TestQuestionGoneDuringClaim::test_outcome_is_sent_as_a_new_message[TvPairClaim.ATTACHED-msg-tv-pair-attached-Bad Request: message can't be edited]
+FAILED tests/test_tv_pair.py::TestQuestionGoneDuringClaim::test_outcome_is_sent_as_a_new_message[TvPairClaim.NOT_FOUND-msg-tv-pair-expired-Bad Request: message to edit not found]
+FAILED tests/test_tv_pair.py::TestQuestionGoneDuringClaim::test_outcome_is_sent_as_a_new_message[TvPairClaim.NOT_FOUND-msg-tv-pair-expired-Bad Request: message can't be edited]
+FAILED tests/test_tv_pair.py::TestQuestionGoneDuringClaim::test_outcome_is_sent_as_a_new_message[TvPairClaim.ALREADY_CLAIMED-msg-tv-pair-used-Bad Request: message to edit not found]
+FAILED tests/test_tv_pair.py::TestQuestionGoneDuringClaim::test_outcome_is_sent_as_a_new_message[TvPairClaim.ALREADY_CLAIMED-msg-tv-pair-used-Bad Request: message can't be edited]
+FAILED tests/test_tv_pair.py::TestQuestionGoneDuringClaim::test_cancel_on_a_deleted_question_is_answered
+7 failed, 118 passed, 27 warnings in 4.71s

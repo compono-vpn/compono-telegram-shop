@@ -535,7 +535,9 @@ class TestUnchangedEdit:
 
     async def test_other_bad_requests_still_raise(self):
         callback = _callback(f"tvp:{CODE}")
-        callback.message.edit_text = self._failing_edit("Bad Request: message to edit not found")
+        callback.message.edit_text = self._failing_edit(
+            "Bad Request: can't parse entities: unsupported start tag"
+        )
         api = MagicMock()
         api.claim_tv_pair = AsyncMock(return_value=TvPairClaim.ATTACHED)
         with pytest.raises(TelegramBadRequest):
@@ -691,3 +693,56 @@ class TestSlowClaimStaleAnswer:
         callback = self._stale_callback("Bad Request: chat not found")
         with pytest.raises(TelegramBadRequest):
             await self._run(callback, TvPairClaim.FAILED)
+
+
+class TestQuestionGoneDuringClaim:
+    """QA round 5 regression: the user can delete the question while the claim is still
+    running (it can take many seconds). Telegram then refuses editMessageText with "message to
+    edit not found". The claim has already happened (the TV pairs), but that refusal escaped
+    the handler: the tap was never answered, admins got #EventError and the user was told
+    something went wrong and sent to the main menu. The outcome must arrive as a new message.
+    """
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            "Bad Request: message to edit not found",
+            "Bad Request: message can't be edited",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "result,key",
+        [
+            (TvPairClaim.ATTACHED, "msg-tv-pair-attached"),
+            (TvPairClaim.NOT_FOUND, "msg-tv-pair-expired"),
+            (TvPairClaim.ALREADY_CLAIMED, "msg-tv-pair-used"),
+        ],
+    )
+    async def test_outcome_is_sent_as_a_new_message(self, error, result, key):
+        callback = _callback(f"tvp:{CODE}")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(method=MagicMock(), message=error)
+        )
+        api = MagicMock()
+        api.claim_tv_pair = AsyncMock(return_value=result)
+        await unwrap_inject(on_tv_pair_confirm)(
+            callback=callback,
+            user=make_user(telegram_id=TG),
+            dialog_manager=make_dialog_manager(),
+            i18n=make_i18n(),
+            api_client=api,
+        )
+        callback.message.answer.assert_awaited_once_with(text=f"[{key}]", reply_markup=None)
+        callback.answer.assert_awaited_once_with()
+
+    async def test_cancel_on_a_deleted_question_is_answered(self):
+        callback = _callback("tvx")
+        callback.message.edit_text = AsyncMock(
+            side_effect=TelegramBadRequest(
+                method=MagicMock(), message="Bad Request: message to edit not found"
+            )
+        )
+        await unwrap_inject(on_tv_pair_cancel)(
+            callback=callback, user=make_user(), i18n=make_i18n()
+        )
+        callback.answer.assert_awaited_once_with()
