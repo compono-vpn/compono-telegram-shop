@@ -307,3 +307,38 @@ again after accepting. Every deep link behaves this way, and both settings are o
 | the six TV pairing e2e modules, real compono-api binary from API commit 4f44f83 (round 5 cancel fix) | 46 passed, 0 failed (`qa-r5/e2e-tv-real-api.txt`) |
 | whole `tests/e2e` (TV modules plus main's stale-callback and Stars-only modules, crawl included), tgmock, Redis 7.4.1, the same API binary | 84 passed, 0 failed in 28 min (`qa-r5/e2e-all-real-api.txt`) |
 
+
+## QA round 6 (2026-11-18, separate QA worktree from 2b5777c)
+
+### Fixed: a tap that arrives with an InaccessibleMessage got no answer text
+
+Since Bot API 7.0 `callback_query.message` can be an `InaccessibleMessage` (`date` 0, no text):
+"deleted or otherwise inaccessible", for example a message too old for Telegram to send its
+content (no exact age threshold is documented). `_edit` returned silently when the message was
+not a `Message`, while `_send_no_subscription` and `_answer` already fell back to a new message.
+So for such a tap the claim ran (the TV paired), but «Готово», «Код устарел», «уже использован»
+and «Отменено» never reached the user. On the real bot with tgmock and the real compono-api the
+user saw no screen at all after the tap. Fix (`src/bot/routers/extra/tv_pair.py` `_edit`): the
+outcome is sent with `bot.send_message` to the user who tapped.
+
+Tests: `TestInaccessibleQuestion` in `tests/test_tv_pair.py` (attached, expired, used, cancel),
+4 of 4 failed before the fix (`qa-r6/inaccessible-unit-before-fix.txt`). E2E
+`tests/e2e/test_tv_pair_qa6_e2e.py` (real bot, tgmock, real compono-api binary built from 4f44f83;
+the update carries `{"chat", "message_id", "date": 0}`): the three outcome cases failed on the old
+handler (`qa-r6/qa6-e2e-before-fix.txt`, no screen after the tap). After the fix all four pass,
+including a user without a subscription, where the retry message is sent and the plan list
+opens through aiogram-dialog (`qa-r6/qa6-e2e-after-fix.txt`). The TV poll returns `paired` and no
+`#EventError` is sent.
+
+Not changed, noted: if the user scanned the same code twice and pairs from one question,
+«Отмена» on the other still says «Отменено. Телевизор не подключён.» although the TV is paired.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `ruff check src/`, `ruff format --check src/` | pass, 207 files formatted |
+| `ruff` on `tests/test_tv_pair.py` and the new e2e module | pass, except `T201 print` in the e2e module, like every other e2e module |
+| `pytest tests/` | 1532 passed, 11 skipped (opt-in e2e), 0 failed |
+| compono-api 4f44f83 (unchanged this round): `go vet ./...`, `go test -race` of the TV pairing, billing, redis and middleware packages | clean, all ok |
+| whole `tests/e2e` (all TV modules including qa6, plus the stale-callback and Stars-only modules), tgmock, Redis 7.4.1, real compono-api binary from 4f44f83 | 88 passed, 0 failed in 28 min 52 s (`qa-r6/e2e-all-real-api.txt`) |
