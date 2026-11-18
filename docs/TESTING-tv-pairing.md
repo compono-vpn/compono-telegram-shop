@@ -297,3 +297,13 @@ Not changed, noted: with `rules_required` or `channel_required` switched on, a n
 `/start tv-<CODE>` is answered with the rules or channel prompt and the code is not asked about
 again after accepting. Every deep link behaves this way, and both settings are off in prod.
 
+### Gates (tree after the merge and the fix)
+
+| Gate | Result |
+|---|---|
+| `ruff check src/`, `ruff format --check src/` | pass, 207 files formatted |
+| `ruff check` / `ruff format --check` on `tests/test_tv_pair.py` and the new e2e module | pass, except `T201 print` in the e2e module, like every other e2e module |
+| `pytest tests/` | 1528 passed, 10 skipped (opt-in e2e), 0 failed |
+| the six TV pairing e2e modules, real compono-api binary from API commit 4f44f83 (round 5 cancel fix) | 46 passed, 0 failed (`qa-r5/e2e-tv-real-api.txt`) |
+| whole `tests/e2e` (TV modules plus main's stale-callback and Stars-only modules, crawl included), tgmock, Redis 7.4.1, the same API binary | 84 passed, 0 failed in 28 min (`qa-r5/e2e-all-real-api.txt`) |
+
