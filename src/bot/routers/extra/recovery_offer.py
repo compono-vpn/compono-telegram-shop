@@ -17,6 +17,7 @@ from src.core.utils.formatters import format_user_log as log
 from src.infrastructure.billing import BillingClient
 from src.infrastructure.billing.converters import billing_plan_to_dto
 from src.models.dto import PlanDto, UserDto
+from src.services.bot_payments import offered_plan
 from src.services.recovery_offer import OfferActivation, activate_offer, offer_payment_id
 
 router = Router(name=__name__)
@@ -31,7 +32,7 @@ async def _abandoned_plan(
         return None, PurchaseType.NEW
     if not transaction or transaction.UserTelegramID != user.telegram_id or not transaction.Plan:
         return None, PurchaseType.NEW
-    billing_plan = await billing.get_plan(transaction.Plan.id) if transaction.Plan.id else None
+    billing_plan = await offered_plan(billing, user.telegram_id, transaction.Plan.id)
     if not billing_plan:
         return None, PurchaseType.NEW
     purchase_type = PurchaseType(transaction.PurchaseType or PurchaseType.NEW.value)

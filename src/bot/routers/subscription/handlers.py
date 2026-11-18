@@ -46,6 +46,7 @@ from src.services.bot_payments import (
     bot_gateways,
     gateway_value,
     is_bot_payment_gateway,
+    offered_plan,
 )
 from src.services.channel_incentive import ChannelIncentiveService
 from src.services.dedicated_ip import get_choice, send_country_prompt
@@ -71,9 +72,18 @@ class CachedPaymentData(TypedDict):
     final_pricing: str
 
 
-def _get_cache_key(duration: int, gateway_type) -> str:
+def _get_cache_key(dialog_manager: DialogManager, duration: int, gateway_type) -> str:
+    """One cached payment per plan, purchase type, duration and method.
+
+    The cache outlives a purchase-type switch («Изменить» → back → «Продлить» keeps it), so a key
+    without the plan and the purchase type reused one plan's invoice under another plan's name.
+    """
+    plan = DialogDataAdapter(dialog_manager).load(PlanDto)
+    plan_id = plan.id if plan else None
+    purchase_type = dialog_manager.dialog_data.get("purchase_type")
+    pt = purchase_type.value if hasattr(purchase_type, "value") else str(purchase_type)
     gt = gateway_type.value if hasattr(gateway_type, "value") else str(gateway_type)
-    return f"{duration}:{gt}"
+    return f"{plan_id}:{pt}:{duration}:{gt}"
 
 
 def _load_payment_data(dialog_manager: DialogManager) -> dict[str, CachedPaymentData]:
@@ -605,8 +615,7 @@ async def on_plan_select(
     # Select passes whatever id the callback carries (an older message, a modified client). Sell
     # only a plan billing offers this user, the list the screen shows: never the trial, the proxy
     # or a hidden plan, which billing's payment creation would accept by id.
-    offered = await billing.get_available_plans(user.telegram_id)
-    billing_plan = next((p for p in offered if p.ID == selected_plan), None)
+    billing_plan = await offered_plan(billing, user.telegram_id, selected_plan)
 
     if not billing_plan:
         logger.warning(f"{log(user)} Ignored plan '{selected_plan}': not offered to the user")
@@ -716,7 +725,7 @@ async def on_duration_select(
         dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
 
         cache = _load_payment_data(dialog_manager)
-        cache_key = _get_cache_key(selected_duration, selected_payment_method)
+        cache_key = _get_cache_key(dialog_manager, selected_duration, selected_payment_method)
         cached = await _reusable_payment(dialog_manager, billing, cache_key)
 
         if cached:
@@ -774,7 +783,7 @@ async def on_payment_method_select(
     dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
 
     cache = _load_payment_data(dialog_manager)
-    cache_key = _get_cache_key(selected_duration, selected_payment_method)
+    cache_key = _get_cache_key(dialog_manager, selected_duration, selected_payment_method)
     cached = await _reusable_payment(dialog_manager, billing, cache_key)
 
     if cached:
@@ -836,7 +845,10 @@ async def on_crypto_asset_select(
     dialog_manager.dialog_data[CRYPTO_ASSET_KEY] = asset.id
 
     cache = _load_payment_data(dialog_manager)
-    cache_key = f"{_get_cache_key(selected_duration, PaymentGatewayType.PLAIDLY)}:{asset.id}"
+    cache_key = (
+        f"{_get_cache_key(dialog_manager, selected_duration, PaymentGatewayType.PLAIDLY)}"
+        f":{asset.id}"
+    )
 
     if cache_key in cache:
         logger.info(f"{log(user)} Re-selected same crypto asset and duration")

@@ -14,7 +14,8 @@ import pytest
 
 from src.bot.routers.subscription.handlers import on_duration_select, on_payment_method_select
 from src.bot.states import Subscription
-from src.core.enums import PaymentGatewayType
+from src.core.enums import PaymentGatewayType, PurchaseType
+from src.models.dto import PlanDto, PlanDurationDto
 from tests.conftest import make_experiment_service, unwrap_inject
 from tests.test_stars_only import _billing, _dm, _NoIncentive, _plan, invoice  # noqa: F401
 
@@ -75,7 +76,7 @@ class TestFailedCreation:
 
 class TestReuse:
     def _cached(self, dm: MagicMock) -> None:
-        dm.dialog_data["payment_cache"] = {"30:TELEGRAM_STARS": dict(OLD)}
+        dm.dialog_data["payment_cache"] = {"1:NEW:30:TELEGRAM_STARS": dict(OLD)}
 
     @pytest.mark.parametrize("status", ["CANCELED", "COMPLETED", "FAILED", None])
     async def test_a_payment_billing_will_not_complete_is_replaced(self, status):
@@ -125,3 +126,34 @@ class TestReuse:
 
         billing.create_payment.assert_awaited_once()
         assert dm.dialog_data["payment_id"] == NEW_ID
+
+
+class TestOtherChoiceSameDuration:
+    """3. The reuse cache was keyed by duration and method only. «Изменить» → Макс → 30 days made a
+    payment; back to the subscription screen, «Продлить» kept the plan cache (only a plan pick
+    clears it), so Старт → 30 days reused the Макс CHANGE invoice under «Старт, продление»."""
+
+    async def test_renew_after_change_with_the_same_duration_makes_its_own_payment(self):
+        billing = _billing()
+        billing.get_transaction.return_value = SimpleNamespace(Status="PENDING")
+        max_plan = PlanDto(
+            id=3, name="💎 Макс", durations=[PlanDurationDto(id=30, days=30, prices=[])]
+        )
+        dm = _dm(max_plan)
+        dm.dialog_data["purchase_type"] = PurchaseType.CHANGE
+        await _duration_select(dm, billing)
+        assert billing.create_payment.await_count == 1
+
+        # «Назад» to the subscription screen, then «Продлить»: on_subscription_plans saves the
+        # current plan and the purchase type, and keeps the rest of the dialog data.
+        dm.dialog_data["plandto"] = _plan().model_dump()
+        dm.dialog_data["purchase_type"] = PurchaseType.RENEW
+        billing.create_payment.return_value = MagicMock(
+            ID="22222222-2222-4222-8222-222222222222", URL=None
+        )
+        await _duration_select(dm, billing)
+
+        assert billing.create_payment.await_count == 2
+        last = billing.create_payment.await_args.kwargs
+        assert (last["plan_id"], last["purchase_type"]) == (1, "RENEW")
+        assert dm.dialog_data["payment_id"] == "22222222-2222-4222-8222-222222222222"
