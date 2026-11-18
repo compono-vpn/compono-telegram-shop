@@ -242,7 +242,7 @@ class TestConnectGetter:
         """The guide page must always live on the website domain, never the
         subscription's own (mirror) host, e.g. getfastlink.online."""
         subscription = make_subscription()
-        subscription.url = "https://getfastlink.online/connect/7UK9yXmGY8d5vRss"
+        subscription.url = "https://getfastlink.online/connect/FakeSubToken0001"
         user = make_user(subscription=subscription)
         config = make_config()
         config.remnawave.sub_public_domain = "getfastlink.online"
@@ -254,7 +254,7 @@ class TestConnectGetter:
             user=user,
         )
 
-        assert result["url"] == "https://componovpn.com/connect/7UK9yXmGY8d5vRss"
+        assert result["url"] == "https://componovpn.com/connect/FakeSubToken0001"
 
 
 class TestIosAppUrl:

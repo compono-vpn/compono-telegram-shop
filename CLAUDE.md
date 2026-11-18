@@ -3,6 +3,11 @@
 Python aiogram 3 + aiogram-dialog 2.6 + dishka bot. Checks before merge (CI runs on pull requests and on push to `main`):
 `ruff check src/`, `ruff format --check src/`, `pytest tests/`.
 
+Tests use made-up subscription tokens only (for example `FakeSubToken0001`). A subscription token or short uuid is a
+VPN credential: a copied real one gives the subscription away. The GitHub mirror of this repo is public. Until
+2026-11-18 `tests/test_menu_getter.py` and `tests/test_subscription_service.py` held the owner's real token (added in
+c9cea00, 2026-08-27). It is still in git history and on the GitHub mirror, so only rotating that link removes it.
+
 ## Stars only (Telegram bot terms 6.2, 2026-11-17)
 
 The bot sells only for Telegram Stars. It never shows or links a ruble, card, SBP, crypto or website payment.
