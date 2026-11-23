@@ -20,6 +20,7 @@ from src.services.dedicated_ip import (
     get_choice,
     is_active_ultra_billing_subscription,
     send_ip_task,
+    server_name,
 )
 from src.services.dedicated_ip import provision_command as _command
 
@@ -43,7 +44,10 @@ async def _post_card(
         bot,
         config,
         title="Ультра: подключить выделенный IP",
-        summary="Клиент выбрал страну. Подключите IP и напишите клиенту, какой сервер выбрать.",
+        summary=(
+            "Клиент выбрал страну. Подключите IP и напишите клиенту, что в любом VPN-приложении "
+            f"первым в списке серверов будет «{server_name(country)}»."
+        ),
         telegram_id=user.telegram_id,
         username=user.username,
         subscription_id=subscription_id,

@@ -237,9 +237,12 @@ EXPIRED/DISABLED/DELETED and `ExpireAt` is in the future.
 - **Prompt.** After a paid Ultra payment (Kafka `subscription_success` redirect and the taskiq success task) the bot sends
   «Тариф Ультра активирован! Выберите страну…» with one button per offered country (`dip:SE|NL`), unless a country is
   already saved.
-- **Texts name no app.** The IP works on the «🇸🇪 Sweden · Белый список» / «🇳🇱 Netherlands · Белый список» server in any
-  VPN client (those are the Remnawave host remarks); the Direct entry keeps the shared exit IP. After the choice the bot
-  says it will write when the IP works; that message is sent by whoever runs the tool.
+- **Texts name no app.** The IP works on the «🇸🇪 Sweden · Выделенный IP» / «🇳🇱 Netherlands · Выделенный IP» server in any
+  VPN client, first in the list (`SERVER_NAMES` / `server_name()` in `src/services/dedicated_ip.py`). Since compono-api
+  v0.43.0 (2026-11-23) the API renames that country's «· Белый список» entry to this name and moves it first, for users
+  with a row in `identity.compono_dedicated_ips` (written by `tools/compono-dedicated-ip.sh`); everyone else still sees
+  «· Белый список». The Direct entry keeps the shared exit IP. After the choice the bot says it will write when the IP
+  works; that message is sent by whoever runs the tool. The support DMs for `add` and `verify` name the server too.
 - **Storage.** Billing `user_reminders`: kind `DEDICATED_IP`, dedup key `v1`, `answer` = country. First answer wins.
 - **Support DM.** Each step is a message from @compono_bot to the @compono_support account (`BOT_SUPPORT_CHAT_ID`,
   default 7504773334; that account has started the bot) with the client, country and the tool command in `<code>`:

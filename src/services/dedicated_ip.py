@@ -76,6 +76,18 @@ COUNTRY_LABELS = {
     DedicatedIpCountry.NL: "🇳🇱 Нидерланды",
 }
 
+# The name compono-api (v0.43.0+, table identity.compono_dedicated_ips) gives this country's
+# «Белый список» entry for a user with a dedicated IP there; the entry also moves to the top.
+SERVER_NAMES = {
+    DedicatedIpCountry.LT: "🇱🇹 Lithuania · Выделенный IP",
+    DedicatedIpCountry.SE: "🇸🇪 Sweden · Выделенный IP",
+    DedicatedIpCountry.NL: "🇳🇱 Netherlands · Выделенный IP",
+}
+
+
+def server_name(country: DedicatedIpCountry) -> str:
+    return SERVER_NAMES[country]
+
 
 def support_task_text(
     *,
@@ -177,7 +189,10 @@ async def flag_check_after_renewal(
         bot,
         config,
         title="Ультра оплачен снова: проверить IP",
-        summary="Проверьте выделенный IP. Если его сняли, подключите заново.",
+        summary=(
+            "Проверьте выделенный IP. Если его сняли, подключите заново. "
+            f"У клиента первым в списке серверов стоит «{server_name(country)}»."
+        ),
         telegram_id=user.telegram_id,
         username=user.username,
         command=(

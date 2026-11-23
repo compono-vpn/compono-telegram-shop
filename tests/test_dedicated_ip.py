@@ -49,10 +49,12 @@ from src.models.dto import PlanSnapshotDto, PriceDetailsDto, TransactionDto
 from src.services.dedicated_ip import (
     DEDUP_KEY,
     KIND,
+    flag_check_after_renewal,
     get_choice,
     is_ultra_tag,
     is_ultra_user,
     offer_country_choice,
+    server_name,
 )
 from src.services.notification import NotificationService
 from src.services.ops_notify import post_ops_event
@@ -454,6 +456,8 @@ class TestCountryCallback:
         assert kwargs["subscription_id"] == 901
         assert kwargs["country"] == DedicatedIpCountry.LT
         assert kwargs["command"] == f"tools/compono-dedicated-ip.sh add {TG} LT"
+        assert "«🇱🇹 Lithuania · Выделенный IP»" in kwargs["summary"]
+        assert "Белый список" not in kwargs["summary"]
 
     @pytest.mark.parametrize("code", ["LT", "SE", "NL"])
     async def test_every_country_builds_the_provisioning_command(self, code):
@@ -721,10 +725,30 @@ class TestTranslations:
             assert "Happ" not in i18n.get("ntf-dedicated-ip-current", country=code)
 
     @pytest.mark.parametrize(
-        "code,server", [("SE", "🇸🇪 Sweden · Белый список"), ("NL", "🇳🇱 Netherlands · Белый список")]
+        "code,server",
+        [("SE", "🇸🇪 Sweden · Выделенный IP"), ("NL", "🇳🇱 Netherlands · Выделенный IP")],
     )
     def test_current_names_the_server(self, code, server):
-        assert server in _translator().get("ntf-dedicated-ip-current", country=code)
+        text = _translator().get("ntf-dedicated-ip-current", country=code)
+        assert server in text
+        assert "Белый список" not in text
+        assert "первым в списке" in text
+        assert server == server_name(DedicatedIpCountry(code))
+
+    def test_server_name_for_every_country(self):
+        assert server_name(DedicatedIpCountry.LT) == "🇱🇹 Lithuania · Выделенный IP"
+        assert server_name(DedicatedIpCountry.SE) == "🇸🇪 Sweden · Выделенный IP"
+        assert server_name(DedicatedIpCountry.NL) == "🇳🇱 Netherlands · Выделенный IP"
+
+    async def test_renewal_card_names_the_server(self):
+        send = AsyncMock(return_value=True)
+        with patch("src.services.dedicated_ip.send_ip_task", new=send) as post:
+            await flag_check_after_renewal(
+                user=_user(), country=DedicatedIpCountry.NL, bot=MagicMock(), config=_config()
+            )
+        summary = post.await_args.kwargs["summary"]
+        assert "«🇳🇱 Netherlands · Выделенный IP»" in summary
+        assert "Белый список" not in summary
 
     def test_button_labels(self):
         i18n = _translator()
